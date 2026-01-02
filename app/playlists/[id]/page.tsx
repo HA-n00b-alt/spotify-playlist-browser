@@ -801,13 +801,17 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           const tracksTriedButFailed = tracks.filter(t => 
             trackBpms[t.id] === null && bpmDetails[t.id]
           ).length
-          // Remaining = total - processed (with BPM or N/A)
-          const actualRemaining = totalTracks - tracksProcessed
+          // Count tracks that don't have a result yet (not in trackBpms or undefined)
+          const tracksNotProcessed = tracks.filter(t => 
+            trackBpms[t.id] === undefined
+          ).length
+          // Remaining = tracks not yet processed (undefined in trackBpms)
+          const actualRemaining = tracksNotProcessed
           const isProcessing = tracksLoading > 0 || actualRemaining > 0
           const allTracksHaveBpm = tracksWithBpm === totalTracks
 
-          // Only hide if ALL tracks are already in DB (either with BPM or N/A with details) AND all have BPM
-          if (allTracksInDb && !isProcessing && allTracksHaveBpm) {
+          // Only hide if ALL tracks are already in DB (either with BPM or N/A with details) AND all have BPM AND not processing
+          if (allTracksInDb && !isProcessing && allTracksHaveBpm && tracksLoading === 0) {
             return null
           }
 
@@ -861,9 +865,26 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             }
 
             // If currently processing - show from the beginning
+            // Show remaining - if tracks are loading, they're not processed yet, so they count as remaining
+            // The actualRemaining already accounts for this since loading tracks aren't in trackBpms yet
             return (
               <div className="mb-4 sm:mb-6 text-sm text-gray-600">
                 BPM information processing ongoing ({tracksProcessed} tracks done, {actualRemaining} remaining){' '}
+                <button
+                  onClick={() => setShowBpmMoreInfo(true)}
+                  className="text-blue-600 hover:text-blue-700 hover:underline"
+                >
+                  (more info)
+                </button>
+              </div>
+            )
+          }
+
+          // If there are N/A tracks, always show the message
+          if (tracksTriedButFailed > 0) {
+            return (
+              <div className="mb-4 sm:mb-6 text-sm text-gray-600">
+                {tracksTriedButFailed} of {totalTracks} tracks have no BPM information available. You can retry by clicking on the N/A value.{' '}
                 <button
                   onClick={() => setShowBpmMoreInfo(true)}
                   className="text-blue-600 hover:text-blue-700 hover:underline"
@@ -1055,7 +1076,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         {getYearString(track.album.release_date)}
                         {' • '}
                         {formatDuration(track.duration_ms)}
-                                    {(trackBpms[track.id] != null 
+                                    {loadingBpms.has(track.id) ? (
+                                      <span className="text-gray-400"> • BPM...</span>
+                                    ) : trackBpms[track.id] != null 
                                       ? (
                                         <button
                                           onClick={(e) => {
@@ -1071,9 +1094,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                       )
                                       : track.tempo != null 
                                         ? ` • ${Math.round(track.tempo)} BPM`
-                                        : loadingBpms.has(track.id)
-                                          ? ' • BPM...'
-                                          : (
+                                        : (
                                             <button
                                               onClick={(e) => {
                                                 e.stopPropagation()
@@ -1084,7 +1105,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                             >
                                               {' • BPM N/A'}
                                             </button>
-                                          ))}
+                                          )}
                         {track.popularity != null && ` • Popularity: ${track.popularity}`}
                       </div>
                     </div>
@@ -1272,7 +1293,15 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         {track.added_at ? formatDate(track.added_at) : 'N/A'}
                       </td>
                                   <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden md:table-cell" onClick={(e) => e.stopPropagation()}>
-                                    {trackBpms[track.id] != null 
+                                    {loadingBpms.has(track.id) ? (
+                                      <div className="flex items-center gap-1">
+                                        <svg className="animate-spin h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        <span className="text-gray-400">...</span>
+                                      </div>
+                                    ) : trackBpms[track.id] != null 
                                       ? (
                                         <button
                                           onClick={() => {
@@ -1289,9 +1318,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                       )
                                       : track.tempo != null 
                                         ? Math.round(track.tempo)
-                                        : loadingBpms.has(track.id)
-                                          ? '...'
-                                          : (
+                                        : (
                                             <button
                                               onClick={() => {
                                                 setSelectedBpmTrack(track)

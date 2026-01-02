@@ -53,6 +53,14 @@ export default async function Home({
         <p className="mt-6 text-xs text-gray-500">
           You&apos;ll be redirected to Spotify to authorize this application
         </p>
+
+        <div className="mt-8 p-4 bg-gray-800/50 border border-gray-700 rounded-lg max-w-lg">
+          <p className="text-xs text-gray-300 leading-relaxed">
+            <strong className="text-gray-200">Privacy Notice:</strong> Your Spotify login is used only to temporarily fetch your playlists. 
+            No data about your playlists or the association between songs and playlists is stored. 
+            Only BPM information for individual songs is cached (not linked to playlists or users) to improve performance.
+          </p>
+        </div>
       </div>
       
       <footer className="mt-auto py-6 sm:py-8 text-center text-xs sm:text-sm text-gray-500">
