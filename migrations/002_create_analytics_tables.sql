@@ -43,3 +43,4 @@ COMMENT ON TABLE analytics_users IS 'Tracks unique users and their aggregate sta
 COMMENT ON TABLE analytics_pageviews IS 'Tracks individual page views';
 COMMENT ON TABLE analytics_api_requests IS 'Tracks API endpoint requests';
 
+

@@ -72,6 +72,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [loadingBpms, setLoadingBpms] = useState<Set<string>>(new Set())
   const [showBpmDebug, setShowBpmDebug] = useState(false)
   const [bpmDebugInfo, setBpmDebugInfo] = useState<Record<string, any>>({})
+  const [bpmDetails, setBpmDetails] = useState<Record<string, { source?: string; error?: string; isrc?: string }>>({})
+  const [showBpmModal, setShowBpmModal] = useState(false)
+  const [selectedBpmTrack, setSelectedBpmTrack] = useState<Track | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
@@ -120,91 +123,145 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     fetchTracks()
   }, [params.id])
 
-  // Fetch BPM for tracks after they're loaded (in batches)
+  // Fetch BPM for all tracks using batch endpoint
   useEffect(() => {
-    if (tracks.length > 0) {
-      // Fetch BPM for first 20 tracks initially, then more as user scrolls
-      const tracksToFetch = tracks.slice(0, 20).filter(t => 
-        trackBpms[t.id] === undefined && !loadingBpms.has(t.id)
-      )
-      if (tracksToFetch.length > 0) {
-        fetchBpmsForTracks(tracksToFetch)
-      }
+    if (tracks.length > 0 && Object.keys(trackBpms).length === 0) {
+      fetchBpmsBatch()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tracks.length]) // Only run when tracks are first loaded
+  }, [tracks.length])
 
-  // Function to fetch BPM for tracks
-  const fetchBpmsForTracks = async (tracksToFetch: Track[]) => {
-    for (const track of tracksToFetch) {
-      if (trackBpms[track.id] !== undefined || loadingBpms.has(track.id)) {
-        continue // Already fetched or in progress
-      }
-      
-      setLoadingBpms(prev => new Set(prev).add(track.id))
-      
-      try {
-        console.log(`[BPM Client] Fetching BPM for track: ${track.id} (${track.name})`)
-        const res = await fetch(`/api/bpm?spotifyTrackId=${track.id}`)
-        console.log(`[BPM Client] Response status for ${track.id}:`, res.status)
-        
-        if (res.ok) {
-          const data = await res.json()
-          console.log(`[BPM Client] BPM data for ${track.id}:`, data)
-          setTrackBpms(prev => ({
-            ...prev,
-            [track.id]: data.bpm,
-          }))
-          // Store debug info
-          setBpmDebugInfo(prev => ({
-            ...prev,
-            [track.id]: data,
-          }))
-        } else {
-          const errorData = await res.json().catch(() => ({}))
-          console.error(`[BPM Client] Error response for ${track.id}:`, res.status, errorData)
-          setTrackBpms(prev => ({
-            ...prev,
-            [track.id]: null,
-          }))
-          // Store error debug info
-          setBpmDebugInfo(prev => ({
-            ...prev,
-            [track.id]: { error: errorData, status: res.status },
-          }))
+  // Batch fetch BPMs from cache
+  const fetchBpmsBatch = async () => {
+    const trackIds = tracks.map(t => t.id)
+    if (trackIds.length === 0) return
+
+    // Mark all as loading
+    setLoadingBpms(new Set(trackIds))
+
+    try {
+      console.log(`[BPM Client] Fetching BPM batch for ${trackIds.length} tracks`)
+      const res = await fetch('/api/bpm/batch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ trackIds }),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        console.log(`[BPM Client] Batch BPM data received:`, data)
+
+        const newBpms: Record<string, number | null> = {}
+        const newDetails: Record<string, { source?: string; error?: string; isrc?: string }> = {}
+
+        for (const [trackId, result] of Object.entries(data.results || {})) {
+          const r = result as any
+          newBpms[trackId] = r.bpm
+          if (r.source || r.error) {
+            newDetails[trackId] = {
+              source: r.source,
+              error: r.error,
+              isrc: r.isrc,
+            }
+          }
         }
-      } catch (error) {
-        console.error(`[BPM Client] Exception fetching BPM for track ${track.id}:`, error)
-        setTrackBpms(prev => ({
-          ...prev,
-          [track.id]: null,
-        }))
-      } finally {
-        setLoadingBpms(prev => {
-          const next = new Set(prev)
-          next.delete(track.id)
-          return next
-        })
+
+        setTrackBpms(newBpms)
+        setBpmDetails(newDetails)
+
+        // For tracks not in cache, fetch individually (but don't block UI)
+        const uncachedTracks = tracks.filter(t => !data.results?.[t.id]?.cached)
+        if (uncachedTracks.length > 0) {
+          console.log(`[BPM Client] Fetching ${uncachedTracks.length} uncached tracks individually`)
+          fetchBpmsForTracks(uncachedTracks)
+        }
+      } else {
+        console.error(`[BPM Client] Batch fetch failed:`, res.status)
+        // Fallback to individual fetching
+        fetchBpmsForTracks(tracks)
       }
-      
-      // Small delay to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 100))
+    } catch (error) {
+      console.error(`[BPM Client] Batch fetch error:`, error)
+      // Fallback to individual fetching
+      fetchBpmsForTracks(tracks)
+    } finally {
+      setLoadingBpms(new Set())
     }
   }
 
-  // Fetch BPM for tracks after they're loaded (in batches)
-  useEffect(() => {
-    if (tracks.length > 0) {
-      // Fetch BPM for first 20 tracks initially, then more as user scrolls
-      const tracksToFetch = tracks.slice(0, 20).filter(t => 
-        trackBpms[t.id] === undefined && !loadingBpms.has(t.id)
+  // Function to fetch BPM for individual tracks (for uncached tracks)
+  const fetchBpmsForTracks = async (tracksToFetch: Track[]) => {
+    // Process in smaller batches to avoid overwhelming the server
+    const batchSize = 10
+    for (let i = 0; i < tracksToFetch.length; i += batchSize) {
+      const batch = tracksToFetch.slice(i, i + batchSize)
+      
+      await Promise.all(
+        batch.map(async (track) => {
+          if (trackBpms[track.id] !== undefined || loadingBpms.has(track.id)) {
+            return // Already fetched or in progress
+          }
+          
+          setLoadingBpms(prev => new Set(prev).add(track.id))
+          
+          try {
+            const res = await fetch(`/api/bpm?spotifyTrackId=${track.id}`)
+            
+            if (res.ok) {
+              const data = await res.json()
+              setTrackBpms(prev => ({
+                ...prev,
+                [track.id]: data.bpm,
+              }))
+              setBpmDetails(prev => ({
+                ...prev,
+                [track.id]: {
+                  source: data.source,
+                  error: data.error,
+                  isrc: data.isrc,
+                },
+              }))
+              setBpmDebugInfo(prev => ({
+                ...prev,
+                [track.id]: data,
+              }))
+            } else {
+              const errorData = await res.json().catch(() => ({}))
+              setTrackBpms(prev => ({
+                ...prev,
+                [track.id]: null,
+              }))
+              setBpmDetails(prev => ({
+                ...prev,
+                [track.id]: {
+                  error: errorData.error || 'Failed to fetch BPM',
+                },
+              }))
+            }
+          } catch (error) {
+            console.error(`[BPM Client] Error fetching BPM for ${track.id}:`, error)
+            setTrackBpms(prev => ({
+              ...prev,
+              [track.id]: null,
+            }))
+          } finally {
+            setLoadingBpms(prev => {
+              const next = new Set(prev)
+              next.delete(track.id)
+              return next
+            })
+          }
+        })
       )
-      if (tracksToFetch.length > 0) {
-        fetchBpmsForTracks(tracksToFetch)
+      
+      // Small delay between batches
+      if (i + batchSize < tracksToFetch.length) {
+        await new Promise(resolve => setTimeout(resolve, 200))
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tracks.length]) // Only run when tracks are first loaded
+  }
 
   /**
    * Handle track row click - open Spotify app via deep link
@@ -686,13 +743,16 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
         {/* Mobile Card View */}
         <div className="block sm:hidden space-y-3">
-          {sortedTracks.map((track) => (
+          {sortedTracks.map((track, index) => (
             <div
               key={track.id}
               className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 cursor-pointer hover:bg-gray-50 transition-colors"
               onClick={() => handleTrackClick(track)}
             >
               <div className="flex gap-3">
+                <div className="text-gray-500 text-sm font-medium w-6 flex-shrink-0 pt-1">
+                  {index + 1}
+                </div>
                 {track.album.images && track.album.images[0] ? (
                   <Image
                     src={track.album.images[0].url}
@@ -759,12 +819,34 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         {' • '}
                         {formatDuration(track.duration_ms)}
                                     {(trackBpms[track.id] != null 
-                                      ? ` • ${Math.round(trackBpms[track.id]!)} BPM`
+                                      ? (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            setSelectedBpmTrack(track)
+                                            setShowBpmModal(true)
+                                          }}
+                                          className="text-blue-600 hover:text-blue-700 hover:underline"
+                                        >
+                                          {` • ${Math.round(trackBpms[track.id]!)} BPM`}
+                                        </button>
+                                      )
                                       : track.tempo != null 
                                         ? ` • ${Math.round(track.tempo)} BPM`
                                         : loadingBpms.has(track.id)
                                           ? ' • BPM...'
-                                          : '')}
+                                          : (
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation()
+                                                setSelectedBpmTrack(track)
+                                                setShowBpmModal(true)
+                                              }}
+                                              className="text-gray-400 hover:text-gray-600 hover:underline"
+                                            >
+                                              {' • BPM N/A'}
+                                            </button>
+                                          ))}
                         {track.popularity != null && ` • Popularity: ${track.popularity}`}
                       </div>
                     </div>
@@ -781,6 +863,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
+                  <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 w-12">
+                    #
+                  </th>
                   <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 w-12 lg:w-16">
                     Cover
                   </th>
@@ -862,17 +947,20 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               <tbody className="divide-y divide-gray-200">
                 {sortedTracks.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={11} className="px-4 py-8 text-center text-gray-500">
                       {(searchQuery || yearFrom || yearTo || bpmFrom || bpmTo) ? 'No tracks match your filters' : 'No tracks found'}
                     </td>
                   </tr>
                 ) : (
-                  sortedTracks.map((track) => (
+                  sortedTracks.map((track, index) => (
                     <tr 
                       key={track.id} 
                       className="hover:bg-gray-50 transition-colors cursor-pointer"
                       onClick={() => handleTrackClick(track)}
                     >
+                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-500 text-xs sm:text-sm">
+                        {index + 1}
+                      </td>
                       <td className="px-3 lg:px-4 py-2 lg:py-3">
                         {track.album.images && track.album.images[0] ? (
                           <Image
@@ -945,17 +1033,35 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden lg:table-cell">
                         {track.added_at ? formatDate(track.added_at) : 'N/A'}
                       </td>
-                                  <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden md:table-cell">
+                                  <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden md:table-cell" onClick={(e) => e.stopPropagation()}>
                                     {trackBpms[track.id] != null 
-                                      ? Math.round(trackBpms[track.id]!)
+                                      ? (
+                                        <button
+                                          onClick={() => {
+                                            setSelectedBpmTrack(track)
+                                            setShowBpmModal(true)
+                                          }}
+                                          className="text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                                          title="Click for BPM details"
+                                        >
+                                          {Math.round(trackBpms[track.id]!)}
+                                        </button>
+                                      )
                                       : track.tempo != null 
                                         ? Math.round(track.tempo)
                                         : loadingBpms.has(track.id)
                                           ? '...'
                                           : (
-                                            <span className="text-gray-400" title="BPM data not available">
+                                            <button
+                                              onClick={() => {
+                                                setSelectedBpmTrack(track)
+                                                setShowBpmModal(true)
+                                              }}
+                                              className="text-gray-400 hover:text-gray-600 hover:underline cursor-pointer"
+                                              title="Click to see why BPM is not available"
+                                            >
                                               N/A
-                                            </span>
+                                            </button>
                                           )}
                                   </td>
                       <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm text-right hidden lg:table-cell">
@@ -984,6 +1090,99 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           Showing {sortedTracks.length} of {tracks.length} tracks
         </div>
       </div>
+
+      {/* BPM Details Modal */}
+      {showBpmModal && selectedBpmTrack && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowBpmModal(false)}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-md w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-900">BPM Information</h2>
+              <button
+                onClick={() => setShowBpmModal(false)}
+                className="text-gray-400 hover:text-gray-600 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="mb-4">
+              <h3 className="font-semibold text-gray-900 mb-2">{selectedBpmTrack.name}</h3>
+              <p className="text-sm text-gray-600">
+                {selectedBpmTrack.artists.map(a => a.name).join(', ')}
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              {trackBpms[selectedBpmTrack.id] != null ? (
+                <>
+                  <div>
+                    <span className="font-semibold text-gray-700">BPM: </span>
+                    <span className="text-gray-900">{Math.round(trackBpms[selectedBpmTrack.id]!)}</span>
+                  </div>
+                  {bpmDetails[selectedBpmTrack.id]?.source && (
+                    <div>
+                      <span className="font-semibold text-gray-700">Source: </span>
+                      <span className="text-gray-900 capitalize">
+                        {bpmDetails[selectedBpmTrack.id].source?.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                  )}
+                  {bpmDetails[selectedBpmTrack.id]?.isrc && (
+                    <div>
+                      <span className="font-semibold text-gray-700">ISRC: </span>
+                      <span className="text-gray-900 font-mono text-sm">
+                        {bpmDetails[selectedBpmTrack.id].isrc}
+                      </span>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div>
+                    <span className="font-semibold text-gray-700">BPM: </span>
+                    <span className="text-gray-600">Not available</span>
+                  </div>
+                  {bpmDetails[selectedBpmTrack.id]?.error ? (
+                    <div>
+                      <span className="font-semibold text-gray-700">Reason: </span>
+                      <span className="text-gray-600">{bpmDetails[selectedBpmTrack.id].error}</span>
+                    </div>
+                  ) : (
+                    <div>
+                      <span className="text-gray-600 text-sm">
+                        BPM data is being calculated or no preview audio is available for this track.
+                      </span>
+                    </div>
+                  )}
+                  {bpmDetails[selectedBpmTrack.id]?.source && (
+                    <div>
+                      <span className="font-semibold text-gray-700">Last attempt source: </span>
+                      <span className="text-gray-900 capitalize">
+                        {bpmDetails[selectedBpmTrack.id].source?.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setShowBpmModal(false)}
+                className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       <footer className="mt-auto py-6 sm:py-8 text-center text-xs sm:text-sm text-gray-500 border-t border-gray-200">
         Created by{' '}

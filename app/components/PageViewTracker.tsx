@@ -23,3 +23,4 @@ export default function PageViewTracker() {
   return null // This component doesn't render anything
 }
 
+
