@@ -321,7 +321,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               }))
               setBpmDebugInfo(prev => ({
                 ...prev,
-                [track.id]: data,
+                [track.id]: {
+                  ...data,
+                  urlsTried: data.urlsTried || [],
+                },
               }))
               // Increment calculated count (this track was just calculated, not cached)
               setBpmTracksCalculated(prev => prev + 1)
@@ -335,6 +338,13 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 ...prev,
                 [track.id]: {
                   error: errorData.error || 'Failed to fetch BPM',
+                },
+              }))
+              setBpmDebugInfo(prev => ({
+                ...prev,
+                [track.id]: {
+                  ...errorData,
+                  urlsTried: errorData.urlsTried || [],
                 },
               }))
             }
@@ -632,6 +642,36 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 </pre>
               </details>
               <details className="mt-2">
+                <summary className="cursor-pointer font-semibold">URLs Tried for Failed Searches</summary>
+                <div className="mt-2 text-xs bg-white p-2 rounded overflow-auto max-h-48">
+                  {Object.entries(bpmDebugInfo)
+                    .filter(([id, data]: [string, any]) => 
+                      data?.urlsTried && data.urlsTried.length > 0 && (data.bpm === null || data.error)
+                    )
+                    .slice(0, 10)
+                    .map(([id, data]: [string, any]) => {
+                      const track = tracks.find(t => t.id === id)
+                      return (
+                        <div key={id} className="mb-3 pb-3 border-b border-gray-200 last:border-0">
+                          <p className="font-semibold mb-1">{track?.name || 'Unknown'}</p>
+                          <p className="text-gray-600 mb-1">Error: {data.error || 'No preview found'}</p>
+                          <p className="font-semibold mb-1">URLs tried:</p>
+                          <ul className="list-disc list-inside space-y-1 text-gray-700">
+                            {data.urlsTried.map((url: string, idx: number) => (
+                              <li key={idx} className="break-all">{url}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )
+                    })}
+                  {Object.entries(bpmDebugInfo).filter(([id, data]: [string, any]) => 
+                    data?.urlsTried && data.urlsTried.length > 0 && (data.bpm === null || data.error)
+                  ).length === 0 && (
+                    <p className="text-gray-500">No failed searches with URLs tracked yet.</p>
+                  )}
+                </div>
+              </details>
+              <details className="mt-2">
                 <summary className="cursor-pointer font-semibold">All BPM States</summary>
                 <pre className="mt-2 text-xs bg-white p-2 rounded overflow-auto max-h-48">
                   {JSON.stringify(
@@ -755,16 +795,15 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
           const tracksWithBpm = Object.values(trackBpms).filter(bpm => bpm !== null && bpm !== undefined).length
           const tracksWithNa = Object.values(trackBpms).filter(bpm => bpm === null).length
+          const tracksProcessed = tracksWithBpm + tracksWithNa // Tracks that have been processed (either BPM or N/A)
           const tracksLoading = loadingBpms.size
           // Tracks that have been tried but failed (have bpmDetails but bpm is null)
           const tracksTriedButFailed = tracks.filter(t => 
             trackBpms[t.id] === null && bpmDetails[t.id]
           ).length
-          // Tracks that haven't been tried yet (no bpmDetails and no bpm) - actual remaining, not queued
-          const tracksNotTried = tracks.filter(t => 
-            trackBpms[t.id] === undefined && !bpmDetails[t.id] && !loadingBpms.has(t.id)
-          ).length
-          const isProcessing = tracksLoading > 0 || tracksNotTried > 0
+          // Remaining = total - processed (with BPM or N/A)
+          const actualRemaining = totalTracks - tracksProcessed
+          const isProcessing = tracksLoading > 0 || actualRemaining > 0
           const allTracksHaveBpm = tracksWithBpm === totalTracks
 
           // Only hide if ALL tracks are already in DB (either with BPM or N/A with details) AND all have BPM
@@ -772,6 +811,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             return null
           }
 
+          // Always show if processing or if there are N/A tracks
           // 2. If tracks have N/A that were previously tried (not currently processing)
           if (!isProcessing && tracksTriedButFailed > 0) {
             return (
@@ -787,11 +827,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             )
           }
 
-          // 3. If currently processing or just completed
-          if (isProcessing || (bpmProcessingEndTime && bpmProcessingStartTime)) {
-            // Actual remaining = tracks not tried (excluding those currently loading)
-            const actualRemaining = tracksNotTried
-            
+          // 3. If currently processing or just completed (or processing has started)
+          if (isProcessing || bpmProcessingStartTime) {
             // If processing just completed
             if (bpmProcessingEndTime && bpmProcessingStartTime && bpmTracksCalculated > 0 && !isProcessing) {
               const elapsedSeconds = Math.floor((bpmProcessingEndTime - bpmProcessingStartTime) / 1000)
@@ -823,10 +860,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               )
             }
 
-            // If currently processing
+            // If currently processing - show from the beginning
             return (
               <div className="mb-4 sm:mb-6 text-sm text-gray-600">
-                BPM information processing ongoing ({tracksWithBpm} tracks done, {actualRemaining} remaining){' '}
+                BPM information processing ongoing ({tracksProcessed} tracks done, {actualRemaining} remaining){' '}
                 <button
                   onClick={() => setShowBpmMoreInfo(true)}
                   className="text-blue-600 hover:text-blue-700 hover:underline"

@@ -5,6 +5,7 @@ import { GoogleAuth } from 'google-auth-library'
 interface PreviewUrlResult {
   url: string | null
   source: string
+  urlsTried?: string[] // URLs that were attempted
 }
 
 interface BpmResult {
@@ -13,6 +14,7 @@ interface BpmResult {
   isrc?: string
   bpmRaw?: number
   error?: string
+  urlsTried?: string[]
 }
 
 interface CacheRecord {
@@ -180,11 +182,14 @@ async function resolvePreviewUrl(params: {
   
   console.log(`[BPM Module] Resolving preview URL for: "${title}" by "${artists}" (ISRC: ${isrc || 'none'}, Country: ${countryCode})`)
   
+  const urlsTried: string[] = []
+  
   // 1. Try iTunes lookup by ISRC
   if (isrc) {
     try {
       console.log(`[BPM Module] Trying iTunes ISRC lookup for: ${isrc}`)
       const itunesLookupUrl = `https://itunes.apple.com/lookup?isrc=${encodeURIComponent(isrc)}&country=${countryCode}`
+      urlsTried.push(itunesLookupUrl)
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 5000)
       
@@ -200,7 +205,7 @@ async function resolvePreviewUrl(params: {
           console.log(`[BPM Module] iTunes ISRC lookup result: ${data.resultCount} results`)
           if (data.resultCount > 0 && data.results[0]?.previewUrl) {
             console.log(`[BPM Module] Found iTunes preview URL via ISRC`)
-            return { url: data.results[0].previewUrl, source: 'itunes_isrc' }
+            return { url: data.results[0].previewUrl, source: 'itunes_isrc', urlsTried }
           }
         } else {
           console.log(`[BPM Module] iTunes ISRC lookup failed with status: ${response.status}`)
@@ -219,6 +224,7 @@ async function resolvePreviewUrl(params: {
     console.log(`[BPM Module] Trying iTunes search for: "${artists} ${title}"`)
     const searchTerm = `${artists} ${title}`
     const itunesSearchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(searchTerm)}&entity=song&limit=1&country=${countryCode}`
+    urlsTried.push(itunesSearchUrl)
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 5000)
     
@@ -234,7 +240,7 @@ async function resolvePreviewUrl(params: {
         console.log(`[BPM Module] iTunes search result: ${data.resultCount} results`)
         if (data.resultCount > 0 && data.results[0]?.previewUrl) {
           console.log(`[BPM Module] Found iTunes preview URL via search`)
-          return { url: data.results[0].previewUrl, source: 'itunes_search' }
+          return { url: data.results[0].previewUrl, source: 'itunes_search', urlsTried }
         }
       } else {
         console.log(`[BPM Module] iTunes search failed with status: ${response.status}`)
@@ -252,6 +258,7 @@ async function resolvePreviewUrl(params: {
     console.log(`[BPM Module] Trying Deezer search for: "${artists}" - "${title}"`)
     const deezerQuery = `artist:"${artists}" track:"${title}"`
     const deezerUrl = `https://api.deezer.com/search?q=${encodeURIComponent(deezerQuery)}`
+    urlsTried.push(deezerUrl)
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 5000)
     
@@ -266,7 +273,7 @@ async function resolvePreviewUrl(params: {
         console.log(`[BPM Module] Deezer search result: ${data.data?.length || 0} results`)
         if (data.data && data.data.length > 0 && data.data[0]?.preview) {
           console.log(`[BPM Module] Found Deezer preview URL`)
-          return { url: data.data[0].preview, source: 'deezer' }
+          return { url: data.data[0].preview, source: 'deezer', urlsTried }
         }
       } else {
         console.log(`[BPM Module] Deezer search failed with status: ${response.status}`)
@@ -281,7 +288,7 @@ async function resolvePreviewUrl(params: {
   
   // No preview URL found
   console.log(`[BPM Module] No preview URL found from any source`)
-  return { url: null, source: 'computed_failed' }
+  return { url: null, source: 'computed_failed', urlsTried }
 }
 
 /**
@@ -530,6 +537,7 @@ export async function getBpmForSpotifyTrack(
           source: previewResult.source,
           isrc: identifiers.isrc || undefined,
           error: errorMessage,
+          urlsTried: previewResult.urlsTried,
         }
       }
       
@@ -558,6 +566,7 @@ export async function getBpmForSpotifyTrack(
           source: previewResult.source,
           isrc: identifiers.isrc || undefined,
           bpmRaw,
+          urlsTried: previewResult.urlsTried,
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
