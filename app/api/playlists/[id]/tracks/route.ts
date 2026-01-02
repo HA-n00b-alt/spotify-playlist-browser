@@ -13,21 +13,42 @@ export async function GET(
       .map((track) => track.id)
       .filter((id): id is string => !!id)
     
+    console.log(`[DEBUG] Fetching audio features for ${trackIds.length} tracks`)
+    
     let audioFeatures: Record<string, any> = {}
     if (trackIds.length > 0) {
       try {
         audioFeatures = await getAudioFeatures(trackIds)
+        console.log(`[DEBUG] Received audio features for ${Object.keys(audioFeatures).length} tracks`)
+        console.log(`[DEBUG] Sample audio feature:`, Object.values(audioFeatures)[0])
       } catch (error) {
-        console.error('Error fetching audio features:', error)
+        console.error('[DEBUG] Error fetching audio features:', error)
         // Continue without audio features if it fails
       }
     }
 
     // Merge audio features into tracks
-    const tracksWithFeatures = tracks.map((track) => ({
-      ...track,
-      tempo: audioFeatures[track.id]?.tempo || null,
-    }))
+    const tracksWithFeatures = tracks.map((track) => {
+      const feature = audioFeatures[track.id]
+      const tempo = feature?.tempo ?? null
+      
+      // Debug logging for first few tracks
+      if (tracks.indexOf(track) < 3) {
+        console.log(`[DEBUG] Track ${track.name}:`, {
+          trackId: track.id,
+          hasFeature: !!feature,
+          tempo: tempo,
+          featureData: feature
+        })
+      }
+      
+      return {
+        ...track,
+        tempo: tempo,
+      }
+    })
+
+    console.log(`[DEBUG] Tracks with tempo: ${tracksWithFeatures.filter(t => t.tempo != null).length} of ${tracksWithFeatures.length}`)
 
     return NextResponse.json(tracksWithFeatures)
   } catch (error) {

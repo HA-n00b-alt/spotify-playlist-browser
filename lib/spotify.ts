@@ -248,32 +248,49 @@ export async function getAudioFeatures(trackIds: string[]): Promise<Record<strin
   const batchSize = 100
   const featuresMap: Record<string, any> = {}
 
+  console.log(`[DEBUG getAudioFeatures] Fetching audio features for ${trackIds.length} tracks`)
+
   for (let i = 0; i < trackIds.length; i += batchSize) {
     const batch = trackIds.slice(i, i + batchSize)
     const ids = batch.join(',')
 
     try {
+      console.log(`[DEBUG getAudioFeatures] Batch ${Math.floor(i / batchSize) + 1}: Requesting features for ${batch.length} tracks`)
       const data = await makeSpotifyRequest<{
         audio_features: Array<{
           id: string
           tempo: number | null
           [key: string]: any
-        }>
+        } | null>
       }>(`/audio-features?ids=${ids}`)
 
+      console.log(`[DEBUG getAudioFeatures] Batch ${Math.floor(i / batchSize) + 1}: Received ${data.audio_features?.length || 0} features`)
+
       if (data.audio_features) {
-        data.audio_features.forEach((feature) => {
+        data.audio_features.forEach((feature, index) => {
           if (feature && feature.id) {
             featuresMap[feature.id] = feature
+            if (index < 3) {
+              console.log(`[DEBUG getAudioFeatures] Sample feature ${index + 1}:`, {
+                id: feature.id,
+                tempo: feature.tempo,
+                hasTempo: feature.tempo != null
+              })
+            }
+          } else if (feature === null) {
+            console.log(`[DEBUG getAudioFeatures] Null feature at index ${index} in batch ${Math.floor(i / batchSize) + 1}`)
           }
         })
+      } else {
+        console.log(`[DEBUG getAudioFeatures] No audio_features array in response`)
       }
     } catch (error) {
-      console.error('Error fetching audio features:', error)
+      console.error(`[DEBUG getAudioFeatures] Error fetching audio features batch ${Math.floor(i / batchSize) + 1}:`, error)
       // Continue with other batches even if one fails
     }
   }
 
+  console.log(`[DEBUG getAudioFeatures] Total features collected: ${Object.keys(featuresMap).length}`)
   return featuresMap
 }
 

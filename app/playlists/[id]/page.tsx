@@ -7,17 +7,28 @@ import Image from 'next/image'
 interface Track {
   id: string
   name: string
-  artists: Array<{ name: string }>
+  artists: Array<{
+    name: string
+    id?: string
+    external_urls?: {
+      spotify: string
+    }
+  }>
   album: {
     name: string
     release_date: string
     images: Array<{ url: string }>
+    id?: string
+    external_urls?: {
+      spotify: string
+    }
   }
   duration_ms: number
   explicit: boolean
   external_urls: {
     spotify: string
   }
+  preview_url?: string | null
   added_at?: string
   tempo?: number | null
 }
@@ -43,6 +54,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [yearTo, setYearTo] = useState('')
   const [bpmFrom, setBpmFrom] = useState('')
   const [bpmTo, setBpmTo] = useState('')
+  const [currentlyPlaying, setCurrentlyPlaying] = useState<string | null>(null)
+  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null)
+  const [showDebug, setShowDebug] = useState(false)
+  const [debugInfo, setDebugInfo] = useState<any>(null)
 
   useEffect(() => {
     async function fetchTracks() {
@@ -56,6 +71,23 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           throw new Error('Failed to fetch tracks')
         }
         const data = await res.json()
+        
+        // Debug: Log the response
+        console.log('Tracks API Response:', data)
+        console.log('First track sample:', data[0])
+        console.log('BPM data in first track:', data[0]?.tempo)
+        
+        // Count tracks with BPM data
+        const tracksWithBPM = data.filter((track: Track) => track.tempo != null)
+        console.log(`Tracks with BPM: ${tracksWithBPM.length} of ${data.length}`)
+        
+        setDebugInfo({
+          totalTracks: data.length,
+          tracksWithBPM: tracksWithBPM.length,
+          sampleTrack: data[0],
+          allTracks: data
+        })
+        
         setTracks(data)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'An error occurred')
@@ -66,6 +98,57 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
     fetchTracks()
   }, [params.id])
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioElement) {
+        audioElement.pause()
+        audioElement.src = ''
+      }
+    }
+  }, [audioElement])
+
+  const handleTrackClick = (track: Track) => {
+    if (!track.preview_url) {
+      console.log('No preview URL available for track:', track.name)
+      return
+    }
+
+    // If clicking the same track, toggle play/pause
+    if (currentlyPlaying === track.id && audioElement) {
+      if (audioElement.paused) {
+        audioElement.play()
+      } else {
+        audioElement.pause()
+        setCurrentlyPlaying(null)
+      }
+      return
+    }
+
+    // Stop current audio if playing
+    if (audioElement) {
+      audioElement.pause()
+      audioElement.src = ''
+    }
+
+    // Play new track
+    const audio = new Audio(track.preview_url)
+    audio.play()
+      .then(() => {
+        setCurrentlyPlaying(track.id)
+        setAudioElement(audio)
+      })
+      .catch((error) => {
+        console.error('Error playing preview:', error)
+      })
+
+    // Auto-stop when audio ends
+    audio.addEventListener('ended', () => {
+      setCurrentlyPlaying(null)
+      setAudioElement(null)
+    })
+  }
 
   const formatDuration = (ms: number): string => {
     const minutes = Math.floor(ms / 60000)
@@ -201,16 +284,28 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4 text-red-600">Error</h1>
-          <p className="mb-4 text-gray-700">{error}</p>
-          <Link
-            href="/api/auth/login"
-            className="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-full"
-          >
-            Login with Spotify
-          </Link>
+      <div className="min-h-screen p-8 bg-gray-50">
+        <div className="max-w-7xl mx-auto">
+          <div className="mb-6">
+            <Link
+              href="/playlists"
+              className="text-blue-600 hover:text-blue-700 inline-block"
+            >
+              ← Back to Playlists
+            </Link>
+          </div>
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center">
+              <h1 className="text-2xl font-bold mb-4 text-red-600">Error</h1>
+              <p className="mb-4 text-gray-700">{error}</p>
+              <Link
+                href="/api/auth/login"
+                className="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-full"
+              >
+                Login with Spotify
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
     )
@@ -226,7 +321,35 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           >
             ← Back to Playlists
           </Link>
+          <button
+            onClick={() => setShowDebug(!showDebug)}
+            className="text-sm bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded transition-colors"
+          >
+            {showDebug ? 'Hide' : 'Show'} Debug Info
+          </button>
         </div>
+        
+        {showDebug && debugInfo && (
+          <div className="mb-6 p-4 bg-gray-100 rounded-lg border border-gray-300 overflow-auto max-h-96">
+            <h3 className="font-bold mb-2">Debug Information</h3>
+            <div className="text-sm space-y-2">
+              <p><strong>Total Tracks:</strong> {debugInfo.totalTracks}</p>
+              <p><strong>Tracks with BPM:</strong> {debugInfo.tracksWithBPM}</p>
+              <details className="mt-2">
+                <summary className="cursor-pointer font-semibold">Sample Track Data</summary>
+                <pre className="mt-2 text-xs bg-white p-2 rounded overflow-auto">
+                  {JSON.stringify(debugInfo.sampleTrack, null, 2)}
+                </pre>
+              </details>
+              <details className="mt-2">
+                <summary className="cursor-pointer font-semibold">All Tracks (first 5)</summary>
+                <pre className="mt-2 text-xs bg-white p-2 rounded overflow-auto">
+                  {JSON.stringify(debugInfo.allTracks.slice(0, 5), null, 2)}
+                </pre>
+              </details>
+            </div>
+          </div>
+        )}
         
         <div className="mb-6 space-y-4">
           <div>
@@ -400,7 +523,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   </tr>
                 ) : (
                   sortedTracks.map((track) => (
-                    <tr key={track.id} className="hover:bg-gray-50 transition-colors">
+                    <tr 
+                      key={track.id} 
+                      className={`hover:bg-gray-50 transition-colors ${track.preview_url ? 'cursor-pointer' : ''} ${currentlyPlaying === track.id ? 'bg-green-50' : ''}`}
+                      onClick={() => track.preview_url && handleTrackClick(track)}
+                    >
                       <td className="px-4 py-3">
                         {track.album.images && track.album.images[0] ? (
                           <Image
@@ -417,15 +544,51 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <span className="font-medium text-gray-900">{track.name}</span>
-                        {track.explicit && (
-                          <span className="ml-2 text-xs bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded">E</span>
+                        <div className="flex items-center gap-2">
+                          {track.preview_url && (
+                            <span className="text-green-600">
+                              {currentlyPlaying === track.id ? '⏸' : '▶'}
+                            </span>
+                          )}
+                          <span className="font-medium text-gray-900">{track.name}</span>
+                          {track.explicit && (
+                            <span className="ml-2 text-xs bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded">E</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-gray-700" onClick={(e) => e.stopPropagation()}>
+                        {track.artists.map((artist, index) => (
+                          <span key={artist.id || index}>
+                            {artist.external_urls?.spotify ? (
+                              <a
+                                href={artist.external_urls.spotify}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-green-600 hover:text-green-700 hover:underline"
+                              >
+                                {artist.name}
+                              </a>
+                            ) : (
+                              <span>{artist.name}</span>
+                            )}
+                            {index < track.artists.length - 1 && ', '}
+                          </span>
+                        ))}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700" onClick={(e) => e.stopPropagation()}>
+                        {track.album.external_urls?.spotify ? (
+                          <a
+                            href={track.album.external_urls.spotify}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-green-600 hover:text-green-700 hover:underline"
+                          >
+                            {track.album.name}
+                          </a>
+                        ) : (
+                          <span>{track.album.name}</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-gray-700">
-                        {track.artists.map((artist) => artist.name).join(', ')}
-                      </td>
-                      <td className="px-4 py-3 text-gray-700">{track.album.name}</td>
                       <td className="px-4 py-3 text-gray-600 text-sm">
                         {getYearString(track.album.release_date)}
                       </td>
@@ -436,9 +599,13 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         {track.added_at ? formatDate(track.added_at) : 'N/A'}
                       </td>
                       <td className="px-4 py-3 text-gray-600 text-sm">
-                        {track.tempo ? Math.round(track.tempo) : 'N/A'}
+                        {track.tempo != null ? Math.round(track.tempo) : (
+                          <span className="text-gray-400" title={track.tempo === null ? 'BPM data is null' : 'BPM data not available'}>
+                            N/A
+                          </span>
+                        )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <a
                           href={track.external_urls.spotify}
                           target="_blank"

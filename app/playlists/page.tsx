@@ -10,6 +10,9 @@ interface Playlist {
   owner: {
     display_name: string
     id: string
+    external_urls?: {
+      spotify: string
+    }
   }
   tracks: {
     total: number

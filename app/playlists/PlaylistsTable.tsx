@@ -12,6 +12,9 @@ interface Playlist {
   owner: {
     display_name: string
     id: string
+    external_urls?: {
+      spotify: string
+    }
   }
   tracks: {
     total: number
@@ -219,7 +222,18 @@ export default function PlaylistsTable({ playlists }: PlaylistsTableProps) {
                 </div>
               </td>
               <td className="px-6 py-4">
-                <div className="text-gray-700">{playlist.owner.display_name}</div>
+                {playlist.owner.external_urls?.spotify ? (
+                  <a
+                    href={playlist.owner.external_urls.spotify}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-green-600 hover:text-green-700 hover:underline"
+                  >
+                    {playlist.owner.display_name}
+                  </a>
+                ) : (
+                  <div className="text-gray-700">{playlist.owner.display_name}</div>
+                )}
               </td>
               <td className="px-6 py-4 text-right">
                 <div className="text-gray-700">{playlist.tracks.total}</div>
