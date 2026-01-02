@@ -25,11 +25,16 @@ interface PlaylistTracksPageProps {
   }
 }
 
+type SortField = 'name' | 'artists' | 'album' | 'release_date' | 'duration' | 'added_at'
+type SortDirection = 'asc' | 'desc'
+
 export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) {
   const [tracks, setTracks] = useState<Track[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [sortField, setSortField] = useState<SortField | null>(null)
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
 
   useEffect(() => {
     async function fetchTracks() {
@@ -74,6 +79,70 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       track.album.release_date.includes(query)
     )
   })
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDirection('asc')
+    }
+  }
+
+  const sortedTracks = [...filteredTracks].sort((a, b) => {
+    if (!sortField) return 0
+
+    let aValue: string | number
+    let bValue: string | number
+
+    switch (sortField) {
+      case 'name':
+        aValue = a.name.toLowerCase()
+        bValue = b.name.toLowerCase()
+        break
+      case 'artists':
+        aValue = a.artists.map((artist) => artist.name).join(', ').toLowerCase()
+        bValue = b.artists.map((artist) => artist.name).join(', ').toLowerCase()
+        break
+      case 'album':
+        aValue = a.album.name.toLowerCase()
+        bValue = b.album.name.toLowerCase()
+        break
+      case 'release_date':
+        aValue = a.album.release_date || ''
+        bValue = b.album.release_date || ''
+        break
+      case 'duration':
+        aValue = a.duration_ms
+        bValue = b.duration_ms
+        break
+      case 'added_at':
+        aValue = a.added_at || ''
+        bValue = b.added_at || ''
+        break
+      default:
+        return 0
+    }
+
+    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1
+    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1
+    return 0
+  })
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) {
+      return (
+        <span className="ml-1 text-gray-400 text-xs">
+          ↕
+        </span>
+      )
+    }
+    return (
+      <span className="ml-1 text-gray-600 text-xs">
+        {sortDirection === 'asc' ? '↑' : '↓'}
+      </span>
+    )
+  }
 
   if (loading) {
     return (
@@ -127,24 +196,72 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Track</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Artists</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Album</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Release Date</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Duration</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Added At</th>
+                  <th
+                    className="px-4 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => handleSort('name')}
+                  >
+                    <div className="flex items-center">
+                      Track
+                      <SortIcon field="name" />
+                    </div>
+                  </th>
+                  <th
+                    className="px-4 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => handleSort('artists')}
+                  >
+                    <div className="flex items-center">
+                      Artists
+                      <SortIcon field="artists" />
+                    </div>
+                  </th>
+                  <th
+                    className="px-4 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => handleSort('album')}
+                  >
+                    <div className="flex items-center">
+                      Album
+                      <SortIcon field="album" />
+                    </div>
+                  </th>
+                  <th
+                    className="px-4 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => handleSort('release_date')}
+                  >
+                    <div className="flex items-center">
+                      Release Date
+                      <SortIcon field="release_date" />
+                    </div>
+                  </th>
+                  <th
+                    className="px-4 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => handleSort('duration')}
+                  >
+                    <div className="flex items-center">
+                      Duration
+                      <SortIcon field="duration" />
+                    </div>
+                  </th>
+                  <th
+                    className="px-4 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => handleSort('added_at')}
+                  >
+                    <div className="flex items-center">
+                      Added At
+                      <SortIcon field="added_at" />
+                    </div>
+                  </th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Link</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {filteredTracks.length === 0 ? (
+                {sortedTracks.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                       {searchQuery ? 'No tracks match your search' : 'No tracks found'}
                     </td>
                   </tr>
                 ) : (
-                  filteredTracks.map((track) => (
+                  sortedTracks.map((track) => (
                     <tr key={track.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3">
                         <span className="font-medium text-gray-900">{track.name}</span>
@@ -183,7 +300,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           </div>
         </div>
         <div className="mt-4 text-sm text-gray-600">
-          Showing {filteredTracks.length} of {tracks.length} tracks
+          Showing {sortedTracks.length} of {tracks.length} tracks
         </div>
       </div>
     </div>

@@ -1,10 +1,15 @@
 import type { Metadata } from 'next'
-import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
 export const metadata: Metadata = {
   title: 'Spotify Playlist Browser',
   description: 'Browse and search your Spotify playlists',
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico', type: 'image/x-icon' },
+    ],
+  },
 }
 
 export default function RootLayout({
@@ -16,7 +21,6 @@ export default function RootLayout({
     <html lang="en">
       <body>
         {children}
-        <Analytics />
       </body>
     </html>
   )
