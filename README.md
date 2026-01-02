@@ -24,16 +24,19 @@ A modern Next.js web application that lets you browse, search, and sort your Spo
 ### Track Page Features
 - Complete track metadata: name, artists, album, release year, duration, BPM, added date
 - Album cover thumbnails
-- 30-second audio preview playback (click track row)
+- BPM detection with automatic processing indicator
 - Advanced filtering:
   - Year range (from/to)
   - BPM range (from/to)
+  - Include tracks with half/double BPM
 - Sort by any column
 - Search across all track fields
 - Clickable links:
-  - Track names → Spotify track page
+  - Track names → Spotify track page (opens in web player)
   - Artist names → Spotify artist profiles
   - Album names → Spotify album pages
+- BPM details modal with source, ISRC, and error information
+- Retry functionality for failed BPM calculations
 - Playlist header showing playlist info with "Open in Spotify" button
 - Mobile-optimized card view
 
@@ -43,6 +46,9 @@ A modern Next.js web application that lets you browse, search, and sort your Spo
 - Token refresh management
 - HTML entity decoding for clean text display
 - Error handling with user-friendly messages
+- BPM detection via external microservice
+- Analytics tracking (admin-only)
+- Country-based preview audio search
 
 ## Tech Stack
 
@@ -50,6 +56,8 @@ A modern Next.js web application that lets you browse, search, and sort your Spo
 - **Language:** TypeScript
 - **Styling:** Tailwind CSS
 - **Authentication:** Spotify OAuth 2.0 with PKCE
+- **Database:** Neon Postgres (for BPM cache and analytics)
+- **BPM Service:** Google Cloud Run microservice
 - **Deployment:** Vercel
 - **Image Optimization:** Next.js Image component
 
@@ -82,6 +90,10 @@ A modern Next.js web application that lets you browse, search, and sort your Spo
    SPOTIFY_CLIENT_SECRET=your_client_secret_here
    SPOTIFY_REDIRECT_URI=http://localhost:3000/api/auth/callback
    NEXT_PUBLIC_BASE_URL=http://localhost:3000
+   DATABASE_URL=postgresql://user:password@host/database?sslmode=require
+   DATABASE_URL_UNPOOLED=postgresql://user:password@host/database?sslmode=require
+   BPM_SERVICE_URL=https://bpm-service-340051416180.europe-west3.run.app
+   GCP_SERVICE_ACCOUNT_KEY={"type":"service_account",...}
    ```
 
 4. **Configure Spotify App:**
@@ -139,25 +151,44 @@ spotify-playlist-browser/
 │   │   │   ├── login/          # OAuth initiation
 │   │   │   ├── callback/        # OAuth callback handler
 │   │   │   ├── logout/          # Logout endpoint
-│   │   │   └── status/          # Auth status check
+│   │   │   ├── status/          # Auth status check
+│   │   │   └── is-admin/        # Check if user is admin
 │   │   ├── playlists/
 │   │   │   ├── route.ts         # Get all playlists
 │   │   │   └── [id]/
 │   │   │       ├── route.ts     # Get playlist info
 │   │   │       └── tracks/
 │   │   │           └── route.ts # Get playlist tracks
-│   │   └── debug/
-│   │       └── audio-features/  # Debug endpoint for BPM data
+│   │   ├── bpm/
+│   │   │   ├── route.ts         # Get BPM for single track
+│   │   │   └── batch/
+│   │   │       └── route.ts     # Get BPM for multiple tracks
+│   │   ├── analytics/
+│   │   │   ├── track-pageview/  # Track pageview
+│   │   │   └── stats/           # Get usage statistics (admin)
+│   │   ├── country/
+│   │   │   └── route.ts         # Get country from IP/locale
+│   │   └── components/
+│   │       └── PageViewTracker.tsx # Client component for pageview tracking
 │   ├── playlists/
 │   │   ├── page.tsx             # Playlists list page
-│   │   ├── PlaylistsTable.tsx   # Playlists table component
 │   │   └── [id]/
-│   │       └── page.tsx         # Tracks page
+│   │       └── page.tsx         # Tracks page with BPM
+│   ├── stats/
+│   │   ├── page.tsx             # Analytics dashboard (admin)
+│   │   └── StatsClient.tsx      # Stats display component
 │   ├── layout.tsx               # Root layout with footer
 │   ├── page.tsx                 # Home/login page
 │   └── globals.css              # Global styles
 ├── lib/
-│   └── spotify.ts               # Spotify API client library
+│   ├── spotify.ts               # Spotify API client library
+│   ├── bpm.ts                   # BPM detection module
+│   ├── db.ts                    # Database connection utility
+│   └── analytics.ts             # Analytics tracking utilities
+├── migrations/
+│   ├── 001_create_track_bpm_cache.sql
+│   ├── 002_create_analytics_tables.sql
+│   └── 003_add_url_tracking.sql
 ├── public/
 │   ├── favicon-16x16.png        # Favicon
 │   └── favicon-32x32.png        # Favicon
@@ -195,8 +226,17 @@ spotify-playlist-browser/
 - `GET /api/playlists/[id]` - Returns playlist information
 - `GET /api/playlists/[id]/tracks` - Returns all tracks for a playlist
 
-### Debug
-- `GET /api/debug/audio-features?playlistId=[id]` - Debug endpoint for audio features API
+### BPM
+- `GET /api/bpm?spotifyTrackId=...&country=...` - Get BPM for a single track
+- `POST /api/bpm/batch` - Get BPM for multiple tracks (batch endpoint)
+
+### Analytics (Admin Only)
+- `GET /api/analytics/stats` - Get usage statistics (users, requests, pageviews)
+- `POST /api/analytics/track-pageview` - Track a pageview
+- `GET /api/auth/is-admin` - Check if current user is admin
+
+### Country
+- `GET /api/country` - Get country code from IP address or browser locale
 
 ## Authentication Flow
 
@@ -234,6 +274,8 @@ SPOTIFY_CLIENT_ID=your_spotify_client_id
 SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
 SPOTIFY_REDIRECT_URI=https://searchmyplaylist.delman.it/api/auth/callback
 NEXT_PUBLIC_BASE_URL=https://searchmyplaylist.delman.it
+DATABASE_URL=postgresql://user:password@host/database?sslmode=require
+DATABASE_URL_UNPOOLED=postgresql://user:password@host/database?sslmode=require
 BPM_SERVICE_URL=https://bpm-service-340051416180.europe-west3.run.app
 GCP_SERVICE_ACCOUNT_KEY={"type":"service_account","project_id":"...","private_key_id":"...","private_key":"...","client_email":"...","client_id":"...","auth_uri":"...","token_uri":"...","auth_provider_x509_cert_url":"...","client_x509_cert_url":"..."}
 ```
@@ -245,9 +287,25 @@ SPOTIFY_CLIENT_ID=your_spotify_client_id
 SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
 SPOTIFY_REDIRECT_URI=http://localhost:3000/api/auth/callback
 NEXT_PUBLIC_BASE_URL=http://localhost:3000
+DATABASE_URL=postgresql://user:password@host/database?sslmode=require
+DATABASE_URL_UNPOOLED=postgresql://user:password@host/database?sslmode=require
 BPM_SERVICE_URL=https://bpm-service-340051416180.europe-west3.run.app
 GCP_SERVICE_ACCOUNT_KEY={"type":"service_account","project_id":"...","private_key_id":"...","private_key":"...","client_email":"...","client_id":"...","auth_uri":"...","token_uri":"...","auth_provider_x509_cert_url":"...","client_x509_cert_url":"..."}
 ```
+
+### Database Setup
+
+The application uses Neon Postgres for BPM caching and analytics. You need to:
+
+1. **Create a Neon database** at [neon.tech](https://neon.tech)
+2. **Run migrations** to create the required tables:
+   ```bash
+   psql $DATABASE_URL_UNPOOLED -f migrations/001_create_track_bpm_cache.sql
+   psql $DATABASE_URL_UNPOOLED -f migrations/002_create_analytics_tables.sql
+   psql $DATABASE_URL_UNPOOLED -f migrations/003_add_url_tracking.sql
+   ```
+3. **Set `DATABASE_URL`** - Pooled connection (PgBouncer) for runtime
+4. **Set `DATABASE_URL_UNPOOLED`** - Direct connection for migrations
 
 ### BPM Service Configuration
 
@@ -316,12 +374,14 @@ The application requests the following Spotify scopes:
 - Click again to reverse sort order
 - Visual indicators show current sort field and direction (↑/↓)
 
-### Audio Preview
+### BPM Detection
 
-- Click on any track row to play a 30-second preview
-- Visual indicator shows which track is currently playing
-- Click again to pause
-- Automatically stops when another track starts
+- Automatic BPM calculation for all tracks in a playlist
+- Progress indicator shows processing status
+- BPM values are clickable to view detailed information (source, ISRC, error)
+- Retry functionality for failed calculations
+- Country selection for preview audio search (iTunes/Deezer)
+- Half/double BPM search option in advanced filters
 
 ### Mobile Optimization
 
@@ -355,9 +415,11 @@ The application requests the following Spotify scopes:
 - Verify domain configuration in Vercel
 
 **BPM data not showing:**
-- BPM data availability depends on when your Spotify app was created
-- Apps created before November 2024 may have access to audio features
-- Use the debug panel (click "Show Debug Info") to check API responses
+- BPM is calculated using an external service from preview audio
+- Some tracks may not have preview audio available (shows as N/A)
+- You can retry failed calculations by clicking on N/A values
+- Try selecting a different country in the "more info" panel if previews aren't found
+- Check the debug panel (admin only) for detailed URL tracking information
 
 **Large playlists not loading:**
 - The app handles pagination automatically

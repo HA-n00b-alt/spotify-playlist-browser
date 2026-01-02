@@ -2,16 +2,18 @@
 
 ## Running the Migration
 
-The `track_bpm_cache` table needs to be created in your Neon Postgres database before BPM detection will work.
+The database tables need to be created in your Neon Postgres database before the application will work properly.
 
 ### Option 1: Using Neon SQL Editor (Easiest)
 
 1. Go to your Neon dashboard: https://console.neon.tech
-2. Select your `song-bpm-storage` database
+2. Select your database
 3. Click on "SQL Editor" in the left sidebar
-4. Copy the contents of `migrations/001_create_track_bpm_cache.sql`
-5. Paste it into the SQL editor
-6. Click "Run" to execute
+4. Copy and paste the contents of each migration file in order:
+   - `migrations/001_create_track_bpm_cache.sql`
+   - `migrations/002_create_analytics_tables.sql`
+   - `migrations/003_add_url_tracking.sql`
+5. Click "Run" to execute each migration
 
 ### Option 2: Using psql Command Line
 
@@ -21,8 +23,10 @@ If you have `psql` installed locally:
 # Set your unpooled connection string
 export DATABASE_URL_UNPOOLED="postgresql://user:password@host/database?sslmode=require"
 
-# Run the migration
+# Run the migrations (in order)
 psql $DATABASE_URL_UNPOOLED -f migrations/001_create_track_bpm_cache.sql
+psql $DATABASE_URL_UNPOOLED -f migrations/002_create_analytics_tables.sql
+psql $DATABASE_URL_UNPOOLED -f migrations/003_add_url_tracking.sql
 ```
 
 ### Option 3: Using Node.js Script

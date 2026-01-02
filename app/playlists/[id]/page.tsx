@@ -826,21 +826,54 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           </div>
         )}
 
-        {/* BPM Processing Progress Indicator */}
+        {/* BPM Processing Progress Indicator - Always visible */}
         {(() => {
           const totalTracks = tracks.length
           if (totalTracks === 0) return null
 
-          // If all tracks have entries in database, don't show anything
-          if (tracksProcessedCount >= totalTracks) {
-            return null
+          const tracksWithBpm = tracks.filter(t => trackBpms[t.id] != null && trackBpms[t.id] !== undefined).length
+          const tracksWithNa = tracks.filter(t => trackBpms[t.id] === null).length
+          const tracksLoading = loadingBpms.size
+          const tracksDone = tracks.filter(t => 
+            trackBpms[t.id] !== undefined && !loadingBpms.has(t.id)
+          ).length
+          const tracksRemaining = totalTracks - tracksDone
+          const isProcessing = tracksLoading > 0 || tracksRemaining > 0
+
+          // Always show the indicator - never hide it
+          if (isProcessing) {
+            return (
+              <div className="mb-4 sm:mb-6 text-sm text-gray-600">
+                BPM information processing ongoing ({tracksDone} tracks done, {tracksRemaining} remaining){' '}
+                <button
+                  onClick={() => setShowBpmMoreInfo(true)}
+                  className="text-blue-600 hover:text-blue-700 hover:underline"
+                >
+                  (more info)
+                </button>
+              </div>
+            )
           }
 
-          // If at least one track is missing, show the message
-          const tracksRemaining = totalTracks - tracksProcessedCount
+          // Show completion status
+          if (tracksWithNa > 0) {
+            return (
+              <div className="mb-4 sm:mb-6 text-sm text-gray-600">
+                {tracksWithNa} of {totalTracks} tracks have no BPM information available. You can retry by clicking on the N/A value.{' '}
+                <button
+                  onClick={() => setShowBpmMoreInfo(true)}
+                  className="text-blue-600 hover:text-blue-700 hover:underline"
+                >
+                  (more info)
+                </button>
+              </div>
+            )
+          }
+
+          // All tracks have BPM
           return (
             <div className="mb-4 sm:mb-6 text-sm text-gray-600">
-              BPM information processing ongoing ({tracksProcessedCount} tracks done, {tracksRemaining} remaining){' '}
+              All {totalTracks} tracks have BPM information available.{' '}
               <button
                 onClick={() => setShowBpmMoreInfo(true)}
                 className="text-blue-600 hover:text-blue-700 hover:underline"

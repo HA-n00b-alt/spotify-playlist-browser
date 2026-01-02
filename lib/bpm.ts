@@ -125,13 +125,18 @@ async function checkCache(
  * Get country code from request header override, IP address, Accept-Language header, or default to US
  */
 function getCountryCodeFromRequest(request?: Request): string {
-  if (!request) return 'us'
+  if (!request) {
+    console.log('[BPM Module] No request provided, defaulting to US')
+    return 'us'
+  }
   
   try {
-    // Check for manual override first
+    // Check for manual override first (this is set by the API route when country param is provided)
     const override = request.headers.get('x-country-override')
     if (override) {
-      return override.toLowerCase()
+      const country = override.toLowerCase()
+      console.log(`[BPM Module] Using country override from header: ${country}`)
+      return country
     }
     
     const acceptLanguage = request.headers.get('accept-language')

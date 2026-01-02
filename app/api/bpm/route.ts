@@ -19,16 +19,19 @@ export async function GET(request: Request) {
   try {
     console.log(`[BPM API] Fetching BPM for track: ${spotifyTrackId}, country: ${countryParam || 'auto'}`)
     // Create a modified request with country in header if provided
-    const modifiedRequest = countryParam 
-      ? new Request(request.url, {
-          ...request,
-          headers: new Headers(request.headers),
-        })
-      : request
+    let modifiedRequest = request
     
     if (countryParam) {
-      // Store country in a custom header for getCountryCodeFromRequest to use
-      modifiedRequest.headers.set('x-country-override', countryParam)
+      // Create a new Request with the country override header
+      const headers = new Headers(request.headers)
+      headers.set('x-country-override', countryParam)
+      modifiedRequest = new Request(request.url, {
+        method: request.method,
+        headers: headers,
+        body: request.body,
+        redirect: request.redirect,
+      })
+      console.log(`[BPM API] Set x-country-override header to: ${countryParam}`)
     }
     
     const result = await getBpmForSpotifyTrack(spotifyTrackId, modifiedRequest)

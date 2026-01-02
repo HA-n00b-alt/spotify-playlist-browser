@@ -13,10 +13,12 @@ This implementation provides a reliable BPM detection pipeline that:
 
 ### Database
 
-- **Table**: `track_bpm_cache` in Neon Postgres database `song-bpm-storage`
+- **Table**: `track_bpm_cache` in Neon Postgres database
 - **Primary Key**: `spotify_track_id` (unique)
 - **Cache Key**: `isrc` (when available) for cross-platform matching
 - **TTL**: 90 days (cached results are valid for 90 days)
+- **URL Tracking**: `urls_tried` (JSONB) stores array of URLs attempted
+- **Successful URL**: `successful_url` (TEXT) stores the URL that succeeded (or null)
 
 ### Components
 
@@ -33,21 +35,35 @@ This implementation provides a reliable BPM detection pipeline that:
    - Stores results in cache
 
 3. **`app/api/bpm/route.ts`** - API endpoint
-   - `GET /api/bpm?spotifyTrackId=...`
-   - Returns `{ bpm, source, isrc, bpmRaw }`
+   - `GET /api/bpm?spotifyTrackId=...&country=...`
+   - Returns `{ bpm, source, isrc, bpmRaw, error, urlsTried, successfulUrl }`
 
-4. **UI Integration** - `app/playlists/[id]/page.tsx`
-   - Fetches BPM for tracks in batches
-   - Displays BPM in track table
-   - Supports BPM filtering and sorting
+4. **`app/api/bpm/batch/route.ts`** - Batch API endpoint
+   - `POST /api/bpm/batch` with `{ trackIds: [...] }`
+   - Returns cached results for multiple tracks efficiently
+   - Returns `{ results: { [trackId]: { bpm, source, isrc, bpmRaw, error, urlsTried, successfulUrl, cached } } }`
+
+5. **UI Integration** - `app/playlists/[id]/page.tsx`
+   - Fetches BPM for all tracks in playlist (not just first 20)
+   - Displays BPM in track table with processing indicator
+   - Supports BPM filtering and sorting (including half/double BPM)
+   - BPM modal with detailed information and retry functionality
+   - Country selection for preview audio search
+   - Debug panel (admin-only) showing URLs tried and successful URLs
 
 ## Preview URL Resolution Order
 
-1. **Spotify preview** (`spotify_preview`) - If `track.preview_url` exists
-2. **iTunes ISRC lookup** (`itunes_isrc`) - Lookup by ISRC code
-3. **iTunes search** (`itunes_search`) - Search by artist + title
-4. **Deezer search** (`deezer`) - Search by artist + title
-5. **Failed** (`computed_failed`) - No preview found
+1. **iTunes ISRC lookup** (`itunes_isrc`) - Lookup by ISRC code (with country parameter)
+2. **iTunes search** (`itunes_search`) - Search by artist + title (with country parameter)
+3. **Deezer search** (`deezer`) - Search by artist + title
+4. **Failed** (`computed_failed`) - No preview found
+
+**Note:** Spotify preview URLs are no longer used as the endpoint is inactive.
+
+**Country Selection:**
+- Country is determined from IP address (via `/api/country`) or browser locale
+- Users can manually select a different country in the "more info" panel
+- Country parameter is used for iTunes API calls to search region-specific stores
 
 ## BPM Computation
 
@@ -95,10 +111,12 @@ GCP_SERVICE_ACCOUNT_KEY={"type":"service_account","project_id":"...","private_ke
 - `BPM_SERVICE_URL` - External BPM service URL (optional, defaults to provided URL)
 - `GCP_SERVICE_ACCOUNT_KEY` - Google Cloud service account key JSON (as single-line string) for authenticating with the BPM service
 
-### 3. Run Migration
+### 3. Run Migrations
 
 ```bash
 psql $DATABASE_URL_UNPOOLED -f migrations/001_create_track_bpm_cache.sql
+psql $DATABASE_URL_UNPOOLED -f migrations/002_create_analytics_tables.sql
+psql $DATABASE_URL_UNPOOLED -f migrations/003_add_url_tracking.sql
 ```
 
 ### 4. Deploy
@@ -128,7 +146,11 @@ Response:
 
 ### UI
 
-BPM is automatically fetched and displayed in the tracks table. The first 20 tracks have BPM fetched on page load.
+BPM is automatically fetched and displayed in the tracks table for all tracks in the playlist. A progress indicator shows processing status. Users can:
+- Click on BPM values to see detailed information (source, ISRC, error)
+- Retry failed calculations by clicking on N/A values
+- Select country for preview audio search
+- View debug information (admin-only) including URLs tried
 
 ## Performance
 
@@ -152,11 +174,18 @@ BPM is automatically fetched and displayed in the tracks table. The first 20 tra
 - Complex time signatures may not be detected accurately
 - Requires Google Cloud service account for authentication
 
-## Future Improvements
+## URL Tracking
 
-- Implement batch BPM fetching for better UX
-- Add manual BPM correction interface
-- Support for more preview sources
-- Better error recovery and retry logic
-- Caching of identity tokens to reduce authentication overhead
+The system tracks all URLs attempted during preview audio resolution:
+- **`urls_tried`**: Array of all URLs that were attempted (iTunes ISRC lookup, iTunes search, Deezer search)
+- **`successful_url`**: The URL that successfully provided preview audio (or null if all failed)
+- URLs are stored in the database for debugging and analysis
+- Debug panel (admin-only) displays URLs tried and highlights the successful one
+
+## Country Selection
+
+- Country is automatically detected from IP address (via `/api/country` endpoint) or browser locale
+- Users can manually select a different country in the "more info" panel
+- Changing country reloads the page and searches stores in the selected country
+- Country parameter is used for iTunes API calls to access region-specific stores
 
