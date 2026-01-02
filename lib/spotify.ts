@@ -45,7 +45,18 @@ async function refreshAccessToken(): Promise<string | null> {
     }
 
     const data = await response.json()
-    return data.access_token
+    const { access_token, expires_in } = data
+
+    // Update the access token cookie
+    const cookieStore = await cookies()
+    cookieStore.set('access_token', access_token, {
+      maxAge: expires_in || 3600,
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+    })
+
+    return access_token
   } catch {
     return null
   }

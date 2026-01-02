@@ -31,10 +31,12 @@ export async function GET() {
   )
 
   // Store code verifier in cookie (30 minutes expiry)
+  const isProduction = process.env.NODE_ENV === 'production'
   response.cookies.set('code_verifier', codeVerifier, {
     maxAge: 30 * 60,
     httpOnly: true,
     sameSite: 'lax',
+    secure: isProduction,
   })
 
   return response

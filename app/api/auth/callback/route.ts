@@ -68,11 +68,13 @@ export async function GET(request: Request) {
 
     // Store tokens in cookies
     const response = NextResponse.redirect(new URL('/playlists', request.url))
+    const isProduction = process.env.NODE_ENV === 'production'
     
     response.cookies.set('access_token', access_token, {
-      maxAge: expires_in,
+      maxAge: expires_in || 3600,
       httpOnly: true,
       sameSite: 'lax',
+      secure: isProduction,
     })
 
     if (refresh_token) {
@@ -80,6 +82,7 @@ export async function GET(request: Request) {
         maxAge: 60 * 60 * 24 * 365, // 1 year
         httpOnly: true,
         sameSite: 'lax',
+        secure: isProduction,
       })
     }
 
