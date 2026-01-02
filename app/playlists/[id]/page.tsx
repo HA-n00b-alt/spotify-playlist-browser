@@ -793,83 +793,49 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           const totalTracks = tracks.length
           if (totalTracks === 0) return null
 
-          const tracksWithBpm = Object.values(trackBpms).filter(bpm => bpm !== null && bpm !== undefined).length
-          const tracksWithNa = Object.values(trackBpms).filter(bpm => bpm === null).length
-          const tracksProcessed = tracksWithBpm + tracksWithNa // Tracks that have been processed (either BPM or N/A)
+          // Simple, clear state calculation
+          const tracksWithBpm = tracks.filter(t => trackBpms[t.id] != null && trackBpms[t.id] !== undefined).length
+          const tracksWithNa = tracks.filter(t => trackBpms[t.id] === null).length
           const tracksLoading = loadingBpms.size
-          // Tracks that have been tried but failed (have bpmDetails but bpm is null)
-          const tracksTriedButFailed = tracks.filter(t => 
-            trackBpms[t.id] === null && bpmDetails[t.id]
+          
+          // Tracks that are done: have a result AND not currently loading
+          const tracksDone = tracks.filter(t => 
+            trackBpms[t.id] !== undefined && !loadingBpms.has(t.id)
           ).length
-          // Count tracks that don't have a result yet (not in trackBpms or undefined)
-          const tracksNotProcessed = tracks.filter(t => 
-            trackBpms[t.id] === undefined
-          ).length
-          // Remaining = tracks not yet processed (undefined in trackBpms)
-          const actualRemaining = tracksNotProcessed
-          const isProcessing = tracksLoading > 0 || actualRemaining > 0
+          
+          // Tracks remaining: total - done (includes tracks without results AND tracks currently loading)
+          const tracksRemaining = totalTracks - tracksDone
+          
+          const isProcessing = tracksLoading > 0 || tracksRemaining > 0
           const allTracksHaveBpm = tracksWithBpm === totalTracks
+          const hasNaTracks = tracksWithNa > 0
 
-          // Only hide if ALL tracks are already in DB (either with BPM or N/A with details) AND all have BPM AND not processing
-          if (allTracksInDb && !isProcessing && allTracksHaveBpm && tracksLoading === 0) {
+          // Hide ONLY if: all tracks have BPM AND nothing is processing
+          if (allTracksHaveBpm && !isProcessing) {
             return null
           }
 
-          // Always show if processing or if there are N/A tracks
-          // 2. If tracks have N/A that were previously tried (not currently processing)
-          if (!isProcessing && tracksTriedButFailed > 0) {
-            return (
-              <div className="mb-4 sm:mb-6 text-sm text-gray-600">
-                {tracksTriedButFailed} of {totalTracks} tracks have no BPM information available. You can retry by clicking on the N/A value.{' '}
-                <button
-                  onClick={() => setShowBpmMoreInfo(true)}
-                  className="text-blue-600 hover:text-blue-700 hover:underline"
-                >
-                  (more info)
-                </button>
-              </div>
-            )
-          }
-
-          // 3. If currently processing or just completed (or processing has started)
-          if (isProcessing || bpmProcessingStartTime) {
-            // If processing just completed
-            if (bpmProcessingEndTime && bpmProcessingStartTime && bpmTracksCalculated > 0 && !isProcessing) {
-              const elapsedSeconds = Math.floor((bpmProcessingEndTime - bpmProcessingStartTime) / 1000)
-              const minutes = Math.floor(elapsedSeconds / 60)
-              const seconds = elapsedSeconds % 60
-              
-              let timeText = ''
-              if (minutes > 0) {
-                timeText = `${minutes} minute${minutes !== 1 ? 's' : ''} and ${seconds} second${seconds !== 1 ? 's' : ''}`
-              } else {
-                timeText = `${seconds} second${seconds !== 1 ? 's' : ''}`
-              }
-
-              return (
-                <div className="mb-4 sm:mb-6 text-sm text-gray-600">
-                  {bpmTracksCalculated} track{bpmTracksCalculated !== 1 ? 's' : ''} calculated in {timeText}.{' '}
-                  {tracksTriedButFailed > 0 && (
-                    <>
-                      {tracksTriedButFailed} track{tracksTriedButFailed !== 1 ? 's' : ''} have no BPM information available.{' '}
-                    </>
-                  )}
-                  <button
-                    onClick={() => setShowBpmMoreInfo(true)}
-                    className="text-blue-600 hover:text-blue-700 hover:underline"
-                  >
-                    (more info)
-                  </button>
-                </div>
-              )
+          // Show completion message if processing just finished and we calculated some tracks
+          if (bpmProcessingEndTime && bpmProcessingStartTime && bpmTracksCalculated > 0 && !isProcessing) {
+            const elapsedSeconds = Math.floor((bpmProcessingEndTime - bpmProcessingStartTime) / 1000)
+            const minutes = Math.floor(elapsedSeconds / 60)
+            const seconds = elapsedSeconds % 60
+            
+            let timeText = ''
+            if (minutes > 0) {
+              timeText = `${minutes} minute${minutes !== 1 ? 's' : ''} and ${seconds} second${seconds !== 1 ? 's' : ''}`
+            } else {
+              timeText = `${seconds} second${seconds !== 1 ? 's' : ''}`
             }
 
-            // If currently processing - show from the beginning
-            // Show remaining - if tracks are loading, they're not processed yet, so they count as remaining
-            // The actualRemaining already accounts for this since loading tracks aren't in trackBpms yet
             return (
               <div className="mb-4 sm:mb-6 text-sm text-gray-600">
-                BPM information processing ongoing ({tracksProcessed} tracks done, {actualRemaining} remaining){' '}
+                {bpmTracksCalculated} track{bpmTracksCalculated !== 1 ? 's' : ''} calculated in {timeText}.{' '}
+                {hasNaTracks && (
+                  <>
+                    {tracksWithNa} track{tracksWithNa !== 1 ? 's' : ''} have no BPM information available.{' '}
+                  </>
+                )}
                 <button
                   onClick={() => setShowBpmMoreInfo(true)}
                   className="text-blue-600 hover:text-blue-700 hover:underline"
@@ -880,11 +846,26 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             )
           }
 
-          // If there are N/A tracks, always show the message
-          if (tracksTriedButFailed > 0) {
+          // Show processing message if currently processing
+          if (isProcessing) {
             return (
               <div className="mb-4 sm:mb-6 text-sm text-gray-600">
-                {tracksTriedButFailed} of {totalTracks} tracks have no BPM information available. You can retry by clicking on the N/A value.{' '}
+                BPM information processing ongoing ({tracksDone} tracks done, {tracksRemaining} remaining){' '}
+                <button
+                  onClick={() => setShowBpmMoreInfo(true)}
+                  className="text-blue-600 hover:text-blue-700 hover:underline"
+                >
+                  (more info)
+                </button>
+              </div>
+            )
+          }
+
+          // Show N/A message if there are N/A tracks (and not processing)
+          if (hasNaTracks) {
+            return (
+              <div className="mb-4 sm:mb-6 text-sm text-gray-600">
+                {tracksWithNa} of {totalTracks} tracks have no BPM information available. You can retry by clicking on the N/A value.{' '}
                 <button
                   onClick={() => setShowBpmMoreInfo(true)}
                   className="text-blue-600 hover:text-blue-700 hover:underline"

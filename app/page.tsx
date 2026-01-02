@@ -54,9 +54,9 @@ export default async function Home({
           You&apos;ll be redirected to Spotify to authorize this application
         </p>
 
-        <div className="mt-8 p-4 bg-gray-800/50 border border-gray-700 rounded-lg max-w-lg">
-          <p className="text-xs text-gray-300 leading-relaxed">
-            <strong className="text-gray-200">Privacy Notice:</strong> Your Spotify login is used only to temporarily fetch your playlists. 
+        <div className="mt-8 p-4 bg-white border border-gray-300 rounded-lg max-w-lg">
+          <p className="text-xs text-gray-900 leading-relaxed">
+            <strong className="text-gray-900">Privacy Notice:</strong> Your Spotify login is used only to temporarily fetch your playlists. 
             No data about your playlists or the association between songs and playlists is stored. 
             Only BPM information for individual songs is cached (not linked to playlists or users) to improve performance.
           </p>
