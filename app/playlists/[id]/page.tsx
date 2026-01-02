@@ -602,12 +602,17 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           const totalTracks = tracks.length
           const tracksWithBpm = Object.values(trackBpms).filter(bpm => bpm !== null && bpm !== undefined).length
           const tracksLoading = loadingBpms.size
-          const tracksRemaining = totalTracks - tracksWithBpm - tracksLoading
-          const isProcessing = tracksRemaining > 0 && tracksLoading > 0
+          // Count tracks that don't have BPM yet (either loading or not started)
+          const tracksWithoutBpm = tracks.filter(t => 
+            trackBpms[t.id] === undefined || trackBpms[t.id] === null
+          ).length
+          const tracksRemaining = tracksWithoutBpm - tracksLoading
+          // Show indicator if there are tracks loading OR tracks that need BPM but aren't loaded yet
+          const isProcessing = (tracksLoading > 0 || tracksRemaining > 0) && totalTracks > 0
           
           // Estimate time: assume ~5 seconds per track for uncached tracks
           const estimatedSecondsPerTrack = 5
-          const estimatedSecondsRemaining = tracksRemaining * estimatedSecondsPerTrack
+          const estimatedSecondsRemaining = (tracksLoading + tracksRemaining) * estimatedSecondsPerTrack
           const estimatedMinutes = Math.ceil(estimatedSecondsRemaining / 60)
           
           if (isProcessing && totalTracks > 0) {
@@ -775,53 +780,53 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             </button>
             
             {showAdvanced && (
-              <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-gray-100 rounded-lg border border-gray-200 max-w-full sm:max-w-2xl">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+              <div className="mt-3 sm:mt-4 p-4 sm:p-6 bg-gray-100 rounded-lg border border-gray-200 max-w-full sm:max-w-3xl">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <label className="block text-sm font-medium text-gray-700">
                       Year Range
                     </label>
-                    <div className="flex gap-2 items-center">
+                    <div className="flex gap-3 items-center">
                       <input
                         type="number"
                         placeholder="From"
                         value={yearFrom}
                         onChange={(e) => setYearFrom(e.target.value)}
-                        className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        className="flex-1 px-4 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       />
-                      <span className="text-gray-500">to</span>
+                      <span className="text-gray-500 text-sm">to</span>
                       <input
                         type="number"
                         placeholder="To"
                         value={yearTo}
                         onChange={(e) => setYearTo(e.target.value)}
-                        className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        className="flex-1 px-4 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       />
                     </div>
                   </div>
                   
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <div className="space-y-3">
+                    <label className="block text-sm font-medium text-gray-700">
                       BPM Range
                     </label>
-                    <div className="flex gap-2 items-center">
+                    <div className="flex gap-3 items-center">
                       <input
                         type="number"
                         placeholder="From"
                         value={bpmFrom}
                         onChange={(e) => setBpmFrom(e.target.value)}
-                        className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        className="flex-1 px-4 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       />
-                      <span className="text-gray-500">to</span>
+                      <span className="text-gray-500 text-sm">to</span>
                       <input
                         type="number"
                         placeholder="To"
                         value={bpmTo}
                         onChange={(e) => setBpmTo(e.target.value)}
-                        className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        className="flex-1 px-4 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       />
                     </div>
-                    <label className="flex items-center mt-2">
+                    <label className="flex items-center pt-1">
                       <input
                         type="checkbox"
                         checked={includeHalfDoubleBpm}
@@ -1286,7 +1291,59 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               )}
             </div>
 
-            <div className="mt-6 flex justify-end">
+            <div className="mt-6 flex justify-end gap-3">
+              {trackBpms[selectedBpmTrack.id] == null && (
+                <button
+                  onClick={async () => {
+                    // Retry fetching BPM for this track
+                    setShowBpmModal(false)
+                    setLoadingBpms(prev => new Set(prev).add(selectedBpmTrack.id))
+                    try {
+                      const res = await fetch(`/api/bpm?spotifyTrackId=${selectedBpmTrack.id}`)
+                      if (res.ok) {
+                        const data = await res.json()
+                        setTrackBpms(prev => ({
+                          ...prev,
+                          [selectedBpmTrack.id]: data.bpm,
+                        }))
+                        setBpmDetails(prev => ({
+                          ...prev,
+                          [selectedBpmTrack.id]: {
+                            source: data.source,
+                            error: data.error,
+                            isrc: data.isrc,
+                          },
+                        }))
+                      } else {
+                        const errorData = await res.json().catch(() => ({}))
+                        setBpmDetails(prev => ({
+                          ...prev,
+                          [selectedBpmTrack.id]: {
+                            error: errorData.error || 'Failed to fetch BPM',
+                          },
+                        }))
+                      }
+                    } catch (error) {
+                      console.error(`[BPM Client] Error retrying BPM for ${selectedBpmTrack.id}:`, error)
+                      setBpmDetails(prev => ({
+                        ...prev,
+                        [selectedBpmTrack.id]: {
+                          error: 'Network error. Please try again.',
+                        },
+                      }))
+                    } finally {
+                      setLoadingBpms(prev => {
+                        const next = new Set(prev)
+                        next.delete(selectedBpmTrack.id)
+                        return next
+                      })
+                    }
+                  }}
+                  className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded transition-colors"
+                >
+                  Retry
+                </button>
+              )}
               <button
                 onClick={() => setShowBpmModal(false)}
                 className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded transition-colors"
