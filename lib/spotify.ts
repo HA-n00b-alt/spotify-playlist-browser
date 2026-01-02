@@ -182,6 +182,10 @@ export async function getPlaylists(): Promise<any[]> {
   return allPlaylists
 }
 
+export async function getPlaylist(playlistId: string): Promise<any> {
+  return await makeSpotifyRequest<any>(`/playlists/${playlistId}`)
+}
+
 export async function getPlaylistTracks(playlistId: string): Promise<any[]> {
   const allTracks: any[] = []
   let nextUrl: string | null = `/playlists/${playlistId}/tracks?limit=50`

@@ -12,6 +12,21 @@ export const metadata: Metadata = {
   },
 }
 
+function Footer() {
+  return (
+    <footer className="mt-auto py-6 sm:py-8 text-center text-xs sm:text-sm text-gray-500 border-t border-gray-200">
+      Created by{' '}
+      <a href="mailto:delman@delman.it" className="text-green-600 hover:text-green-700 hover:underline">
+        delman@delman.it
+      </a>
+      , powered by{' '}
+      <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
+        Spotify
+      </a>
+    </footer>
+  )
+}
+
 export default function RootLayout({
   children,
 }: {
@@ -19,7 +34,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>
+      <body className="flex flex-col min-h-screen">
         {children}
       </body>
     </html>

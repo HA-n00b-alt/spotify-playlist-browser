@@ -40,6 +40,12 @@ interface PlaylistsTableProps {
 type SortField = 'name' | 'description' | 'owner' | 'tracks' | 'followers'
 type SortDirection = 'asc' | 'desc'
 
+function decodeHtmlEntities(text: string): string {
+  const textarea = document.createElement('textarea')
+  textarea.innerHTML = text
+  return textarea.value
+}
+
 export default function PlaylistsTable({ playlists }: PlaylistsTableProps) {
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
@@ -162,7 +168,7 @@ export default function PlaylistsTable({ playlists }: PlaylistsTableProps) {
                 </div>
                 {playlist.description && (
                   <div className="text-sm text-gray-600 mb-2 line-clamp-2">
-                    {playlist.description}
+                    {decodeHtmlEntities(playlist.description)}
                   </div>
                 )}
                 <div className="flex flex-wrap gap-3 text-xs text-gray-500">
@@ -282,7 +288,11 @@ export default function PlaylistsTable({ playlists }: PlaylistsTableProps) {
                   </td>
                   <td className="px-4 lg:px-6 py-3 hidden md:table-cell">
                     <div className="text-gray-600 max-w-md truncate text-sm">
-                      {playlist.description || <span className="text-gray-400 italic">No description</span>}
+                      {playlist.description ? (
+                        decodeHtmlEntities(playlist.description)
+                      ) : (
+                        <span className="text-gray-400 italic">No description</span>
+                      )}
                     </div>
                   </td>
                   <td className="px-4 lg:px-6 py-3">

@@ -69,8 +69,8 @@ export default async function PlaylistsPage() {
   }
 
   return (
-    <div className="min-h-screen p-4 sm:p-8 bg-gray-50">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
+      <div className="max-w-7xl mx-auto flex-1 w-full">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">My Playlists</h1>
           <form action="/api/auth/logout" method="POST">
@@ -91,6 +91,17 @@ export default async function PlaylistsPage() {
           </div>
         )}
       </div>
+      
+      <footer className="mt-auto py-6 sm:py-8 text-center text-xs sm:text-sm text-gray-500 border-t border-gray-200">
+        Created by{' '}
+        <a href="mailto:delman@delman.it" className="text-green-600 hover:text-green-700 hover:underline">
+          delman@delman.it
+        </a>
+        , powered by{' '}
+        <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
+          Spotify
+        </a>
+      </footer>
     </div>
   )
 }

@@ -24,11 +24,11 @@ export default async function Home({
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <div className="text-center max-w-md">
-        <h1 className="text-4xl font-bold mb-4">Spotify Playlist Browser</h1>
-        <p className="text-gray-400 mb-8">
-          Browse and search your Spotify playlists with ease
+    <main className="flex min-h-screen flex-col items-center justify-center p-8 sm:p-24">
+      <div className="text-center max-w-md w-full">
+        <h1 className="text-3xl sm:text-4xl font-bold mb-2 sm:mb-4">Spotify Playlist Tools</h1>
+        <p className="text-gray-400 mb-6 sm:mb-8 text-sm sm:text-base">
+          Search and sort your Spotify playlists with ease
         </p>
 
         {error && (
@@ -54,6 +54,17 @@ export default async function Home({
           You&apos;ll be redirected to Spotify to authorize this application
         </p>
       </div>
+      
+      <footer className="mt-auto py-6 sm:py-8 text-center text-xs sm:text-sm text-gray-500">
+        Created by{' '}
+        <a href="mailto:delman@delman.it" className="text-green-600 hover:text-green-700 hover:underline">
+          delman@delman.it
+        </a>
+        , powered by{' '}
+        <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
+          Spotify
+        </a>
+      </footer>
     </main>
   )
 }

@@ -42,8 +42,22 @@ interface PlaylistTracksPageProps {
 type SortField = 'name' | 'artists' | 'album' | 'release_date' | 'duration' | 'added_at' | 'tempo'
 type SortDirection = 'asc' | 'desc'
 
+interface PlaylistInfo {
+  id: string
+  name: string
+  description: string | null
+  images: Array<{ url: string }>
+  owner: {
+    display_name: string
+  }
+  external_urls: {
+    spotify: string
+  }
+}
+
 export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) {
   const [tracks, setTracks] = useState<Track[]>([])
+  const [playlistInfo, setPlaylistInfo] = useState<PlaylistInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -58,6 +72,23 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null)
   const [showDebug, setShowDebug] = useState(false)
   const [debugInfo, setDebugInfo] = useState<any>(null)
+  const [audioFeaturesDebug, setAudioFeaturesDebug] = useState<any>(null)
+
+  useEffect(() => {
+    async function fetchPlaylistInfo() {
+      try {
+        const res = await fetch(`/api/playlists/${params.id}`)
+        if (res.ok) {
+          const playlist = await res.json()
+          setPlaylistInfo(playlist)
+        }
+      } catch (e) {
+        console.error('Error fetching playlist info:', e)
+      }
+    }
+
+    fetchPlaylistInfo()
+  }, [params.id])
 
   useEffect(() => {
     async function fetchTracks() {
@@ -81,11 +112,27 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         const tracksWithBPM = data.filter((track: Track) => track.tempo != null)
         console.log(`Tracks with BPM: ${tracksWithBPM.length} of ${data.length}`)
         
+        // Try to fetch audio features directly to debug
+        if (data.length > 0) {
+          try {
+            const trackIds = data.slice(0, 5).map((t: Track) => t.id).filter((id: string) => !!id)
+            const audioRes = await fetch(`/api/debug/audio-features?ids=${trackIds.join(',')}`)
+            if (audioRes.ok) {
+              const audioData = await audioRes.json()
+              setAudioFeaturesDebug(audioData)
+              console.log('Audio Features Debug Response:', audioData)
+            }
+          } catch (e) {
+            console.error('Error fetching audio features debug:', e)
+          }
+        }
+        
         setDebugInfo({
           totalTracks: data.length,
           tracksWithBPM: tracksWithBPM.length,
           sampleTrack: data[0],
-          allTracks: data
+          allTracks: data,
+          tracksWithoutBPM: data.filter((track: Track) => track.tempo == null).length
         })
         
         setTracks(data)
@@ -311,9 +358,16 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     )
   }
 
+  function decodeHtmlEntities(text: string): string {
+    if (typeof document === 'undefined') return text
+    const textarea = document.createElement('textarea')
+    textarea.innerHTML = text
+    return textarea.value
+  }
+
   return (
-    <div className="min-h-screen p-4 sm:p-8 bg-gray-50">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
+      <div className="max-w-7xl mx-auto flex-1 w-full">
         <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <Link
             href="/playlists"
@@ -329,12 +383,67 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           </button>
         </div>
         
+        {playlistInfo && (
+          <div className="mb-6 bg-white rounded-lg border border-gray-200 shadow-sm p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              {playlistInfo.images && playlistInfo.images[0] && (
+                <Image
+                  src={playlistInfo.images[0].url}
+                  alt={playlistInfo.name}
+                  width={120}
+                  height={120}
+                  className="w-24 h-24 sm:w-30 sm:h-30 object-cover rounded flex-shrink-0"
+                />
+              )}
+              <div className="flex-1 min-w-0">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
+                  {playlistInfo.name}
+                </h1>
+                {playlistInfo.description && (
+                  <p className="text-sm sm:text-base text-gray-600 mb-2">
+                    {decodeHtmlEntities(playlistInfo.description)}
+                  </p>
+                )}
+                <div className="flex flex-wrap gap-3 text-xs sm:text-sm text-gray-500">
+                  <span>By {playlistInfo.owner.display_name}</span>
+                  <span>•</span>
+                  <span>{tracks.length} tracks</span>
+                </div>
+              </div>
+              {playlistInfo.external_urls?.spotify && (
+                <a
+                  href={playlistInfo.external_urls.spotify}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-full transition-colors text-sm sm:text-base whitespace-nowrap"
+                >
+                  Open in Spotify
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+        
         {showDebug && debugInfo && (
           <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-100 rounded-lg border border-gray-300 overflow-auto max-h-96">
             <h3 className="font-bold mb-2 text-sm sm:text-base">Debug Information</h3>
             <div className="text-xs sm:text-sm space-y-2">
               <p><strong>Total Tracks:</strong> {debugInfo.totalTracks}</p>
               <p><strong>Tracks with BPM:</strong> {debugInfo.tracksWithBPM}</p>
+              <p><strong>Tracks without BPM:</strong> {debugInfo.tracksWithoutBPM || 0}</p>
+              <p className="text-red-600">
+                <strong>BPM Success Rate:</strong> {debugInfo.totalTracks > 0 
+                  ? `${Math.round((debugInfo.tracksWithBPM / debugInfo.totalTracks) * 100)}%`
+                  : 'N/A'}
+              </p>
+              {audioFeaturesDebug && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer font-semibold text-xs sm:text-sm">Audio Features API Response (first 5 tracks)</summary>
+                  <pre className="mt-2 text-xs bg-white p-2 rounded overflow-auto">
+                    {JSON.stringify(audioFeaturesDebug, null, 2)}
+                  </pre>
+                </details>
+              )}
               <details className="mt-2">
                 <summary className="cursor-pointer font-semibold text-xs sm:text-sm">Sample Track Data</summary>
                 <pre className="mt-2 text-xs bg-white p-2 rounded overflow-auto">
@@ -342,9 +451,13 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 </pre>
               </details>
               <details className="mt-2">
-                <summary className="cursor-pointer font-semibold text-xs sm:text-sm">All Tracks (first 5)</summary>
+                <summary className="cursor-pointer font-semibold text-xs sm:text-sm">Tracks without BPM (first 3)</summary>
                 <pre className="mt-2 text-xs bg-white p-2 rounded overflow-auto">
-                  {JSON.stringify(debugInfo.allTracks.slice(0, 5), null, 2)}
+                  {JSON.stringify(
+                    debugInfo.allTracks.filter((t: Track) => t.tempo == null).slice(0, 3),
+                    null,
+                    2
+                  )}
                 </pre>
               </details>
             </div>
@@ -372,7 +485,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             </button>
             
             {showAdvanced && (
-              <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-gray-100 rounded-lg border border-gray-200">
+              <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-gray-100 rounded-lg border border-gray-200 max-w-full sm:max-w-2xl">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -462,20 +575,26 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     <span className="text-gray-400 text-xs">No image</span>
                   </div>
                 )}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start gap-2 mb-1">
-                    {track.preview_url && (
-                      <span className="text-green-600 text-sm mt-0.5">
-                        {currentlyPlaying === track.id ? '⏸' : '▶'}
-                      </span>
-                    )}
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-gray-900 text-sm truncate">
-                        {track.name}
-                        {track.explicit && (
-                          <span className="ml-1 text-xs bg-gray-200 text-gray-700 px-1 py-0.5 rounded">E</span>
+                      <div className="flex items-start gap-2 mb-1">
+                        {track.preview_url && (
+                          <span className="text-green-600 text-sm mt-0.5">
+                            {currentlyPlaying === track.id ? '⏸' : '▶'}
+                          </span>
                         )}
-                      </div>
+                        <div className="flex-1 min-w-0">
+                          <a
+                            href={track.external_urls.spotify}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-medium text-gray-900 text-sm truncate hover:text-green-600 hover:underline block"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {track.name}
+                            {track.explicit && (
+                              <span className="ml-1 text-xs bg-gray-200 text-gray-700 px-1 py-0.5 rounded">E</span>
+                            )}
+                          </a>
                       <div className="text-xs text-gray-600 mt-1">
                         {track.artists.map((artist, index) => (
                           <span key={artist.id || index}>
@@ -596,7 +715,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       <SortIcon field="tempo" />
                     </div>
                   </th>
-                  <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Link</th>
+                  <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 hidden sm:table-cell">Link</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -635,7 +754,15 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                               {currentlyPlaying === track.id ? '⏸' : '▶'}
                             </span>
                           )}
-                          <span className="font-medium text-gray-900 text-xs sm:text-sm">{track.name}</span>
+                          <a
+                            href={track.external_urls.spotify}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-medium text-gray-900 text-xs sm:text-sm hover:text-green-600 hover:underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {track.name}
+                          </a>
                           {track.explicit && (
                             <span className="ml-1 text-xs bg-gray-200 text-gray-700 px-1 py-0.5 rounded">E</span>
                           )}
@@ -690,7 +817,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           </span>
                         )}
                       </td>
-                      <td className="px-3 lg:px-4 py-2 lg:py-3" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-3 lg:px-4 py-2 lg:py-3 hidden sm:table-cell" onClick={(e) => e.stopPropagation()}>
                         <a
                           href={track.external_urls.spotify}
                           target="_blank"
@@ -711,6 +838,17 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           Showing {sortedTracks.length} of {tracks.length} tracks
         </div>
       </div>
+      
+      <footer className="mt-auto py-6 sm:py-8 text-center text-xs sm:text-sm text-gray-500 border-t border-gray-200">
+        Created by{' '}
+        <a href="mailto:delman@delman.it" className="text-green-600 hover:text-green-700 hover:underline">
+          delman@delman.it
+        </a>
+        , powered by{' '}
+        <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
+          Spotify
+        </a>
+      </footer>
     </div>
   )
 }
