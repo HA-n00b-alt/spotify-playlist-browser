@@ -124,139 +124,205 @@ export default function PlaylistsTable({ playlists }: PlaylistsTableProps) {
 
   return (
     <div>
-      <div className="mb-6">
+      <div className="mb-4 sm:mb-6">
         <input
           type="text"
-          placeholder="Search playlists by name, description, owner, tracks, or followers..."
+          placeholder="Search playlists..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          className="w-full px-4 py-3 sm:py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-base sm:text-sm"
         />
       </div>
       
-      <div className="bg-white rounded-lg overflow-hidden border border-gray-200 shadow-sm">
-        <table className="w-full">
-        <thead className="bg-gray-50 border-b border-gray-200">
-          <tr>
-            <th
-              className="px-6 py-4 text-left text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
-              onClick={() => handleSort('name')}
-            >
-              <div className="flex items-center">
-                Playlist
-                <SortIcon field="name" />
-              </div>
-            </th>
-            <th
-              className="px-6 py-4 text-left text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
-              onClick={() => handleSort('description')}
-            >
-              <div className="flex items-center">
-                Description
-                <SortIcon field="description" />
-              </div>
-            </th>
-            <th
-              className="px-6 py-4 text-left text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
-              onClick={() => handleSort('owner')}
-            >
-              <div className="flex items-center">
-                Owner
-                <SortIcon field="owner" />
-              </div>
-            </th>
-            <th
-              className="px-6 py-4 text-right text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
-              onClick={() => handleSort('tracks')}
-            >
-              <div className="flex items-center justify-end">
-                Tracks
-                <SortIcon field="tracks" />
-              </div>
-            </th>
-            <th
-              className="px-6 py-4 text-right text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
-              onClick={() => handleSort('followers')}
-            >
-              <div className="flex items-center justify-end">
-                Followers
-                <SortIcon field="followers" />
-              </div>
-            </th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-200">
-          {sortedPlaylists.map((playlist) => (
-            <tr
-              key={playlist.id}
-              className="hover:bg-gray-50 transition-colors"
-            >
-              <td className="px-6 py-4">
-                <Link
-                  href={`/playlists/${playlist.id}`}
-                  className="flex items-center gap-4 group"
-                >
-                  {playlist.images[0] ? (
-                    <Image
-                      src={playlist.images[0].url}
-                      alt={playlist.name}
-                      width={50}
-                      height={50}
-                      className="w-12 h-12 object-cover rounded flex-shrink-0"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 bg-gray-200 rounded flex-shrink-0 flex items-center justify-center">
-                      <span className="text-gray-400 text-xs">No image</span>
-                    </div>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium text-gray-900 group-hover:text-green-600 transition-colors truncate">
-                      {playlist.name}
-                    </div>
+      {/* Mobile Card View */}
+      <div className="block sm:hidden space-y-3">
+        {sortedPlaylists.map((playlist) => (
+          <Link
+            key={playlist.id}
+            href={`/playlists/${playlist.id}`}
+            className="block bg-white rounded-lg border border-gray-200 shadow-sm p-4 hover:shadow-md transition-shadow"
+          >
+            <div className="flex items-start gap-3">
+              {playlist.images[0] ? (
+                <Image
+                  src={playlist.images[0].url}
+                  alt={playlist.name}
+                  width={60}
+                  height={60}
+                  className="w-15 h-15 sm:w-12 sm:h-12 object-cover rounded flex-shrink-0"
+                />
+              ) : (
+                <div className="w-15 h-15 sm:w-12 sm:h-12 bg-gray-200 rounded flex-shrink-0 flex items-center justify-center">
+                  <span className="text-gray-400 text-xs">No image</span>
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-gray-900 mb-1 truncate">
+                  {playlist.name}
+                </div>
+                {playlist.description && (
+                  <div className="text-sm text-gray-600 mb-2 line-clamp-2">
+                    {playlist.description}
                   </div>
-                </Link>
-              </td>
-              <td className="px-6 py-4">
-                <div className="text-gray-600 max-w-md truncate">
-                  {playlist.description || <span className="text-gray-400 italic">No description</span>}
-                </div>
-              </td>
-              <td className="px-6 py-4">
-                {playlist.owner.external_urls?.spotify ? (
-                  <a
-                    href={playlist.owner.external_urls.spotify}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-green-600 hover:text-green-700 hover:underline"
-                  >
-                    {playlist.owner.display_name}
-                  </a>
-                ) : (
-                  <div className="text-gray-700">{playlist.owner.display_name}</div>
                 )}
-              </td>
-              <td className="px-6 py-4 text-right">
-                <div className="text-gray-700">{playlist.tracks.total}</div>
-              </td>
-              <td className="px-6 py-4 text-right">
-                <div className="text-gray-700">
-                  {playlist.followers?.total !== undefined ? playlist.followers.total.toLocaleString() : '-'}
+                <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+                  <span>
+                    {playlist.owner.external_urls?.spotify ? (
+                      <a
+                        href={playlist.owner.external_urls.spotify}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-green-600 hover:text-green-700"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {playlist.owner.display_name}
+                      </a>
+                    ) : (
+                      playlist.owner.display_name
+                    )}
+                  </span>
+                  <span>•</span>
+                  <span>{playlist.tracks.total} tracks</span>
+                  {playlist.followers?.total !== undefined && (
+                    <>
+                      <span>•</span>
+                      <span>{playlist.followers.total.toLocaleString()} followers</span>
+                    </>
+                  )}
                 </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              </div>
+            </div>
+          </Link>
+        ))}
+      </div>
+      
+      {/* Desktop Table View */}
+      <div className="hidden sm:block bg-white rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th
+                  className="px-4 lg:px-6 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                  onClick={() => handleSort('name')}
+                >
+                  <div className="flex items-center">
+                    Playlist
+                    <SortIcon field="name" />
+                  </div>
+                </th>
+                <th
+                  className="px-4 lg:px-6 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-100 select-none hidden md:table-cell"
+                  onClick={() => handleSort('description')}
+                >
+                  <div className="flex items-center">
+                    Description
+                    <SortIcon field="description" />
+                  </div>
+                </th>
+                <th
+                  className="px-4 lg:px-6 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                  onClick={() => handleSort('owner')}
+                >
+                  <div className="flex items-center">
+                    Owner
+                    <SortIcon field="owner" />
+                  </div>
+                </th>
+                <th
+                  className="px-4 lg:px-6 py-3 text-right text-xs sm:text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                  onClick={() => handleSort('tracks')}
+                >
+                  <div className="flex items-center justify-end">
+                    Tracks
+                    <SortIcon field="tracks" />
+                  </div>
+                </th>
+                <th
+                  className="px-4 lg:px-6 py-3 text-right text-xs sm:text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-100 select-none hidden lg:table-cell"
+                  onClick={() => handleSort('followers')}
+                >
+                  <div className="flex items-center justify-end">
+                    Followers
+                    <SortIcon field="followers" />
+                  </div>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {sortedPlaylists.map((playlist) => (
+                <tr
+                  key={playlist.id}
+                  className="hover:bg-gray-50 transition-colors"
+                >
+                  <td className="px-4 lg:px-6 py-3">
+                    <Link
+                      href={`/playlists/${playlist.id}`}
+                      className="flex items-center gap-3 sm:gap-4 group"
+                    >
+                      {playlist.images[0] ? (
+                        <Image
+                          src={playlist.images[0].url}
+                          alt={playlist.name}
+                          width={50}
+                          height={50}
+                          className="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 rounded flex-shrink-0 flex items-center justify-center">
+                          <span className="text-gray-400 text-xs">No image</span>
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-gray-900 group-hover:text-green-600 transition-colors truncate text-sm sm:text-base">
+                          {playlist.name}
+                        </div>
+                      </div>
+                    </Link>
+                  </td>
+                  <td className="px-4 lg:px-6 py-3 hidden md:table-cell">
+                    <div className="text-gray-600 max-w-md truncate text-sm">
+                      {playlist.description || <span className="text-gray-400 italic">No description</span>}
+                    </div>
+                  </td>
+                  <td className="px-4 lg:px-6 py-3">
+                    {playlist.owner.external_urls?.spotify ? (
+                      <a
+                        href={playlist.owner.external_urls.spotify}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-green-600 hover:text-green-700 hover:underline text-sm sm:text-base"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {playlist.owner.display_name}
+                      </a>
+                    ) : (
+                      <div className="text-gray-700 text-sm sm:text-base">{playlist.owner.display_name}</div>
+                    )}
+                  </td>
+                  <td className="px-4 lg:px-6 py-3 text-right">
+                    <div className="text-gray-700 text-sm sm:text-base">{playlist.tracks.total}</div>
+                  </td>
+                  <td className="px-4 lg:px-6 py-3 text-right hidden lg:table-cell">
+                    <div className="text-gray-700 text-sm sm:text-base">
+                      {playlist.followers?.total !== undefined ? playlist.followers.total.toLocaleString() : '-'}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
       
       {filteredPlaylists.length === 0 && playlists.length > 0 && (
-        <div className="mt-4 text-center py-8 text-gray-500">
+        <div className="mt-4 text-center py-8 text-gray-500 text-sm sm:text-base">
           No playlists match your search
         </div>
       )}
       
       {searchQuery && filteredPlaylists.length > 0 && (
-        <div className="mt-4 text-sm text-gray-600">
+        <div className="mt-4 text-xs sm:text-sm text-gray-600">
           Showing {filteredPlaylists.length} of {playlists.length} playlists
         </div>
       )}

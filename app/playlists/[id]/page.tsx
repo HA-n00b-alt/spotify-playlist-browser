@@ -312,37 +312,37 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   }
 
   return (
-    <div className="min-h-screen p-8 bg-gray-50">
+    <div className="min-h-screen p-4 sm:p-8 bg-gray-50">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <Link
             href="/playlists"
-            className="text-blue-600 hover:text-blue-700 mb-4 inline-block"
+            className="text-blue-600 hover:text-blue-700 inline-block text-sm sm:text-base"
           >
             ← Back to Playlists
           </Link>
           <button
             onClick={() => setShowDebug(!showDebug)}
-            className="text-sm bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded transition-colors"
+            className="text-xs sm:text-sm bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-3 sm:px-4 rounded transition-colors"
           >
-            {showDebug ? 'Hide' : 'Show'} Debug Info
+            {showDebug ? 'Hide' : 'Show'} Debug
           </button>
         </div>
         
         {showDebug && debugInfo && (
-          <div className="mb-6 p-4 bg-gray-100 rounded-lg border border-gray-300 overflow-auto max-h-96">
-            <h3 className="font-bold mb-2">Debug Information</h3>
-            <div className="text-sm space-y-2">
+          <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-100 rounded-lg border border-gray-300 overflow-auto max-h-96">
+            <h3 className="font-bold mb-2 text-sm sm:text-base">Debug Information</h3>
+            <div className="text-xs sm:text-sm space-y-2">
               <p><strong>Total Tracks:</strong> {debugInfo.totalTracks}</p>
               <p><strong>Tracks with BPM:</strong> {debugInfo.tracksWithBPM}</p>
               <details className="mt-2">
-                <summary className="cursor-pointer font-semibold">Sample Track Data</summary>
+                <summary className="cursor-pointer font-semibold text-xs sm:text-sm">Sample Track Data</summary>
                 <pre className="mt-2 text-xs bg-white p-2 rounded overflow-auto">
                   {JSON.stringify(debugInfo.sampleTrack, null, 2)}
                 </pre>
               </details>
               <details className="mt-2">
-                <summary className="cursor-pointer font-semibold">All Tracks (first 5)</summary>
+                <summary className="cursor-pointer font-semibold text-xs sm:text-sm">All Tracks (first 5)</summary>
                 <pre className="mt-2 text-xs bg-white p-2 rounded overflow-auto">
                   {JSON.stringify(debugInfo.allTracks.slice(0, 5), null, 2)}
                 </pre>
@@ -351,14 +351,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           </div>
         )}
         
-        <div className="mb-6 space-y-4">
+        <div className="mb-4 sm:mb-6 space-y-3 sm:space-y-4">
           <div>
             <input
               type="text"
-              placeholder="Search tracks by name, artist, album, year, or BPM..."
+              placeholder="Search tracks..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className="w-full px-4 py-3 sm:py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-base sm:text-sm"
             />
           </div>
           
@@ -366,14 +366,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             <button
               type="button"
               onClick={() => setShowAdvanced(!showAdvanced)}
-              className="text-sm text-gray-600 hover:text-gray-900 underline"
+              className="text-xs sm:text-sm text-gray-600 hover:text-gray-900 underline py-2"
             >
               {showAdvanced ? 'Hide' : 'Show'} Advanced Filters
             </button>
             
             {showAdvanced && (
-              <div className="mt-4 p-4 bg-gray-100 rounded-lg border border-gray-200">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-gray-100 rounded-lg border border-gray-200">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Year Range
@@ -440,16 +440,101 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           </div>
         </div>
 
-        <div className="bg-white rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+        {/* Mobile Card View */}
+        <div className="block sm:hidden space-y-3">
+          {sortedTracks.map((track) => (
+            <div
+              key={track.id}
+              className={`bg-white rounded-lg border border-gray-200 shadow-sm p-4 ${track.preview_url ? 'cursor-pointer' : ''} ${currentlyPlaying === track.id ? 'bg-green-50 border-green-300' : ''}`}
+              onClick={() => track.preview_url && handleTrackClick(track)}
+            >
+              <div className="flex gap-3">
+                {track.album.images && track.album.images[0] ? (
+                  <Image
+                    src={track.album.images[0].url}
+                    alt={track.album.name}
+                    width={60}
+                    height={60}
+                    className="w-15 h-15 object-cover rounded flex-shrink-0"
+                  />
+                ) : (
+                  <div className="w-15 h-15 bg-gray-200 rounded flex-shrink-0 flex items-center justify-center">
+                    <span className="text-gray-400 text-xs">No image</span>
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start gap-2 mb-1">
+                    {track.preview_url && (
+                      <span className="text-green-600 text-sm mt-0.5">
+                        {currentlyPlaying === track.id ? '⏸' : '▶'}
+                      </span>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-gray-900 text-sm truncate">
+                        {track.name}
+                        {track.explicit && (
+                          <span className="ml-1 text-xs bg-gray-200 text-gray-700 px-1 py-0.5 rounded">E</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-600 mt-1">
+                        {track.artists.map((artist, index) => (
+                          <span key={artist.id || index}>
+                            {artist.external_urls?.spotify ? (
+                              <a
+                                href={artist.external_urls.spotify}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-green-600 hover:text-green-700"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {artist.name}
+                              </a>
+                            ) : (
+                              <span>{artist.name}</span>
+                            )}
+                            {index < track.artists.length - 1 && ', '}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {track.album.external_urls?.spotify ? (
+                          <a
+                            href={track.album.external_urls.spotify}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-green-600 hover:text-green-700"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {track.album.name}
+                          </a>
+                        ) : (
+                          <span>{track.album.name}</span>
+                        )}
+                        {' • '}
+                        {getYearString(track.album.release_date)}
+                        {' • '}
+                        {formatDuration(track.duration_ms)}
+                        {track.tempo != null && ` • ${Math.round(track.tempo)} BPM`}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop Table View */}
+        <div className="hidden sm:block bg-white rounded-lg overflow-hidden border border-gray-200 shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 w-16">
+                  <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 w-12 lg:w-16">
                     Cover
                   </th>
                   <th
-                    className="px-4 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                    className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
                     onClick={() => handleSort('name')}
                   >
                     <div className="flex items-center">
@@ -458,7 +543,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   </th>
                   <th
-                    className="px-4 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                    className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none hidden md:table-cell"
                     onClick={() => handleSort('artists')}
                   >
                     <div className="flex items-center">
@@ -467,7 +552,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   </th>
                   <th
-                    className="px-4 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                    className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none hidden lg:table-cell"
                     onClick={() => handleSort('album')}
                   >
                     <div className="flex items-center">
@@ -476,7 +561,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   </th>
                   <th
-                    className="px-4 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                    className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
                     onClick={() => handleSort('release_date')}
                   >
                     <div className="flex items-center">
@@ -485,7 +570,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   </th>
                   <th
-                    className="px-4 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                    className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none hidden md:table-cell"
                     onClick={() => handleSort('duration')}
                   >
                     <div className="flex items-center">
@@ -494,7 +579,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   </th>
                   <th
-                    className="px-4 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                    className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none hidden lg:table-cell"
                     onClick={() => handleSort('added_at')}
                   >
                     <div className="flex items-center">
@@ -503,7 +588,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   </th>
                   <th
-                    className="px-4 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                    className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none hidden md:table-cell"
                     onClick={() => handleSort('tempo')}
                   >
                     <div className="flex items-center">
@@ -511,7 +596,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       <SortIcon field="tempo" />
                     </div>
                   </th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Link</th>
+                  <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">Link</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -528,35 +613,35 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       className={`hover:bg-gray-50 transition-colors ${track.preview_url ? 'cursor-pointer' : ''} ${currentlyPlaying === track.id ? 'bg-green-50' : ''}`}
                       onClick={() => track.preview_url && handleTrackClick(track)}
                     >
-                      <td className="px-4 py-3">
+                      <td className="px-3 lg:px-4 py-2 lg:py-3">
                         {track.album.images && track.album.images[0] ? (
                           <Image
                             src={track.album.images[0].url}
                             alt={track.album.name}
                             width={40}
                             height={40}
-                            className="w-10 h-10 object-cover rounded flex-shrink-0"
+                            className="w-8 h-8 sm:w-10 sm:h-10 object-cover rounded flex-shrink-0"
                           />
                         ) : (
-                          <div className="w-10 h-10 bg-gray-200 rounded flex-shrink-0 flex items-center justify-center">
+                          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 rounded flex-shrink-0 flex items-center justify-center">
                             <span className="text-gray-400 text-xs">No image</span>
                           </div>
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 lg:px-4 py-2 lg:py-3">
                         <div className="flex items-center gap-2">
                           {track.preview_url && (
-                            <span className="text-green-600">
+                            <span className="text-green-600 text-sm">
                               {currentlyPlaying === track.id ? '⏸' : '▶'}
                             </span>
                           )}
-                          <span className="font-medium text-gray-900">{track.name}</span>
+                          <span className="font-medium text-gray-900 text-xs sm:text-sm">{track.name}</span>
                           {track.explicit && (
-                            <span className="ml-2 text-xs bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded">E</span>
+                            <span className="ml-1 text-xs bg-gray-200 text-gray-700 px-1 py-0.5 rounded">E</span>
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-gray-700" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-700 text-xs sm:text-sm hidden md:table-cell" onClick={(e) => e.stopPropagation()}>
                         {track.artists.map((artist, index) => (
                           <span key={artist.id || index}>
                             {artist.external_urls?.spotify ? (
@@ -575,7 +660,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           </span>
                         ))}
                       </td>
-                      <td className="px-4 py-3 text-gray-700" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-700 text-xs sm:text-sm hidden lg:table-cell" onClick={(e) => e.stopPropagation()}>
                         {track.album.external_urls?.spotify ? (
                           <a
                             href={track.album.external_urls.spotify}
@@ -589,28 +674,28 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           <span>{track.album.name}</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-gray-600 text-sm">
+                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm">
                         {getYearString(track.album.release_date)}
                       </td>
-                      <td className="px-4 py-3 text-gray-600 text-sm">
+                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden md:table-cell">
                         {formatDuration(track.duration_ms)}
                       </td>
-                      <td className="px-4 py-3 text-gray-600 text-sm">
+                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden lg:table-cell">
                         {track.added_at ? formatDate(track.added_at) : 'N/A'}
                       </td>
-                      <td className="px-4 py-3 text-gray-600 text-sm">
+                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden md:table-cell">
                         {track.tempo != null ? Math.round(track.tempo) : (
                           <span className="text-gray-400" title={track.tempo === null ? 'BPM data is null' : 'BPM data not available'}>
                             N/A
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-3 lg:px-4 py-2 lg:py-3" onClick={(e) => e.stopPropagation()}>
                         <a
                           href={track.external_urls.spotify}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-green-600 hover:text-green-700"
+                          className="text-green-600 hover:text-green-700 text-xs sm:text-sm"
                         >
                           Open
                         </a>
@@ -622,7 +707,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             </table>
           </div>
         </div>
-        <div className="mt-4 text-sm text-gray-600">
+        <div className="mt-4 text-xs sm:text-sm text-gray-600">
           Showing {sortedTracks.length} of {tracks.length} tracks
         </div>
       </div>
