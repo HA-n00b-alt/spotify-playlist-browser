@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 
 interface Track {
   id: string
@@ -10,6 +11,7 @@ interface Track {
   album: {
     name: string
     release_date: string
+    images: Array<{ url: string }>
   }
   duration_ms: number
   explicit: boolean
@@ -17,6 +19,7 @@ interface Track {
     spotify: string
   }
   added_at?: string
+  tempo?: number | null
 }
 
 interface PlaylistTracksPageProps {
@@ -25,7 +28,7 @@ interface PlaylistTracksPageProps {
   }
 }
 
-type SortField = 'name' | 'artists' | 'album' | 'release_date' | 'duration' | 'added_at'
+type SortField = 'name' | 'artists' | 'album' | 'release_date' | 'duration' | 'added_at' | 'tempo'
 type SortDirection = 'asc' | 'desc'
 
 export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) {
@@ -35,6 +38,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [searchQuery, setSearchQuery] = useState('')
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [yearFrom, setYearFrom] = useState('')
+  const [yearTo, setYearTo] = useState('')
+  const [bpmFrom, setBpmFrom] = useState('')
+  const [bpmTo, setBpmTo] = useState('')
 
   useEffect(() => {
     async function fetchTracks() {
@@ -69,15 +77,50 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     return new Date(dateString).toLocaleDateString()
   }
 
+  const getYear = (dateString: string | null | undefined): number | null => {
+    if (!dateString) return null
+    // Extract year from date string (format can be YYYY, YYYY-MM, or YYYY-MM-DD)
+    const year = dateString.split('-')[0]
+    const yearNum = parseInt(year, 10)
+    return isNaN(yearNum) ? null : yearNum
+  }
+
+  const getYearString = (dateString: string | null | undefined): string => {
+    const year = getYear(dateString)
+    return year ? year.toString() : 'N/A'
+  }
+
   const filteredTracks = tracks.filter((track) => {
-    if (!searchQuery) return true
-    const query = searchQuery.toLowerCase()
-    return (
-      track.name.toLowerCase().includes(query) ||
-      track.artists.some((artist) => artist.name.toLowerCase().includes(query)) ||
-      track.album.name.toLowerCase().includes(query) ||
-      track.album.release_date.includes(query)
-    )
+    // Text search
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      const matchesText = (
+        track.name.toLowerCase().includes(query) ||
+        track.artists.some((artist) => artist.name.toLowerCase().includes(query)) ||
+        track.album.name.toLowerCase().includes(query) ||
+        track.album.release_date.includes(query) ||
+        (track.tempo && Math.round(track.tempo).toString().includes(query))
+      )
+      if (!matchesText) return false
+    }
+
+    // Year filter
+    const trackYear = getYear(track.album.release_date)
+    if (yearFrom || yearTo) {
+      if (trackYear === null) return false
+      if (yearFrom && trackYear < parseInt(yearFrom, 10)) return false
+      if (yearTo && trackYear > parseInt(yearTo, 10)) return false
+    }
+
+    // BPM filter
+    const trackBpm = track.tempo ? Math.round(track.tempo) : null
+    if (bpmFrom || bpmTo) {
+      if (trackBpm === null) return false
+      if (bpmFrom && trackBpm < parseInt(bpmFrom, 10)) return false
+      if (bpmTo && trackBpm > parseInt(bpmTo, 10)) return false
+    }
+
+    return true
   })
 
   const handleSort = (field: SortField) => {
@@ -119,6 +162,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       case 'added_at':
         aValue = a.added_at || ''
         bValue = b.added_at || ''
+        break
+      case 'tempo':
+        aValue = a.tempo ?? -1
+        bValue = b.tempo ?? -1
         break
       default:
         return 0
@@ -181,14 +228,93 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           </Link>
         </div>
         
-        <div className="mb-6">
-          <input
-            type="text"
-            placeholder="Search tracks by name, artist, album, or release date..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-          />
+        <div className="mb-6 space-y-4">
+          <div>
+            <input
+              type="text"
+              placeholder="Search tracks by name, artist, album, year, or BPM..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            />
+          </div>
+          
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="text-sm text-gray-600 hover:text-gray-900 underline"
+            >
+              {showAdvanced ? 'Hide' : 'Show'} Advanced Filters
+            </button>
+            
+            {showAdvanced && (
+              <div className="mt-4 p-4 bg-gray-100 rounded-lg border border-gray-200">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Year Range
+                    </label>
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="number"
+                        placeholder="From"
+                        value={yearFrom}
+                        onChange={(e) => setYearFrom(e.target.value)}
+                        className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      />
+                      <span className="text-gray-500">to</span>
+                      <input
+                        type="number"
+                        placeholder="To"
+                        value={yearTo}
+                        onChange={(e) => setYearTo(e.target.value)}
+                        className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      BPM Range
+                    </label>
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="number"
+                        placeholder="From"
+                        value={bpmFrom}
+                        onChange={(e) => setBpmFrom(e.target.value)}
+                        className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      />
+                      <span className="text-gray-500">to</span>
+                      <input
+                        type="number"
+                        placeholder="To"
+                        value={bpmTo}
+                        onChange={(e) => setBpmTo(e.target.value)}
+                        className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                </div>
+                
+                {(yearFrom || yearTo || bpmFrom || bpmTo) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setYearFrom('')
+                      setYearTo('')
+                      setBpmFrom('')
+                      setBpmTo('')
+                    }}
+                    className="mt-4 text-sm text-red-600 hover:text-red-700 underline"
+                  >
+                    Clear Filters
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="bg-white rounded-lg overflow-hidden border border-gray-200 shadow-sm">
@@ -196,6 +322,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 w-16">
+                    Cover
+                  </th>
                   <th
                     className="px-4 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
                     onClick={() => handleSort('name')}
@@ -228,7 +357,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     onClick={() => handleSort('release_date')}
                   >
                     <div className="flex items-center">
-                      Release Date
+                      Year
                       <SortIcon field="release_date" />
                     </div>
                   </th>
@@ -250,19 +379,43 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       <SortIcon field="added_at" />
                     </div>
                   </th>
+                  <th
+                    className="px-4 py-3 text-left text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => handleSort('tempo')}
+                  >
+                    <div className="flex items-center">
+                      BPM
+                      <SortIcon field="tempo" />
+                    </div>
+                  </th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Link</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {sortedTracks.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
-                      {searchQuery ? 'No tracks match your search' : 'No tracks found'}
+                    <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
+                      {(searchQuery || yearFrom || yearTo || bpmFrom || bpmTo) ? 'No tracks match your filters' : 'No tracks found'}
                     </td>
                   </tr>
                 ) : (
                   sortedTracks.map((track) => (
                     <tr key={track.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3">
+                        {track.album.images && track.album.images[0] ? (
+                          <Image
+                            src={track.album.images[0].url}
+                            alt={track.album.name}
+                            width={40}
+                            height={40}
+                            className="w-10 h-10 object-cover rounded flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 bg-gray-200 rounded flex-shrink-0 flex items-center justify-center">
+                            <span className="text-gray-400 text-xs">No image</span>
+                          </div>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <span className="font-medium text-gray-900">{track.name}</span>
                         {track.explicit && (
@@ -274,13 +427,16 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       </td>
                       <td className="px-4 py-3 text-gray-700">{track.album.name}</td>
                       <td className="px-4 py-3 text-gray-600 text-sm">
-                        {track.album.release_date || 'N/A'}
+                        {getYearString(track.album.release_date)}
                       </td>
                       <td className="px-4 py-3 text-gray-600 text-sm">
                         {formatDuration(track.duration_ms)}
                       </td>
                       <td className="px-4 py-3 text-gray-600 text-sm">
                         {track.added_at ? formatDate(track.added_at) : 'N/A'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 text-sm">
+                        {track.tempo ? Math.round(track.tempo) : 'N/A'}
                       </td>
                       <td className="px-4 py-3">
                         <a

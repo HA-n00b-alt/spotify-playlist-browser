@@ -40,6 +40,7 @@ type SortDirection = 'asc' | 'desc'
 export default function PlaylistsTable({ playlists }: PlaylistsTableProps) {
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  const [searchQuery, setSearchQuery] = useState('')
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -50,10 +51,25 @@ export default function PlaylistsTable({ playlists }: PlaylistsTableProps) {
     }
   }
 
-  const sortedPlaylists = useMemo(() => {
-    if (!sortField) return playlists
+  const filteredPlaylists = useMemo(() => {
+    if (!searchQuery) return playlists
 
-    return [...playlists].sort((a, b) => {
+    const query = searchQuery.toLowerCase()
+    return playlists.filter((playlist) => {
+      return (
+        playlist.name.toLowerCase().includes(query) ||
+        (playlist.description && playlist.description.toLowerCase().includes(query)) ||
+        playlist.owner.display_name.toLowerCase().includes(query) ||
+        playlist.tracks.total.toString().includes(query) ||
+        (playlist.followers?.total && playlist.followers.total.toString().includes(query))
+      )
+    })
+  }, [playlists, searchQuery])
+
+  const sortedPlaylists = useMemo(() => {
+    if (!sortField) return filteredPlaylists
+
+    return [...filteredPlaylists].sort((a, b) => {
       let aValue: string | number
       let bValue: string | number
 
@@ -86,7 +102,7 @@ export default function PlaylistsTable({ playlists }: PlaylistsTableProps) {
       if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1
       return 0
     })
-  }, [playlists, sortField, sortDirection])
+  }, [filteredPlaylists, sortField, sortDirection])
 
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) {
@@ -104,8 +120,19 @@ export default function PlaylistsTable({ playlists }: PlaylistsTableProps) {
   }
 
   return (
-    <div className="bg-white rounded-lg overflow-hidden border border-gray-200 shadow-sm">
-      <table className="w-full">
+    <div>
+      <div className="mb-6">
+        <input
+          type="text"
+          placeholder="Search playlists by name, description, owner, tracks, or followers..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+        />
+      </div>
+      
+      <div className="bg-white rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+        <table className="w-full">
         <thead className="bg-gray-50 border-b border-gray-200">
           <tr>
             <th
@@ -206,6 +233,19 @@ export default function PlaylistsTable({ playlists }: PlaylistsTableProps) {
           ))}
         </tbody>
       </table>
+      </div>
+      
+      {filteredPlaylists.length === 0 && playlists.length > 0 && (
+        <div className="mt-4 text-center py-8 text-gray-500">
+          No playlists match your search
+        </div>
+      )}
+      
+      {searchQuery && filteredPlaylists.length > 0 && (
+        <div className="mt-4 text-sm text-gray-600">
+          Showing {filteredPlaylists.length} of {playlists.length} playlists
+        </div>
+      )}
     </div>
   )
 }
