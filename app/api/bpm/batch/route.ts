@@ -68,7 +68,7 @@ export async function POST(request: Request) {
     const results: Record<string, {
       bpm: number | null
       source?: string
-      isrc?: string
+      upc?: string
       bpmRaw?: number
       error?: string
       urlsTried?: string[]
@@ -96,7 +96,7 @@ export async function POST(request: Request) {
         results[trackId] = {
           bpm: cached.bpm,
           source: cached.source,
-          isrc: cached.isrc || undefined,
+          upc: cached.isrc || undefined, // Note: UPC stored in isrc column
           bpmRaw: cached.bpm_raw || undefined,
           urlsTried: parseUrlsTried(cached.urls_tried),
           successfulUrl: cached.successful_url || undefined,
@@ -107,7 +107,7 @@ export async function POST(request: Request) {
         results[trackId] = {
           bpm: errorRecord.bpm,
           source: errorRecord.source,
-          isrc: errorRecord.isrc || undefined,
+          upc: errorRecord.isrc || undefined, // Note: UPC stored in isrc column
           bpmRaw: errorRecord.bpm_raw || undefined,
           error: errorRecord.error || undefined,
           urlsTried: parseUrlsTried(errorRecord.urls_tried),
@@ -119,7 +119,7 @@ export async function POST(request: Request) {
         results[trackId] = {
           bpm: allCached.bpm,
           source: allCached.source,
-          isrc: allCached.isrc || undefined,
+          upc: allCached.isrc || undefined, // Note: UPC stored in isrc column
           bpmRaw: allCached.bpm_raw || undefined,
           urlsTried: parseUrlsTried(allCached.urls_tried),
           successfulUrl: allCached.successful_url || undefined,

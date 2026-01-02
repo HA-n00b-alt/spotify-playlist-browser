@@ -72,7 +72,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [loadingBpms, setLoadingBpms] = useState<Set<string>>(new Set())
   const [showBpmDebug, setShowBpmDebug] = useState(false)
   const [bpmDebugInfo, setBpmDebugInfo] = useState<Record<string, any>>({})
-  const [bpmDetails, setBpmDetails] = useState<Record<string, { source?: string; error?: string; isrc?: string }>>({})
+  const [bpmDetails, setBpmDetails] = useState<Record<string, { source?: string; error?: string; upc?: string }>>({})
   const [showBpmModal, setShowBpmModal] = useState(false)
   const [selectedBpmTrack, setSelectedBpmTrack] = useState<Track | null>(null)
   const [bpmProcessingStartTime, setBpmProcessingStartTime] = useState<number | null>(null)
@@ -257,17 +257,17 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         console.log(`[BPM Client] Batch BPM data received:`, data)
 
         const newBpms: Record<string, number | null> = {}
-        const newDetails: Record<string, { source?: string; error?: string; isrc?: string }> = {}
+        const newDetails: Record<string, { source?: string; error?: string; upc?: string }> = {}
 
         for (const [trackId, result] of Object.entries(data.results || {})) {
           const r = result as any
           newBpms[trackId] = r.bpm
-          // Always store details if available (source, error, isrc, urls)
-          if (r.source || r.error || r.isrc || r.urlsTried || r.successfulUrl) {
+          // Always store details if available (source, error, upc, urls)
+          if (r.source || r.error || r.upc || r.urlsTried || r.successfulUrl) {
             newDetails[trackId] = {
               source: r.source,
               error: r.error,
-              isrc: r.isrc,
+              upc: r.upc,
             }
           }
           // Store debug info including URLs
@@ -343,7 +343,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 [track.id]: {
                   source: data.source,
                   error: data.error,
-                  isrc: data.isrc,
+                  upc: data.upc,
                 },
               }))
               setBpmDebugInfo(prev => ({
@@ -1462,11 +1462,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       </span>
                     </div>
                   )}
-                  {bpmDetails[selectedBpmTrack.id]?.isrc && (
+                  {bpmDetails[selectedBpmTrack.id]?.upc && (
                     <div>
-                      <span className="font-semibold text-gray-700">ISRC: </span>
+                      <span className="font-semibold text-gray-700">UPC: </span>
                       <span className="text-gray-900 font-mono text-sm">
-                        {bpmDetails[selectedBpmTrack.id].isrc}
+                        {bpmDetails[selectedBpmTrack.id].upc}
                       </span>
                     </div>
                   )}
@@ -1555,7 +1555,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             // Generate descriptive message based on source
                             if (data.source === 'computed_failed') {
                               errorMessage = 'No preview audio available from any source (iTunes, Deezer)'
-                            } else if (data.source === 'itunes_isrc' || data.source === 'itunes_search') {
+                            } else if (data.source === 'itunes_upc' || data.source === 'itunes_search') {
                               errorMessage = 'No preview available on iTunes/Apple Music'
                             } else if (data.source === 'deezer') {
                               errorMessage = 'No preview available on Deezer'

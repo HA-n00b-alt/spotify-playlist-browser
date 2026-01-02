@@ -185,10 +185,7 @@ spotify-playlist-browser/
 │   ├── bpm.ts                   # BPM detection module
 │   ├── db.ts                    # Database connection utility
 │   └── analytics.ts             # Analytics tracking utilities
-├── migrations/
-│   ├── 001_create_track_bpm_cache.sql
-│   ├── 002_create_analytics_tables.sql
-│   └── 003_add_url_tracking.sql
+├── setup.sql                 # Database setup script (run once for fresh install)
 ├── public/
 │   ├── favicon-16x16.png        # Favicon
 │   └── favicon-32x32.png        # Favicon
@@ -298,14 +295,17 @@ GCP_SERVICE_ACCOUNT_KEY={"type":"service_account","project_id":"...","private_ke
 The application uses Neon Postgres for BPM caching and analytics. You need to:
 
 1. **Create a Neon database** at [neon.tech](https://neon.tech)
-2. **Run migrations** to create the required tables:
+2. **Run the setup script** to create all required tables:
    ```bash
-   psql $DATABASE_URL_UNPOOLED -f migrations/001_create_track_bpm_cache.sql
-   psql $DATABASE_URL_UNPOOLED -f migrations/002_create_analytics_tables.sql
-   psql $DATABASE_URL_UNPOOLED -f migrations/003_add_url_tracking.sql
+   psql $DATABASE_URL_UNPOOLED -f setup.sql
+   ```
+   Or if you have the connection string set:
+   ```bash
+   export DATABASE_URL_UNPOOLED="postgresql://user:password@host/database?sslmode=require"
+   psql $DATABASE_URL_UNPOOLED -f setup.sql
    ```
 3. **Set `DATABASE_URL`** - Pooled connection (PgBouncer) for runtime
-4. **Set `DATABASE_URL_UNPOOLED`** - Direct connection for migrations
+4. **Set `DATABASE_URL_UNPOOLED`** - Direct connection (for running setup.sql)
 
 ### BPM Service Configuration
 

@@ -92,7 +92,7 @@ npm install
 
 Required packages:
 - `@neondatabase/serverless` - Neon database client
-- `pg` - PostgreSQL client (for migrations)
+- `pg` - PostgreSQL client (for running setup.sql)
 - `google-auth-library` - Google Cloud authentication for BPM service
 
 ### 2. Configure Environment Variables
@@ -107,17 +107,17 @@ GCP_SERVICE_ACCOUNT_KEY={"type":"service_account","project_id":"...","private_ke
 ```
 
 - `DATABASE_URL` - Neon pooled connection (PgBouncer) for runtime
-- `DATABASE_URL_UNPOOLED` - Neon direct connection for migrations
+- `DATABASE_URL_UNPOOLED` - Neon direct connection (for running setup.sql)
 - `BPM_SERVICE_URL` - External BPM service URL (optional, defaults to provided URL)
 - `GCP_SERVICE_ACCOUNT_KEY` - Google Cloud service account key JSON (as single-line string) for authenticating with the BPM service
 
-### 3. Run Migrations
+### 3. Run Database Setup
 
 ```bash
-psql $DATABASE_URL_UNPOOLED -f migrations/001_create_track_bpm_cache.sql
-psql $DATABASE_URL_UNPOOLED -f migrations/002_create_analytics_tables.sql
-psql $DATABASE_URL_UNPOOLED -f migrations/003_add_url_tracking.sql
+psql $DATABASE_URL_UNPOOLED -f setup.sql
 ```
+
+This single script creates all required tables (BPM cache, analytics tables, and URL tracking columns).
 
 ### 4. Deploy
 
