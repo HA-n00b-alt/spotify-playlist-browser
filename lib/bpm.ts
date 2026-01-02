@@ -247,9 +247,10 @@ async function getIdentityToken(serviceUrl: string): Promise<string> {
     throw new Error(`Failed to parse GCP_SERVICE_ACCOUNT_KEY: ${error instanceof Error ? error.message : 'Invalid JSON'}`)
   }
   
+  // For Cloud Run identity tokens, we only need credentials, not scopes
+  // The audience (serviceUrl) is set when getting the ID token client
   const auth = new GoogleAuth({
     credentials: serviceAccountKey,
-    scopes: ['https://www.googleapis.com/auth/cloud-platform'],
   })
   
   const client = await auth.getIdTokenClient(serviceUrl)
