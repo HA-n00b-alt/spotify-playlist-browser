@@ -82,7 +82,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [retryAttempted, setRetryAttempted] = useState(false)
   const [showBpmMoreInfo, setShowBpmMoreInfo] = useState(false)
   const [countryCode, setCountryCode] = useState<string>('us')
-  const [tracksProcessedCount, setTracksProcessedCount] = useState<number>(0) // Number of tracks with entries in DB
+  const [tracksInDb, setTracksInDb] = useState<Set<string>>(new Set()) // Track IDs that are already in the DB
   const [searchQuery, setSearchQuery] = useState('')
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
@@ -185,12 +185,18 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
       if (res.ok) {
         const data = await res.json()
-        // Count tracks that have an entry in DB (either BPM or N/A with details)
-        const processedCount = trackIds.filter(id => {
-          const result = data.results?.[id]
-          return result && (result.bpm !== undefined || result.error !== undefined || result.source !== undefined)
-        }).length
-        setTracksProcessedCount(processedCount)
+        // Track which tracks are in DB: if spotify_track_id exists in DB, the result will have source/error/bpmRaw fields
+        // If track is NOT in DB, result will be { bpm: null, cached: false } with no other fields
+        const inDbSet = new Set<string>()
+        for (const [trackId, result] of Object.entries(data.results || {})) {
+          const r = result as any
+          // Track is in DB if spotify_track_id exists in track_bpm_cache table
+          // This is indicated by presence of source, error, bpmRaw, or cached === true
+          if (r && (r.source !== undefined || r.error !== undefined || r.bpmRaw !== undefined || r.cached === true)) {
+            inDbSet.add(trackId)
+          }
+        }
+        setTracksInDb(inDbSet)
       }
     } catch (error) {
       console.error('[BPM Client] Error checking tracks in DB:', error)
@@ -206,14 +212,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tracks.length])
 
-  // Update processed count when trackBpms changes
+  // Update tracks in DB when batch results come in
   useEffect(() => {
-    if (tracks.length > 0) {
-      // Count tracks that have a result (either BPM or N/A)
-      const processed = tracks.filter(t => trackBpms[t.id] !== undefined).length
-      setTracksProcessedCount(processed)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // This will be updated when fetchBpmsBatch completes
   }, [trackBpms, tracks.length])
 
   // Track when BPM processing completes
@@ -286,6 +287,23 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         setTrackBpms(newBpms)
         setBpmDetails(newDetails)
 
+        // Track which tracks are in DB: if spotify_track_id exists in track_bpm_cache table
+        // The batch API returns results with source/error/bpmRaw for tracks in DB
+        // Tracks NOT in DB return only { bpm: null, cached: false }
+        const inDbSet = new Set<string>()
+        for (const [trackId, result] of Object.entries(data.results || {})) {
+          const r = result as any
+          // Track is in DB if spotify_track_id exists in track_bpm_cache (indicated by source/error/bpmRaw/cached)
+          if (r && (r.source !== undefined || r.error !== undefined || r.bpmRaw !== undefined || r.cached === true)) {
+            inDbSet.add(trackId)
+          }
+        }
+        setTracksInDb(prev => {
+          const combined = new Set(prev)
+          inDbSet.forEach(id => combined.add(id))
+          return combined
+        })
+
         // Count how many were cached (not calculated)
         const cachedCount = Object.values(data.results || {}).filter((r: any) => r.cached).length
         const calculatedFromBatch = Object.values(data.results || {}).filter((r: any) => r.bpm !== null && !r.cached).length
@@ -354,6 +372,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   successfulUrl: data.successfulUrl || null,
                 },
               }))
+              // Mark track as in DB (now it has an entry, whether BPM or N/A)
+              setTracksInDb(prev => new Set(prev).add(track.id))
               // Increment calculated count (this track was just calculated, not cached)
               setBpmTracksCalculated(prev => prev + 1)
             } else {
@@ -837,11 +857,13 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           const tracksDone = tracks.filter(t => 
             trackBpms[t.id] !== undefined && !loadingBpms.has(t.id)
           ).length
-          const tracksRemaining = totalTracks - tracksDone
-          const isProcessing = tracksLoading > 0 || tracksRemaining > 0
-
-          // Calculate songs already in DB (with BPM or N/A)
-          const songsInDb = tracksDone
+          
+          // Calculate songs already in DB (tracks that have an entry in database, regardless of BPM value)
+          const songsInDb = tracks.filter(t => tracksInDb.has(t.id)).length
+          
+          // Tracks to search = total - tracks in DB
+          const tracksToSearch = totalTracks - songsInDb
+          const isProcessing = tracksLoading > 0 || tracksToSearch > 0
 
           // Always show the indicator - never hide it
           return (
@@ -849,11 +871,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               <div>
                 <span className="font-semibold">Playlist:</span> {totalTracks} songs |{' '}
                 <span className="font-semibold">In DB:</span> {songsInDb} songs (with BPM or N/A) |{' '}
-                <span className="font-semibold">To search:</span> {tracksRemaining} songs
+                <span className="font-semibold">To search:</span> {tracksToSearch} songs
               </div>
               {isProcessing ? (
                 <div>
-                  BPM information processing ongoing ({tracksDone} tracks done, {tracksRemaining} remaining){' '}
+                  BPM information processing ongoing ({tracksDone} tracks done, {tracksToSearch} remaining){' '}
                   <button
                     onClick={() => setShowBpmMoreInfo(true)}
                     className="text-blue-600 hover:text-blue-700 hover:underline"
@@ -1536,6 +1558,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       const res = await fetch(`/api/bpm?spotifyTrackId=${selectedBpmTrack.id}&country=${countryCode}`)
                       if (res.ok) {
                         const data = await res.json()
+                        // Mark track as in DB (now it has an entry, whether BPM or N/A)
+                        setTracksInDb(prev => new Set(prev).add(selectedBpmTrack.id))
                         if (data.bpm != null) {
                           setTrackBpms(prev => ({
                             ...prev,
@@ -1546,7 +1570,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             [selectedBpmTrack.id]: {
                               source: data.source,
                               error: data.error,
-                              isrc: data.isrc,
+                              upc: data.upc,
                             },
                           }))
                           setRetryStatus({ loading: false, success: true })
@@ -1570,7 +1594,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             [selectedBpmTrack.id]: {
                               source: data.source,
                               error: errorMessage,
-                              isrc: data.isrc,
+                              upc: data.upc,
                             },
                           }))
                           setRetryStatus({ loading: false, success: false, error: errorMessage })
