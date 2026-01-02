@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import Image from 'next/image'
+import { getPlaylists } from '@/lib/spotify'
 
 interface Playlist {
   id: string
@@ -14,30 +15,12 @@ interface Playlist {
   }
 }
 
-async function getPlaylists(): Promise<Playlist[]> {
-  // Use absolute URL for server-side fetch
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://searchmyplaylist.delman.it'
-  const res = await fetch(`${baseUrl}/api/playlists`, {
-    cache: 'no-store',
-  })
-  
-  if (!res.ok) {
-    if (res.status === 401) {
-      // Redirect to login if not authenticated
-      throw new Error('Unauthorized')
-    }
-    throw new Error('Failed to fetch playlists')
-  }
-  
-  return res.json()
-}
-
 export default async function PlaylistsPage() {
   let playlists: Playlist[] = []
   let error: string | null = null
 
   try {
-    playlists = await getPlaylists()
+    playlists = await getPlaylists() as Playlist[]
   } catch (e) {
     error = e instanceof Error ? e.message : 'An error occurred'
   }

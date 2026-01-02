@@ -37,6 +37,7 @@ export async function GET() {
     httpOnly: true,
     sameSite: 'lax',
     secure: isProduction,
+    path: '/',
   })
 
   return response

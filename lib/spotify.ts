@@ -54,6 +54,7 @@ async function refreshAccessToken(): Promise<string | null> {
       httpOnly: true,
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
+      path: '/',
     })
 
     return access_token

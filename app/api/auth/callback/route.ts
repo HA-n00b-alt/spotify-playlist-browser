@@ -75,6 +75,7 @@ export async function GET(request: Request) {
       httpOnly: true,
       sameSite: 'lax',
       secure: isProduction,
+      path: '/',
     })
 
     if (refresh_token) {
@@ -83,6 +84,7 @@ export async function GET(request: Request) {
         httpOnly: true,
         sameSite: 'lax',
         secure: isProduction,
+        path: '/',
       })
     }
 
