@@ -237,22 +237,117 @@ async function resolvePreviewUrl(params: {
 }
 
 /**
+ * Get ffmpeg binary path
+ * Handles different ways ffmpeg-static can export the path
+ * Works in both local and Vercel serverless environments
+ */
+function getFfmpegPath(): string {
+  const fs = require('fs')
+  const path = require('path')
+  
+  try {
+    // Method 1: Direct require (CommonJS) - this is the standard way
+    let ffmpegPath: string | undefined
+    
+    try {
+      const ffmpegStatic = require('ffmpeg-static')
+      
+      // ffmpeg-static exports the path directly as a string
+      if (typeof ffmpegStatic === 'string') {
+        ffmpegPath = ffmpegStatic
+      } else if (ffmpegStatic && typeof ffmpegStatic === 'object') {
+        // Sometimes it's an object with a default export
+        ffmpegPath = (ffmpegStatic as any).default || (ffmpegStatic as any).path || (ffmpegStatic as any).ffmpegPath
+      }
+      
+      console.log(`[BPM Module] ffmpeg-static require result type: ${typeof ffmpegStatic}`)
+      console.log(`[BPM Module] ffmpeg-static require result: ${JSON.stringify(ffmpegStatic).substring(0, 200)}`)
+    } catch (e) {
+      console.error('[BPM Module] Error requiring ffmpeg-static:', e)
+      throw new Error(`Cannot require ffmpeg-static: ${e instanceof Error ? e.message : 'Unknown error'}`)
+    }
+    
+    if (!ffmpegPath) {
+      throw new Error('ffmpeg-static did not return a valid path')
+    }
+    
+    // Resolve to absolute path if it's relative
+    if (!path.isAbsolute(ffmpegPath)) {
+      ffmpegPath = path.resolve(ffmpegPath)
+    }
+    
+    console.log(`[BPM Module] Resolved ffmpeg path: ${ffmpegPath}`)
+    
+    // Verify the path exists
+    if (!fs.existsSync(ffmpegPath)) {
+      console.error(`[BPM Module] ffmpeg path does not exist: ${ffmpegPath}`)
+      
+      // Try to find it in node_modules as a fallback
+      try {
+        const ffmpegStaticModulePath = require.resolve('ffmpeg-static')
+        console.log(`[BPM Module] ffmpeg-static module resolved to: ${ffmpegStaticModulePath}`)
+        
+        // ffmpeg-static v5+ stores binaries differently
+        // Check if the resolved path is the binary itself
+        if (fs.existsSync(ffmpegStaticModulePath)) {
+          const stats = fs.statSync(ffmpegStaticModulePath)
+          if (stats.isFile() && (ffmpegStaticModulePath.includes('ffmpeg') || stats.mode & 0o111)) {
+            // This might be the binary
+            console.log(`[BPM Module] Trying resolved module path as binary: ${ffmpegStaticModulePath}`)
+            if (fs.existsSync(ffmpegStaticModulePath)) {
+              ffmpegPath = ffmpegStaticModulePath
+            }
+          }
+        }
+      } catch (e) {
+        console.error(`[BPM Module] Could not resolve ffmpeg-static module:`, e)
+      }
+      
+      // Final check
+      if (!ffmpegPath || !fs.existsSync(ffmpegPath)) {
+        throw new Error(`ffmpeg binary not found at: ${ffmpegPath || 'undefined'}. This might be a Vercel deployment issue - ffmpeg-static binaries may not be included in serverless bundles.`)
+      }
+    }
+    
+    // At this point, ffmpegPath is guaranteed to be a string and exist
+    if (!ffmpegPath) {
+      throw new Error('ffmpeg path is undefined after all resolution attempts')
+    }
+    
+    // Make sure it's executable (on Unix systems)
+    if (process.platform !== 'win32') {
+      try {
+        fs.chmodSync(ffmpegPath, 0o755)
+      } catch (e) {
+        // Ignore chmod errors - might not have permission or might already be executable
+        console.warn(`[BPM Module] Could not set executable permissions:`, e)
+      }
+    }
+    
+    console.log(`[BPM Module] Using ffmpeg at: ${ffmpegPath}`)
+    return ffmpegPath
+  } catch (error) {
+    console.error('[BPM Module] Error getting ffmpeg path:', error)
+    throw new Error(`Failed to locate ffmpeg-static: ${error instanceof Error ? error.message : 'Unknown error'}`)
+  }
+}
+
+/**
  * Download audio preview and convert to WAV for analysis
  */
 async function downloadAndConvertAudio(
   previewUrl: string,
   outputPath: string
 ): Promise<void> {
-  const ffmpegPath = require('ffmpeg-static')
-  if (!ffmpegPath) {
-    throw new Error('ffmpeg-static not found')
-  }
+  const ffmpegPath = getFfmpegPath()
+  console.log(`[BPM Module] Using ffmpeg at: ${ffmpegPath}`)
   
   // Download the audio file
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 10000) // 10s timeout
   
   try {
+    console.log(`[BPM Module] Downloading audio from: ${previewUrl.substring(0, 100)}...`)
     const response = await fetch(previewUrl, {
       signal: controller.signal,
     })
@@ -260,19 +355,40 @@ async function downloadAndConvertAudio(
     clearTimeout(timeoutId)
     
     if (!response.ok) {
-      throw new Error(`Failed to download audio: ${response.statusText}`)
+      throw new Error(`Failed to download audio: ${response.status} ${response.statusText}`)
     }
     
     const buffer = await response.arrayBuffer()
+    console.log(`[BPM Module] Downloaded ${buffer.byteLength} bytes`)
     const tempInputPath = join(tmpdir(), `bpm-input-${Date.now()}.tmp`)
     
     try {
       // Write input file
       writeFileSync(tempInputPath, Buffer.from(buffer))
+      console.log(`[BPM Module] Wrote input file to: ${tempInputPath}`)
       
       // Convert to mono WAV at 44.1kHz using ffmpeg
-      const ffmpegCommand = `"${ffmpegPath}" -i "${tempInputPath}" -acodec pcm_s16le -ac 1 -ar 44100 -y "${outputPath}"`
-      await execAsync(ffmpegCommand)
+      // Escape paths properly for shell execution
+      const escapePath = (p: string) => p.replace(/ /g, '\\ ') // Basic escaping for spaces
+      const ffmpegCommand = `${escapePath(ffmpegPath)} -i ${escapePath(tempInputPath)} -acodec pcm_s16le -ac 1 -ar 44100 -y ${escapePath(outputPath)}`
+      console.log(`[BPM Module] Running ffmpeg command (truncated): ${ffmpegCommand.substring(0, 200)}...`)
+      
+      const { stdout, stderr } = await execAsync(ffmpegCommand, {
+        maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+        timeout: 30000, // 30 second timeout
+      })
+      
+      if (stdout) console.log(`[BPM Module] ffmpeg stdout: ${stdout.substring(0, 200)}`)
+      if (stderr && !stderr.includes('Stream mapping')) {
+        console.warn(`[BPM Module] ffmpeg stderr: ${stderr.substring(0, 200)}`)
+      }
+      
+      console.log(`[BPM Module] ffmpeg conversion completed: ${outputPath}`)
+      
+      // Verify output file exists
+      if (!require('fs').existsSync(outputPath)) {
+        throw new Error(`Output file was not created: ${outputPath}`)
+      }
       
       // Clean up input file
       try {
@@ -281,6 +397,7 @@ async function downloadAndConvertAudio(
         // Ignore cleanup errors
       }
     } catch (error) {
+      console.error(`[BPM Module] Error during ffmpeg conversion:`, error)
       // Clean up on error
       try {
         unlinkSync(tempInputPath)
@@ -291,6 +408,7 @@ async function downloadAndConvertAudio(
     }
   } catch (error) {
     clearTimeout(timeoutId)
+    console.error(`[BPM Module] Error downloading audio:`, error)
     throw error
   }
 }
