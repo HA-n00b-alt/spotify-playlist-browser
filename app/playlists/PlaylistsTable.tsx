@@ -40,10 +40,18 @@ interface PlaylistsTableProps {
 type SortField = 'name' | 'description' | 'owner' | 'tracks' | 'followers'
 type SortDirection = 'asc' | 'desc'
 
-function decodeHtmlEntities(text: string): string {
+function stripHtmlTags(text: string): string {
+  if (typeof document === 'undefined') {
+    // Server-side fallback: basic regex removal
+    return text.replace(/<[^>]*>/g, '').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'")
+  }
   const textarea = document.createElement('textarea')
   textarea.innerHTML = text
-  return textarea.value
+  const decoded = textarea.value
+  // Remove any remaining HTML tags
+  const div = document.createElement('div')
+  div.innerHTML = decoded
+  return div.textContent || div.innerText || ''
 }
 
 export default function PlaylistsTable({ playlists }: PlaylistsTableProps) {
@@ -168,7 +176,7 @@ export default function PlaylistsTable({ playlists }: PlaylistsTableProps) {
                 </div>
                 {playlist.description && (
                   <div className="text-sm text-gray-600 mb-2 line-clamp-2">
-                    {decodeHtmlEntities(playlist.description)}
+                    {stripHtmlTags(playlist.description)}
                   </div>
                 )}
                 <div className="flex flex-wrap gap-3 text-xs text-gray-500">
@@ -289,7 +297,7 @@ export default function PlaylistsTable({ playlists }: PlaylistsTableProps) {
                   <td className="px-4 lg:px-6 py-3 hidden md:table-cell">
                     <div className="text-gray-600 max-w-md truncate text-sm">
                       {playlist.description ? (
-                        decodeHtmlEntities(playlist.description)
+                        stripHtmlTags(playlist.description)
                       ) : (
                         <span className="text-gray-400 italic">No description</span>
                       )}

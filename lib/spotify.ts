@@ -7,6 +7,78 @@ interface SpotifyError {
   }
 }
 
+/**
+ * Spotify paginated response type
+ */
+interface SpotifyPagedResponse<T> {
+  items: T[]
+  next: string | null
+  previous?: string | null
+  limit?: number
+  offset?: number
+  total?: number
+}
+
+/**
+ * Options for pagination helper
+ */
+interface PaginationOptions {
+  maxPages?: number
+  onPageFetched?: (page: number, items: any[]) => void
+}
+
+/**
+ * Helper function to paginate through Spotify API responses
+ * Automatically handles pagination and collects all items
+ */
+async function paginateSpotify<T>(
+  initialUrl: string,
+  options: PaginationOptions = {}
+): Promise<T[]> {
+  const { maxPages = 200, onPageFetched } = options
+  const allItems: T[] = []
+  let nextUrl: string | null = initialUrl
+  let pageCount = 0
+
+  while (nextUrl && pageCount < maxPages) {
+    try {
+      const data: SpotifyPagedResponse<T> = await makeSpotifyRequest<SpotifyPagedResponse<T>>(nextUrl)
+      
+      allItems.push(...data.items)
+      pageCount++
+
+      if (onPageFetched) {
+        onPageFetched(pageCount, data.items)
+      }
+
+      if (data.next) {
+        try {
+          // Extract path and query from full URL
+          const nextUrlObj: URL = new URL(data.next)
+          nextUrl = nextUrlObj.pathname + nextUrlObj.search
+        } catch (urlError) {
+          console.error('Error parsing next URL:', data.next, urlError)
+          // If URL parsing fails, try to continue with the next URL as-is (might be relative)
+          nextUrl = data.next.startsWith('http') ? null : data.next
+        }
+      } else {
+        nextUrl = null
+      }
+    } catch (error) {
+      console.error(`Error fetching page ${pageCount + 1}:`, error)
+      // If we have some items, return them; otherwise throw
+      if (allItems.length === 0) {
+        throw error
+      }
+      // Break on error but return what we have
+      console.warn(`Returning ${allItems.length} items after error on page ${pageCount + 1}`)
+      break
+    }
+  }
+
+  return allItems
+}
+
 async function getAccessToken(): Promise<string | null> {
   const cookieStore = await cookies()
   return cookieStore.get('access_token')?.value || null
@@ -65,8 +137,10 @@ async function refreshAccessToken(): Promise<string | null> {
 
 async function makeSpotifyRequest<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  retryCount = 0
 ): Promise<T> {
+  const maxRetries = 3
   let accessToken = await getAccessToken()
 
   if (!accessToken) {
@@ -77,44 +151,51 @@ async function makeSpotifyRequest<T>(
   }
 
   const url = `https://api.spotify.com/v1${endpoint}`
-  let response = await fetch(url, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  })
-
-  // Handle rate limiting (429)
-  if (response.status === 429) {
-    const retryAfter = response.headers.get('Retry-After')
-    const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : 1000
-    await new Promise((resolve) => setTimeout(resolve, waitTime))
-    response = await fetch(url, {
+  
+  const makeRequest = async (token: string): Promise<Response> => {
+    return fetch(url, {
       ...options,
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
         ...options.headers,
       },
     })
   }
 
-  // Handle token expiration
-  if (response.status === 401) {
-    accessToken = await refreshAccessToken()
-    if (!accessToken) {
-      throw new Error('Unauthorized')
+  let response = await makeRequest(accessToken)
+
+  // Handle rate limiting (429) with retry logic
+  if (response.status === 429) {
+    if (retryCount >= maxRetries) {
+      throw new Error('Rate limit exceeded: Maximum retries reached')
     }
-    response = await fetch(url, {
-      ...options,
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    })
+
+    const retryAfter = response.headers.get('Retry-After')
+    const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : 1000 * (retryCount + 1)
+    
+    console.warn(`Rate limit hit (429). Retrying after ${waitTime}ms (attempt ${retryCount + 1}/${maxRetries})`)
+    await new Promise((resolve) => setTimeout(resolve, waitTime))
+    
+    // Retry the request
+    return makeSpotifyRequest<T>(endpoint, options, retryCount + 1)
+  }
+
+  // Handle token expiration (401) with retry logic
+  if (response.status === 401) {
+    if (retryCount >= maxRetries) {
+      throw new Error('Unauthorized: Token refresh failed after maximum retries')
+    }
+
+    console.warn(`Token expired (401). Refreshing token (attempt ${retryCount + 1}/${maxRetries})`)
+    accessToken = await refreshAccessToken()
+    
+    if (!accessToken) {
+      throw new Error('Unauthorized: Failed to refresh access token')
+    }
+    
+    // Retry the request with new token
+    return makeSpotifyRequest<T>(endpoint, options, retryCount + 1)
   }
 
   if (!response.ok) {
@@ -122,7 +203,7 @@ async function makeSpotifyRequest<T>(
       error: { status: response.status, message: response.statusText },
     }))
     throw new Error(
-      error.error?.message || `Spotify API error: ${response.status}`
+      error.error?.message || `Spotify API error: ${response.status} ${response.statusText}`
     )
   }
 
@@ -130,56 +211,31 @@ async function makeSpotifyRequest<T>(
 }
 
 export async function getPlaylists(): Promise<any[]> {
-  const allPlaylists: any[] = []
-  let nextUrl: string | null = '/me/playlists?limit=50'
+  // Use pagination helper to fetch all playlists
+  const allPlaylists = await paginateSpotify<any>('/me/playlists?limit=50')
 
-  while (nextUrl) {
-    try {
-      const data: {
-        items: any[]
-        next: string | null
-      } = await makeSpotifyRequest<{
-        items: any[]
-        next: string | null
-      }>(nextUrl)
-
-      // For each playlist, fetch full details to get followers if not present
-      const playlistsWithFollowers = await Promise.all(
-        data.items.map(async (playlist) => {
-          // If followers is missing, try to get it from the full playlist endpoint
-          if (!playlist.followers) {
-            try {
-              const fullPlaylist = await makeSpotifyRequest<any>(
-                `/playlists/${playlist.id}?fields=followers`
-              )
-              if (fullPlaylist.followers) {
-                playlist.followers = fullPlaylist.followers
-              }
-            } catch (error) {
-              // If fetching fails, continue without followers
-              console.error(`Error fetching followers for playlist ${playlist.id}:`, error)
-            }
+  // For each playlist, fetch full details to get followers if not present
+  const playlistsWithFollowers = await Promise.all(
+    allPlaylists.map(async (playlist) => {
+      // If followers is missing, try to get it from the full playlist endpoint
+      if (!playlist.followers) {
+        try {
+          const fullPlaylist = await makeSpotifyRequest<any>(
+            `/playlists/${playlist.id}?fields=followers`
+          )
+          if (fullPlaylist.followers) {
+            playlist.followers = fullPlaylist.followers
           }
-          return playlist
-        })
-      )
-
-      allPlaylists.push(...playlistsWithFollowers)
-
-      if (data.next) {
-        // Extract the path from the full URL
-        nextUrl = new URL(data.next).pathname + new URL(data.next).search
-      } else {
-        nextUrl = null
+        } catch (error) {
+          // If fetching fails, continue without followers
+          console.error(`Error fetching followers for playlist ${playlist.id}:`, error)
+        }
       }
-    } catch (error) {
-      console.error('Error fetching playlists page:', error)
-      // Break on error to avoid infinite loop
-      break
-    }
-  }
+      return playlist
+    })
+  )
 
-  return allPlaylists
+  return playlistsWithFollowers
 }
 
 export async function getPlaylist(playlistId: string): Promise<any> {
@@ -187,64 +243,21 @@ export async function getPlaylist(playlistId: string): Promise<any> {
 }
 
 export async function getPlaylistTracks(playlistId: string): Promise<any[]> {
-  const allTracks: any[] = []
-  let nextUrl: string | null = `/playlists/${playlistId}/tracks?limit=50`
-  let pageCount = 0
-  const maxPages = 200 // Safety limit to prevent infinite loops
+  // Use pagination helper to fetch all tracks
+  const allItems = await paginateSpotify<{
+    added_at: string
+    track: any
+  }>(`/playlists/${playlistId}/tracks?limit=50`)
 
-  while (nextUrl && pageCount < maxPages) {
-    try {
-      const data: {
-        items: Array<{
-          added_at: string
-          track: any
-        }>
-        next: string | null
-      } = await makeSpotifyRequest<{
-        items: Array<{
-          added_at: string
-          track: any
-        }>
-        next: string | null
-      }>(nextUrl)
+  // Map items to include added_at with track data
+  const tracksWithMetadata = allItems
+    .filter((item) => item.track) // Filter out null tracks
+    .map((item) => ({
+      ...item.track,
+      added_at: item.added_at,
+    }))
 
-      // Map items to include added_at with track data
-      const tracksWithMetadata = data.items
-        .filter((item) => item.track) // Filter out null tracks
-        .map((item) => ({
-          ...item.track,
-          added_at: item.added_at,
-        }))
-
-      allTracks.push(...tracksWithMetadata)
-      pageCount++
-
-      if (data.next) {
-        try {
-          // Extract path and query from full URL
-          const nextUrlObj = new URL(data.next)
-          nextUrl = nextUrlObj.pathname + nextUrlObj.search
-        } catch (urlError) {
-          console.error('Error parsing next URL:', data.next, urlError)
-          // If URL parsing fails, try to continue with the next URL as-is (might be relative)
-          nextUrl = data.next.startsWith('http') ? null : data.next
-        }
-      } else {
-        nextUrl = null
-      }
-    } catch (error) {
-      console.error(`Error fetching tracks page ${pageCount + 1}:`, error)
-      // If we have some tracks, return them; otherwise throw
-      if (allTracks.length === 0) {
-        throw error
-      }
-      // Break on error but return what we have
-      console.warn(`Returning ${allTracks.length} tracks after error on page ${pageCount + 1}`)
-      break
-    }
-  }
-
-  return allTracks
+  return tracksWithMetadata
 }
 
 export async function getAudioFeatures(trackIds: string[]): Promise<Record<string, any>> {

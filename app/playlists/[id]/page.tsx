@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import type { MouseEvent } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 
@@ -31,6 +32,7 @@ interface Track {
   preview_url?: string | null
   added_at?: string
   tempo?: number | null
+  popularity?: number
 }
 
 interface PlaylistTracksPageProps {
@@ -39,7 +41,7 @@ interface PlaylistTracksPageProps {
   }
 }
 
-type SortField = 'name' | 'artists' | 'album' | 'release_date' | 'duration' | 'added_at' | 'tempo'
+type SortField = 'name' | 'artists' | 'album' | 'release_date' | 'duration' | 'added_at' | 'tempo' | 'popularity'
 type SortDirection = 'asc' | 'desc'
 
 interface PlaylistInfo {
@@ -70,6 +72,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [bpmTo, setBpmTo] = useState('')
   const [currentlyPlaying, setCurrentlyPlaying] = useState<string | null>(null)
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null)
+  const [previewPositions, setPreviewPositions] = useState<Record<string, number>>({}) // Track preview playback positions
   const [showDebug, setShowDebug] = useState(false)
   const [debugInfo, setDebugInfo] = useState<any>(null)
   const [audioFeaturesDebug, setAudioFeaturesDebug] = useState<any>(null)
@@ -181,6 +184,30 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
     // Play new track
     const audio = new Audio(track.preview_url)
+    
+    // Track playback position
+    const handleTimeUpdate = () => {
+      if (audio.currentTime > 0) {
+        setPreviewPositions((prev: Record<string, number>) => ({
+          ...prev,
+          [track.id]: Math.floor(audio.currentTime),
+        }))
+      }
+    }
+    
+    const handleEnded = () => {
+      // Save final position when preview ends (preview is typically 30 seconds)
+      setPreviewPositions((prev: Record<string, number>) => ({
+        ...prev,
+        [track.id]: 30,
+      }))
+      setCurrentlyPlaying(null)
+      setAudioElement(null)
+    }
+    
+    audio.addEventListener('timeupdate', handleTimeUpdate)
+    audio.addEventListener('ended', handleEnded)
+    
     audio.play()
       .then(() => {
         setCurrentlyPlaying(track.id)
@@ -189,12 +216,35 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       .catch((error) => {
         console.error('Error playing preview:', error)
       })
+  }
 
-    // Auto-stop when audio ends
-    audio.addEventListener('ended', () => {
-      setCurrentlyPlaying(null)
-      setAudioElement(null)
-    })
+  /**
+   * Handle track title click - open Spotify with playback position if available
+   */
+  const handleTrackTitleClick = (e: MouseEvent<HTMLAnchorElement>, track: Track) => {
+    e.stopPropagation()
+    
+    const position = previewPositions[track.id]
+    
+    if (position && position > 0) {
+      // Try Spotify URI scheme first (opens app if available)
+      // Format: spotify:track:ID:position (position in seconds)
+      const spotifyUri = `spotify:track:${track.id}:${position}`
+      
+      // Attempt to open Spotify app
+      // This works on mobile and some desktop platforms
+      window.location.href = spotifyUri
+      
+      // Fallback: if app doesn't open after a short delay, open web URL
+      setTimeout(() => {
+        // Check if we're still on the same page (app didn't navigate away)
+        // If so, open web URL as fallback
+        window.open(track.external_urls.spotify, '_blank', 'noopener,noreferrer')
+      }, 500)
+    } else {
+      // No position, just open web URL normally
+      window.open(track.external_urls.spotify, '_blank', 'noopener,noreferrer')
+    }
   }
 
   const formatDuration = (ms: number): string => {
@@ -297,6 +347,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         aValue = a.tempo ?? -1
         bValue = b.tempo ?? -1
         break
+      case 'popularity':
+        aValue = a.popularity ?? -1
+        bValue = b.popularity ?? -1
+        break
       default:
         return 0
     }
@@ -358,11 +412,18 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     )
   }
 
-  function decodeHtmlEntities(text: string): string {
-    if (typeof document === 'undefined') return text
+  function stripHtmlTags(text: string): string {
+    if (typeof document === 'undefined') {
+      // Server-side fallback: basic regex removal
+      return text.replace(/<[^>]*>/g, '').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'")
+    }
     const textarea = document.createElement('textarea')
     textarea.innerHTML = text
-    return textarea.value
+    const decoded = textarea.value
+    // Remove any remaining HTML tags
+    const div = document.createElement('div')
+    div.innerHTML = decoded
+    return div.textContent || div.innerText || ''
   }
 
   return (
@@ -401,7 +462,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 </h1>
                 {playlistInfo.description && (
                   <p className="text-sm sm:text-base text-gray-600 mb-2">
-                    {decodeHtmlEntities(playlistInfo.description)}
+                    {stripHtmlTags(playlistInfo.description)}
                   </p>
                 )}
                 <div className="flex flex-wrap gap-3 text-xs sm:text-sm text-gray-500">
@@ -588,7 +649,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             target="_blank"
                             rel="noopener noreferrer"
                             className="font-medium text-gray-900 text-sm truncate hover:text-green-600 hover:underline block"
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={(e) => handleTrackTitleClick(e, track)}
+                            title={previewPositions[track.id] ? `Open in Spotify at ${previewPositions[track.id]}s` : 'Open in Spotify'}
                           >
                             {track.name}
                             {track.explicit && (
@@ -634,6 +696,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         {' • '}
                         {formatDuration(track.duration_ms)}
                         {track.tempo != null && ` • ${Math.round(track.tempo)} BPM`}
+                        {track.popularity != null && ` • Popularity: ${track.popularity}`}
                       </div>
                     </div>
                   </div>
@@ -715,13 +778,22 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       <SortIcon field="tempo" />
                     </div>
                   </th>
+                  <th
+                    className="px-3 lg:px-4 py-2 lg:py-3 text-right text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none hidden lg:table-cell"
+                    onClick={() => handleSort('popularity')}
+                  >
+                    <div className="flex items-center justify-end">
+                      Popularity
+                      <SortIcon field="popularity" />
+                    </div>
+                  </th>
                   <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 hidden sm:table-cell">Link</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {sortedTracks.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={10} className="px-4 py-8 text-center text-gray-500">
                       {(searchQuery || yearFrom || yearTo || bpmFrom || bpmTo) ? 'No tracks match your filters' : 'No tracks found'}
                     </td>
                   </tr>
@@ -759,7 +831,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             target="_blank"
                             rel="noopener noreferrer"
                             className="font-medium text-gray-900 text-xs sm:text-sm hover:text-green-600 hover:underline"
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={(e) => handleTrackTitleClick(e, track)}
+                            title={previewPositions[track.id] ? `Open in Spotify at ${previewPositions[track.id]}s` : 'Open in Spotify'}
                           >
                             {track.name}
                           </a>
@@ -815,6 +888,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           <span className="text-gray-400" title={track.tempo === null ? 'BPM data is null' : 'BPM data not available'}>
                             N/A
                           </span>
+                        )}
+                      </td>
+                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm text-right hidden lg:table-cell">
+                        {track.popularity != null ? track.popularity : (
+                          <span className="text-gray-400">N/A</span>
                         )}
                       </td>
                       <td className="px-3 lg:px-4 py-2 lg:py-3 hidden sm:table-cell" onClick={(e) => e.stopPropagation()}>
