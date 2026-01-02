@@ -75,6 +75,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [bpmDetails, setBpmDetails] = useState<Record<string, { source?: string; error?: string; isrc?: string }>>({})
   const [showBpmModal, setShowBpmModal] = useState(false)
   const [selectedBpmTrack, setSelectedBpmTrack] = useState<Track | null>(null)
+  const [bpmProcessingStartTime, setBpmProcessingStartTime] = useState<number | null>(null)
+  const [bpmProcessingEndTime, setBpmProcessingEndTime] = useState<number | null>(null)
+  const [bpmTracksCalculated, setBpmTracksCalculated] = useState<number>(0) // Track how many were actually calculated (not cached)
+  const [retryStatus, setRetryStatus] = useState<{ loading: boolean; success?: boolean; error?: string } | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
@@ -142,10 +146,29 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   // Fetch BPM for all tracks using batch endpoint
   useEffect(() => {
     if (tracks.length > 0 && Object.keys(trackBpms).length === 0) {
+      setBpmProcessingStartTime(Date.now())
       fetchBpmsBatch()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tracks.length])
+
+  // Track when BPM processing completes
+  useEffect(() => {
+    if (tracks.length > 0 && bpmProcessingStartTime && !bpmProcessingEndTime) {
+      const tracksWithBpm = Object.values(trackBpms).filter(bpm => bpm !== null && bpm !== undefined).length
+      const tracksWithoutBpm = tracks.filter(t => 
+        trackBpms[t.id] === undefined || trackBpms[t.id] === null
+      ).length
+      const tracksLoading = loadingBpms.size
+      
+      // Processing is complete when no tracks are loading and all tracks have been attempted
+      // Only set end time if at least one track was calculated (not just all cached)
+      if (tracksLoading === 0 && tracksWithoutBpm === 0 && tracksWithBpm > 0) {
+        setBpmProcessingEndTime(Date.now())
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackBpms, loadingBpms, tracks.length, bpmProcessingStartTime, bpmProcessingEndTime])
 
   // Batch fetch BPMs from cache
   const fetchBpmsBatch = async () => {
@@ -187,11 +210,19 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         setTrackBpms(newBpms)
         setBpmDetails(newDetails)
 
+        // Count how many were cached (not calculated)
+        const cachedCount = Object.values(data.results || {}).filter((r: any) => r.cached).length
+        const calculatedFromBatch = Object.values(data.results || {}).filter((r: any) => r.bpm !== null && !r.cached).length
+        setBpmTracksCalculated(prev => prev + calculatedFromBatch)
+
         // For tracks not in cache, fetch individually (but don't block UI)
         const uncachedTracks = tracks.filter(t => !data.results?.[t.id]?.cached)
         if (uncachedTracks.length > 0) {
           console.log(`[BPM Client] Fetching ${uncachedTracks.length} uncached tracks individually`)
           fetchBpmsForTracks(uncachedTracks)
+        } else if (uncachedTracks.length === 0 && cachedCount === totalTracks) {
+          // All tracks were cached, no processing happened
+          setBpmProcessingStartTime(null)
         }
       } else {
         console.error(`[BPM Client] Batch fetch failed:`, res.status)
@@ -243,6 +274,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 ...prev,
                 [track.id]: data,
               }))
+              // Increment calculated count (this track was just calculated, not cached)
+              setBpmTracksCalculated(prev => prev + 1)
             } else {
               const errorData = await res.json().catch(() => ({}))
               setTrackBpms(prev => ({
@@ -600,66 +633,60 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         {/* BPM Processing Progress Indicator */}
         {(() => {
           const totalTracks = tracks.length
+          if (totalTracks === 0) return null
+
           const tracksWithBpm = Object.values(trackBpms).filter(bpm => bpm !== null && bpm !== undefined).length
+          const tracksWithNa = Object.values(trackBpms).filter(bpm => bpm === null).length
           const tracksLoading = loadingBpms.size
-          // Count tracks that don't have BPM yet (either loading or not started)
           const tracksWithoutBpm = tracks.filter(t => 
             trackBpms[t.id] === undefined || trackBpms[t.id] === null
           ).length
           const tracksRemaining = tracksWithoutBpm - tracksLoading
-          // Show indicator if there are tracks loading OR tracks that need BPM but aren't loaded yet
-          const isProcessing = (tracksLoading > 0 || tracksRemaining > 0) && totalTracks > 0
-          
-          // Estimate time: assume ~5 seconds per track for uncached tracks
-          const estimatedSecondsPerTrack = 5
-          const estimatedSecondsRemaining = (tracksLoading + tracksRemaining) * estimatedSecondsPerTrack
-          const estimatedMinutes = Math.ceil(estimatedSecondsRemaining / 60)
-          
-          if (isProcessing && totalTracks > 0) {
+          const isProcessing = tracksLoading > 0 || tracksRemaining > 0
+          const allTracksProcessed = tracksLoading === 0 && tracksWithoutBpm === 0
+          const allTracksHaveBpm = tracksWithBpm === totalTracks
+
+          // If all tracks have BPM, don't show anything
+          if (allTracksHaveBpm) return null
+
+          // If processing is complete but some tracks have N/A
+          if (allTracksProcessed && tracksWithNa > 0) {
             return (
-              <div className="mb-4 sm:mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1">
-                    <p className="text-sm text-blue-900">
-                      BPM information processing ongoing ({tracksWithBpm} tracks done, {tracksRemaining} remaining)
-                      {estimatedMinutes > 0 && ` • Estimated time: ~${estimatedMinutes} minute${estimatedMinutes !== 1 ? 's' : ''}`}
-                      {' '}
-                      <button
-                        onClick={() => setShowBpmInfo(!showBpmInfo)}
-                        className="text-blue-600 hover:text-blue-800 underline"
-                      >
-                        (more info)
-                      </button>
-                    </p>
-                    {showBpmInfo && (
-                      <div className="mt-3 p-3 bg-white rounded border border-blue-200">
-                        <p className="text-sm text-gray-700 mb-2">
-                          <strong>What&apos;s happening?</strong>
-                        </p>
-                        <p className="text-sm text-gray-600 mb-2">
-                          This is the first time this playlist is being opened. The system is calculating BPM (beats per minute) for each track by analyzing audio previews. This process:
-                        </p>
-                        <ul className="text-sm text-gray-600 list-disc list-inside mb-2 space-y-1">
-                          <li>Downloads 30-second audio previews from Spotify, iTunes, or Deezer</li>
-                          <li>Analyzes the audio to detect the tempo</li>
-                          <li>Stores the results for instant access next time</li>
-                        </ul>
-                        <p className="text-sm text-gray-600">
-                          <strong>Note:</strong> This only happens once per playlist. Future visits will load BPM data instantly from the cache.
-                        </p>
-                        <button
-                          onClick={() => setShowBpmInfo(false)}
-                          className="mt-2 text-xs text-blue-600 hover:text-blue-800 underline"
-                        >
-                          Hide details
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
+              <div className="mb-4 sm:mb-6 text-sm text-gray-600">
+                {tracksWithNa} of {totalTracks} tracks have no BPM information available. You can retry by clicking on the N/A value.
               </div>
             )
           }
+
+          // If processing just completed (with calculated tracks)
+          if (bpmProcessingEndTime && bpmProcessingStartTime && bpmTracksCalculated > 0) {
+            const elapsedSeconds = Math.floor((bpmProcessingEndTime - bpmProcessingStartTime) / 1000)
+            const minutes = Math.floor(elapsedSeconds / 60)
+            const seconds = elapsedSeconds % 60
+            
+            let timeText = ''
+            if (minutes > 0) {
+              timeText = `${minutes} minute${minutes !== 1 ? 's' : ''} and ${seconds} second${seconds !== 1 ? 's' : ''}`
+            } else {
+              timeText = `${seconds} second${seconds !== 1 ? 's' : ''}`
+            }
+
+            return (
+              <div className="mb-4 sm:mb-6 text-sm text-gray-600">
+                {bpmTracksCalculated} track{bpmTracksCalculated !== 1 ? 's' : ''} calculated in {timeText}.
+              </div>
+            )
+          }
+
+          // If currently processing
+          if (isProcessing) {
+            return (
+              <div className="mb-4 sm:mb-6 text-sm text-gray-600">
+                BPM information processing ongoing ({tracksWithBpm} tracks done, {tracksRemaining} remaining)
+              </div>
+            )
+          }
+
           return null
         })()}
         
@@ -780,10 +807,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             </button>
             
             {showAdvanced && (
-              <div className="mt-3 sm:mt-4 p-4 sm:p-6 bg-gray-100 rounded-lg border border-gray-200 max-w-full sm:max-w-3xl">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="space-y-3">
-                    <label className="block text-sm font-medium text-gray-700">
+              <div className="mt-3 sm:mt-4 p-5 sm:p-6 bg-gray-100 rounded-lg border border-gray-200">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 max-w-4xl">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
                       Year Range
                     </label>
                     <div className="flex gap-3 items-center">
@@ -792,41 +819,41 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         placeholder="From"
                         value={yearFrom}
                         onChange={(e) => setYearFrom(e.target.value)}
-                        className="flex-1 px-4 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        className="w-24 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       />
-                      <span className="text-gray-500 text-sm">to</span>
+                      <span className="text-gray-500 text-sm whitespace-nowrap">to</span>
                       <input
                         type="number"
                         placeholder="To"
                         value={yearTo}
                         onChange={(e) => setYearTo(e.target.value)}
-                        className="flex-1 px-4 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        className="w-24 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       />
                     </div>
                   </div>
                   
-                  <div className="space-y-3">
-                    <label className="block text-sm font-medium text-gray-700">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
                       BPM Range
                     </label>
-                    <div className="flex gap-3 items-center">
+                    <div className="flex gap-3 items-center mb-3">
                       <input
                         type="number"
                         placeholder="From"
                         value={bpmFrom}
                         onChange={(e) => setBpmFrom(e.target.value)}
-                        className="flex-1 px-4 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        className="w-24 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       />
-                      <span className="text-gray-500 text-sm">to</span>
+                      <span className="text-gray-500 text-sm whitespace-nowrap">to</span>
                       <input
                         type="number"
                         placeholder="To"
                         value={bpmTo}
                         onChange={(e) => setBpmTo(e.target.value)}
-                        className="flex-1 px-4 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        className="w-24 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       />
                     </div>
-                    <label className="flex items-center pt-1">
+                    <label className="flex items-center">
                       <input
                         type="checkbox"
                         checked={includeHalfDoubleBpm}
@@ -943,6 +970,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                           onClick={(e) => {
                                             e.stopPropagation()
                                             setSelectedBpmTrack(track)
+                                            setRetryStatus(null)
                                             setShowBpmModal(true)
                                           }}
                                           className="text-blue-600 hover:text-blue-700 hover:underline"
@@ -1158,6 +1186,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                         <button
                                           onClick={() => {
                                             setSelectedBpmTrack(track)
+                                            setRetryStatus(null)
                                             setShowBpmModal(true)
                                           }}
                                           className="text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
@@ -1291,12 +1320,27 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               )}
             </div>
 
+            {/* Retry Status Message */}
+            {retryStatus && (
+              <div className={`mt-4 p-3 rounded text-sm ${
+                retryStatus.loading 
+                  ? 'bg-blue-50 text-blue-700' 
+                  : retryStatus.success 
+                    ? 'bg-green-50 text-green-700' 
+                    : 'bg-red-50 text-red-700'
+              }`}>
+                {retryStatus.loading && 'Retrying...'}
+                {!retryStatus.loading && retryStatus.success && 'BPM successfully calculated!'}
+                {!retryStatus.loading && retryStatus.error && `Error: ${retryStatus.error}`}
+              </div>
+            )}
+
             <div className="mt-6 flex justify-end gap-3">
               {trackBpms[selectedBpmTrack.id] == null && (
                 <button
                   onClick={async () => {
                     // Retry fetching BPM for this track
-                    setShowBpmModal(false)
+                    setRetryStatus({ loading: true })
                     setLoadingBpms(prev => new Set(prev).add(selectedBpmTrack.id))
                     try {
                       const res = await fetch(`/api/bpm?spotifyTrackId=${selectedBpmTrack.id}`)
@@ -1314,23 +1358,30 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             isrc: data.isrc,
                           },
                         }))
+                        setRetryStatus({ loading: false, success: true })
+                        // Clear success message after 3 seconds
+                        setTimeout(() => setRetryStatus(null), 3000)
                       } else {
                         const errorData = await res.json().catch(() => ({}))
+                        const errorMessage = errorData.error || 'Failed to fetch BPM'
                         setBpmDetails(prev => ({
                           ...prev,
                           [selectedBpmTrack.id]: {
-                            error: errorData.error || 'Failed to fetch BPM',
+                            error: errorMessage,
                           },
                         }))
+                        setRetryStatus({ loading: false, success: false, error: errorMessage })
                       }
                     } catch (error) {
                       console.error(`[BPM Client] Error retrying BPM for ${selectedBpmTrack.id}:`, error)
+                      const errorMessage = 'Network error. Please try again.'
                       setBpmDetails(prev => ({
                         ...prev,
                         [selectedBpmTrack.id]: {
-                          error: 'Network error. Please try again.',
+                          error: errorMessage,
                         },
                       }))
+                      setRetryStatus({ loading: false, success: false, error: errorMessage })
                     } finally {
                       setLoadingBpms(prev => {
                         const next = new Set(prev)
@@ -1339,13 +1390,17 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       })
                     }
                   }}
-                  className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded transition-colors"
+                  disabled={retryStatus?.loading}
+                  className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded transition-colors"
                 >
-                  Retry
+                  {retryStatus?.loading ? 'Retrying...' : 'Retry'}
                 </button>
               )}
               <button
-                onClick={() => setShowBpmModal(false)}
+                onClick={() => {
+                  setShowBpmModal(false)
+                  setRetryStatus(null)
+                }}
                 className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded transition-colors"
               >
                 Close
