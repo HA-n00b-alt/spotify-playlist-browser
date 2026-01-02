@@ -82,7 +82,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [retryAttempted, setRetryAttempted] = useState(false)
   const [showBpmMoreInfo, setShowBpmMoreInfo] = useState(false)
   const [countryCode, setCountryCode] = useState<string>('us')
-  const [allTracksInDb, setAllTracksInDb] = useState(false) // Track if all tracks are already in DB
+  const [tracksProcessedCount, setTracksProcessedCount] = useState<number>(0) // Number of tracks with entries in DB
   const [searchQuery, setSearchQuery] = useState('')
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
@@ -163,19 +163,16 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     fetchCountry()
   }, [])
 
-  // Fetch BPM for all tracks using batch endpoint
+  // Check status of all tracks in database
   useEffect(() => {
-    if (tracks.length > 0 && Object.keys(trackBpms).length === 0) {
-      // Check if all tracks are already in DB
-      checkAllTracksInDb()
-      setBpmProcessingStartTime(Date.now())
-      fetchBpmsBatch()
+    if (tracks.length > 0) {
+      checkTracksInDb()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tracks.length])
 
-  // Check if all tracks are already in the database
-  const checkAllTracksInDb = async () => {
+  // Check how many tracks have entries in the database
+  const checkTracksInDb = async () => {
     const trackIds = tracks.map(t => t.id)
     if (trackIds.length === 0) return
 
@@ -188,17 +185,36 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
       if (res.ok) {
         const data = await res.json()
-        // Check if all tracks have results (either BPM or N/A with details)
-        const allHaveResults = trackIds.every(id => {
+        // Count tracks that have an entry in DB (either BPM or N/A with details)
+        const processedCount = trackIds.filter(id => {
           const result = data.results?.[id]
           return result && (result.bpm !== undefined || result.error !== undefined || result.source !== undefined)
-        })
-        setAllTracksInDb(allHaveResults)
+        }).length
+        setTracksProcessedCount(processedCount)
       }
     } catch (error) {
       console.error('[BPM Client] Error checking tracks in DB:', error)
     }
   }
+
+  // Fetch BPM for all tracks using batch endpoint
+  useEffect(() => {
+    if (tracks.length > 0 && Object.keys(trackBpms).length === 0) {
+      setBpmProcessingStartTime(Date.now())
+      fetchBpmsBatch()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tracks.length])
+
+  // Update processed count when trackBpms changes
+  useEffect(() => {
+    if (tracks.length > 0) {
+      // Count tracks that have a result (either BPM or N/A)
+      const processed = tracks.filter(t => trackBpms[t.id] !== undefined).length
+      setTracksProcessedCount(processed)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackBpms, tracks.length])
 
   // Track when BPM processing completes
   useEffect(() => {
@@ -246,13 +262,24 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         for (const [trackId, result] of Object.entries(data.results || {})) {
           const r = result as any
           newBpms[trackId] = r.bpm
-          // Always store details if available (source, error, isrc)
-          if (r.source || r.error || r.isrc) {
+          // Always store details if available (source, error, isrc, urls)
+          if (r.source || r.error || r.isrc || r.urlsTried || r.successfulUrl) {
             newDetails[trackId] = {
               source: r.source,
               error: r.error,
               isrc: r.isrc,
             }
+          }
+          // Store debug info including URLs
+          if (r.source || r.error || r.urlsTried || r.successfulUrl) {
+            setBpmDebugInfo(prev => ({
+              ...prev,
+              [trackId]: {
+                ...r,
+                urlsTried: r.urlsTried || [],
+                successfulUrl: r.successfulUrl || null,
+              },
+            }))
           }
         }
 
@@ -324,6 +351,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 [track.id]: {
                   ...data,
                   urlsTried: data.urlsTried || [],
+                  successfulUrl: data.successfulUrl || null,
                 },
               }))
               // Increment calculated count (this track was just calculated, not cached)
@@ -345,6 +373,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 [track.id]: {
                   ...errorData,
                   urlsTried: errorData.urlsTried || [],
+                  successfulUrl: errorData.successfulUrl || null,
                 },
               }))
             }
@@ -642,11 +671,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 </pre>
               </details>
               <details className="mt-2">
-                <summary className="cursor-pointer font-semibold">URLs Tried for Failed Searches</summary>
+                <summary className="cursor-pointer font-semibold">URLs Tried for All Searches</summary>
                 <div className="mt-2 text-xs bg-white p-2 rounded overflow-auto max-h-48">
                   {Object.entries(bpmDebugInfo)
                     .filter(([id, data]: [string, any]) => 
-                      data?.urlsTried && data.urlsTried.length > 0 && (data.bpm === null || data.error)
+                      data?.urlsTried && data.urlsTried.length > 0
                     )
                     .slice(0, 10)
                     .map(([id, data]: [string, any]) => {
@@ -654,20 +683,29 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       return (
                         <div key={id} className="mb-3 pb-3 border-b border-gray-200 last:border-0">
                           <p className="font-semibold mb-1">{track?.name || 'Unknown'}</p>
-                          <p className="text-gray-600 mb-1">Error: {data.error || 'No preview found'}</p>
-                          <p className="font-semibold mb-1">URLs tried:</p>
+                          {data.bpm != null ? (
+                            <p className="text-green-600 mb-1">✓ BPM: {Math.round(data.bpm)}</p>
+                          ) : (
+                            <p className="text-red-600 mb-1">✗ Error: {data.error || 'No preview found'}</p>
+                          )}
+                          <p className="font-semibold mb-1">URLs tried ({data.urlsTried.length}):</p>
                           <ul className="list-disc list-inside space-y-1 text-gray-700">
                             {data.urlsTried.map((url: string, idx: number) => (
-                              <li key={idx} className="break-all">{url}</li>
+                              <li key={idx} className={`break-all ${url === data.successfulUrl ? 'text-green-600 font-semibold' : ''}`}>
+                                {url === data.successfulUrl ? '✓ ' : ''}{url}
+                              </li>
                             ))}
                           </ul>
+                          {data.successfulUrl && (
+                            <p className="mt-1 text-green-600 text-xs">Successful URL: {data.successfulUrl}</p>
+                          )}
                         </div>
                       )
                     })}
                   {Object.entries(bpmDebugInfo).filter(([id, data]: [string, any]) => 
-                    data?.urlsTried && data.urlsTried.length > 0 && (data.bpm === null || data.error)
+                    data?.urlsTried && data.urlsTried.length > 0
                   ).length === 0 && (
-                    <p className="text-gray-500">No failed searches with URLs tracked yet.</p>
+                    <p className="text-gray-500">No searches with URLs tracked yet.</p>
                   )}
                 </div>
               </details>
@@ -793,90 +831,24 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           const totalTracks = tracks.length
           if (totalTracks === 0) return null
 
-          // Simple, clear state calculation
-          const tracksWithBpm = tracks.filter(t => trackBpms[t.id] != null && trackBpms[t.id] !== undefined).length
-          const tracksWithNa = tracks.filter(t => trackBpms[t.id] === null).length
-          const tracksLoading = loadingBpms.size
-          
-          // Tracks that are done: have a result AND not currently loading
-          const tracksDone = tracks.filter(t => 
-            trackBpms[t.id] !== undefined && !loadingBpms.has(t.id)
-          ).length
-          
-          // Tracks remaining: total - done (includes tracks without results AND tracks currently loading)
-          const tracksRemaining = totalTracks - tracksDone
-          
-          const isProcessing = tracksLoading > 0 || tracksRemaining > 0
-          const allTracksHaveBpm = tracksWithBpm === totalTracks
-          const hasNaTracks = tracksWithNa > 0
-
-          // Hide ONLY if: all tracks have BPM AND nothing is processing
-          if (allTracksHaveBpm && !isProcessing) {
+          // If all tracks have entries in database, don't show anything
+          if (tracksProcessedCount >= totalTracks) {
             return null
           }
 
-          // Show completion message if processing just finished and we calculated some tracks
-          if (bpmProcessingEndTime && bpmProcessingStartTime && bpmTracksCalculated > 0 && !isProcessing) {
-            const elapsedSeconds = Math.floor((bpmProcessingEndTime - bpmProcessingStartTime) / 1000)
-            const minutes = Math.floor(elapsedSeconds / 60)
-            const seconds = elapsedSeconds % 60
-            
-            let timeText = ''
-            if (minutes > 0) {
-              timeText = `${minutes} minute${minutes !== 1 ? 's' : ''} and ${seconds} second${seconds !== 1 ? 's' : ''}`
-            } else {
-              timeText = `${seconds} second${seconds !== 1 ? 's' : ''}`
-            }
-
-            return (
-              <div className="mb-4 sm:mb-6 text-sm text-gray-600">
-                {bpmTracksCalculated} track{bpmTracksCalculated !== 1 ? 's' : ''} calculated in {timeText}.{' '}
-                {hasNaTracks && (
-                  <>
-                    {tracksWithNa} track{tracksWithNa !== 1 ? 's' : ''} have no BPM information available.{' '}
-                  </>
-                )}
-                <button
-                  onClick={() => setShowBpmMoreInfo(true)}
-                  className="text-blue-600 hover:text-blue-700 hover:underline"
-                >
-                  (more info)
-                </button>
-              </div>
-            )
-          }
-
-          // Show processing message if currently processing
-          if (isProcessing) {
-            return (
-              <div className="mb-4 sm:mb-6 text-sm text-gray-600">
-                BPM information processing ongoing ({tracksDone} tracks done, {tracksRemaining} remaining){' '}
-                <button
-                  onClick={() => setShowBpmMoreInfo(true)}
-                  className="text-blue-600 hover:text-blue-700 hover:underline"
-                >
-                  (more info)
-                </button>
-              </div>
-            )
-          }
-
-          // Show N/A message if there are N/A tracks (and not processing)
-          if (hasNaTracks) {
-            return (
-              <div className="mb-4 sm:mb-6 text-sm text-gray-600">
-                {tracksWithNa} of {totalTracks} tracks have no BPM information available. You can retry by clicking on the N/A value.{' '}
-                <button
-                  onClick={() => setShowBpmMoreInfo(true)}
-                  className="text-blue-600 hover:text-blue-700 hover:underline"
-                >
-                  (more info)
-                </button>
-              </div>
-            )
-          }
-
-          return null
+          // If at least one track is missing, show the message
+          const tracksRemaining = totalTracks - tracksProcessedCount
+          return (
+            <div className="mb-4 sm:mb-6 text-sm text-gray-600">
+              BPM information processing ongoing ({tracksProcessedCount} tracks done, {tracksRemaining} remaining){' '}
+              <button
+                onClick={() => setShowBpmMoreInfo(true)}
+                className="text-blue-600 hover:text-blue-700 hover:underline"
+              >
+                (more info)
+              </button>
+            </div>
+          )
         })()}
         
         <div className="mb-4 sm:mb-6 space-y-3 sm:space-y-4">

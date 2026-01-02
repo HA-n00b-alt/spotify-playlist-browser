@@ -5,7 +5,8 @@ import { GoogleAuth } from 'google-auth-library'
 interface PreviewUrlResult {
   url: string | null
   source: string
-  urlsTried?: string[] // URLs that were attempted
+  urlsTried: string[] // URLs that were attempted
+  successfulUrl: string | null // URL that succeeded (or null if all failed)
 }
 
 interface BpmResult {
@@ -15,6 +16,7 @@ interface BpmResult {
   bpmRaw?: number
   error?: string
   urlsTried?: string[]
+  successfulUrl?: string | null
 }
 
 interface CacheRecord {
@@ -28,6 +30,8 @@ interface CacheRecord {
   source: string
   updated_at: Date
   error: string | null
+  urls_tried?: string[] | null
+  successful_url?: string | null
 }
 
 // In-flight computation locks to prevent duplicate work
@@ -205,7 +209,12 @@ async function resolvePreviewUrl(params: {
           console.log(`[BPM Module] iTunes ISRC lookup result: ${data.resultCount} results`)
           if (data.resultCount > 0 && data.results[0]?.previewUrl) {
             console.log(`[BPM Module] Found iTunes preview URL via ISRC`)
-            return { url: data.results[0].previewUrl, source: 'itunes_isrc', urlsTried }
+            return { 
+              url: data.results[0].previewUrl, 
+              source: 'itunes_isrc', 
+              urlsTried,
+              successfulUrl: data.results[0].previewUrl
+            }
           }
         } else {
           console.log(`[BPM Module] iTunes ISRC lookup failed with status: ${response.status}`)
@@ -240,7 +249,12 @@ async function resolvePreviewUrl(params: {
         console.log(`[BPM Module] iTunes search result: ${data.resultCount} results`)
         if (data.resultCount > 0 && data.results[0]?.previewUrl) {
           console.log(`[BPM Module] Found iTunes preview URL via search`)
-          return { url: data.results[0].previewUrl, source: 'itunes_search', urlsTried }
+          return { 
+            url: data.results[0].previewUrl, 
+            source: 'itunes_search', 
+            urlsTried,
+            successfulUrl: data.results[0].previewUrl
+          }
         }
       } else {
         console.log(`[BPM Module] iTunes search failed with status: ${response.status}`)
@@ -273,7 +287,12 @@ async function resolvePreviewUrl(params: {
         console.log(`[BPM Module] Deezer search result: ${data.data?.length || 0} results`)
         if (data.data && data.data.length > 0 && data.data[0]?.preview) {
           console.log(`[BPM Module] Found Deezer preview URL`)
-          return { url: data.data[0].preview, source: 'deezer', urlsTried }
+          return { 
+            url: data.data[0].preview, 
+            source: 'deezer', 
+            urlsTried,
+            successfulUrl: data.data[0].preview
+          }
         }
       } else {
         console.log(`[BPM Module] Deezer search failed with status: ${response.status}`)
@@ -288,7 +307,7 @@ async function resolvePreviewUrl(params: {
   
   // No preview URL found
   console.log(`[BPM Module] No preview URL found from any source`)
-  return { url: null, source: 'computed_failed', urlsTried }
+  return { url: null, source: 'computed_failed', urlsTried, successfulUrl: null }
 }
 
 /**
@@ -397,8 +416,10 @@ async function storeInCache(params: {
   bpmRaw: number | null
   source: string
   error: string | null
+  urlsTried?: string[]
+  successfulUrl?: string | null
 }): Promise<void> {
-  const { spotifyTrackId, isrc, artist, title, bpm, bpmRaw, source, error } = params
+  const { spotifyTrackId, isrc, artist, title, bpm, bpmRaw, source, error, urlsTried, successfulUrl } = params
   
   // Check if record exists
   const existing = await query<CacheRecord>(
@@ -406,6 +427,9 @@ async function storeInCache(params: {
     [spotifyTrackId]
   )
   
+  // Convert urlsTried array to JSON for storage
+  const urlsTriedJson = urlsTried && urlsTried.length > 0 ? JSON.stringify(urlsTried) : null
+
   if (existing.length > 0) {
     // Update existing record
     await query(
@@ -416,17 +440,19 @@ async function storeInCache(params: {
            bpm = $4, 
            bpm_raw = $5, 
            source = $6, 
-           error = $7, 
+           error = $7,
+           urls_tried = COALESCE($8::jsonb, urls_tried),
+           successful_url = COALESCE($9, successful_url),
            updated_at = NOW()
-       WHERE spotify_track_id = $8`,
-      [isrc, artist, title, bpm, bpmRaw, source, error, spotifyTrackId]
+       WHERE spotify_track_id = $10`,
+      [isrc, artist, title, bpm, bpmRaw, source, error, urlsTriedJson, successfulUrl, spotifyTrackId]
     )
   } else {
     // Insert new record
     await query(
       `INSERT INTO track_bpm_cache 
-       (isrc, spotify_track_id, artist, title, bpm, bpm_raw, source, error, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+       (isrc, spotify_track_id, artist, title, bpm, bpm_raw, source, error, urls_tried, successful_url, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, NOW())
        ON CONFLICT (spotify_track_id) DO UPDATE SET
          isrc = COALESCE(EXCLUDED.isrc, track_bpm_cache.isrc),
          artist = EXCLUDED.artist,
@@ -435,8 +461,10 @@ async function storeInCache(params: {
          bpm_raw = EXCLUDED.bpm_raw,
          source = EXCLUDED.source,
          error = EXCLUDED.error,
+         urls_tried = COALESCE(EXCLUDED.urls_tried, track_bpm_cache.urls_tried),
+         successful_url = COALESCE(EXCLUDED.successful_url, track_bpm_cache.successful_url),
          updated_at = NOW()`,
-      [isrc, spotifyTrackId, artist, title, bpm, bpmRaw, source, error]
+      [isrc, spotifyTrackId, artist, title, bpm, bpmRaw, source, error, urlsTriedJson, successfulUrl]
     )
   }
 }
@@ -474,21 +502,43 @@ export async function getBpmForSpotifyTrack(
       const cached = await checkCache(spotifyTrackId, identifiers.isrc)
       if (cached && cached.bpm !== null) {
         console.log(`[BPM Module] Cache hit! Returning cached BPM: ${cached.bpm} (source: ${cached.source})`)
+        // Parse urls_tried from JSONB if present
+        let urlsTried: string[] | undefined
+        if (cached.urls_tried) {
+          try {
+            urlsTried = Array.isArray(cached.urls_tried) ? cached.urls_tried : JSON.parse(cached.urls_tried as any)
+          } catch (e) {
+            console.warn('[BPM Module] Error parsing urls_tried:', e)
+          }
+        }
         return {
           bpm: cached.bpm,
           source: cached.source,
           isrc: cached.isrc || undefined,
           bpmRaw: cached.bpm_raw || undefined,
+          urlsTried,
+          successfulUrl: cached.successful_url || undefined,
         }
       }
       // If cached but bpm is null, return the error if available
       if (cached && cached.bpm === null) {
         console.log(`[BPM Module] Cache hit with null BPM. Source: ${cached.source}, Error: ${cached.error}`)
+        // Parse urls_tried from JSONB if present
+        let urlsTried: string[] | undefined
+        if (cached.urls_tried) {
+          try {
+            urlsTried = Array.isArray(cached.urls_tried) ? cached.urls_tried : JSON.parse(cached.urls_tried as any)
+          } catch (e) {
+            console.warn('[BPM Module] Error parsing urls_tried:', e)
+          }
+        }
         return {
           bpm: null,
           source: cached.source,
           isrc: cached.isrc || undefined,
           error: cached.error || undefined,
+          urlsTried,
+          successfulUrl: cached.successful_url || undefined,
         }
       }
       console.log(`[BPM Module] Cache miss. Cached record:`, cached)
@@ -520,6 +570,8 @@ export async function getBpmForSpotifyTrack(
           bpmRaw: null,
           source: previewResult.source,
           error: 'No preview URL found',
+          urlsTried: previewResult.urlsTried,
+          successfulUrl: previewResult.successfulUrl,
         })
         
         // Generate descriptive error message based on source
@@ -538,6 +590,7 @@ export async function getBpmForSpotifyTrack(
           isrc: identifiers.isrc || undefined,
           error: errorMessage,
           urlsTried: previewResult.urlsTried,
+          successfulUrl: previewResult.successfulUrl,
         }
       }
       
@@ -558,6 +611,8 @@ export async function getBpmForSpotifyTrack(
           bpmRaw,
           source: previewResult.source,
           error: null,
+          urlsTried: previewResult.urlsTried,
+          successfulUrl: previewResult.successfulUrl,
         })
         console.log(`[BPM Module] Successfully cached BPM for ${spotifyTrackId}`)
         
@@ -567,6 +622,7 @@ export async function getBpmForSpotifyTrack(
           isrc: identifiers.isrc || undefined,
           bpmRaw,
           urlsTried: previewResult.urlsTried,
+          successfulUrl: previewResult.successfulUrl,
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
@@ -585,6 +641,8 @@ export async function getBpmForSpotifyTrack(
           bpmRaw: null,
           source: previewResult.source,
           error: errorMessage,
+          urlsTried: previewResult.urlsTried,
+          successfulUrl: previewResult.successfulUrl,
         })
         
         throw error

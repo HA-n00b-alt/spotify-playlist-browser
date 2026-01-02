@@ -10,6 +10,8 @@ interface CacheRecord {
   source: string
   error: string | null
   updated_at: Date
+  urls_tried?: string[] | null
+  successful_url?: string | null
 }
 
 // Cache TTL: 90 days
@@ -37,7 +39,7 @@ export async function POST(request: Request) {
 
     // Query cache for all tracks at once
     const cacheResults = await query<CacheRecord>(
-      `SELECT spotify_track_id, isrc, bpm, bpm_raw, source, error, updated_at 
+      `SELECT spotify_track_id, isrc, bpm, bpm_raw, source, error, updated_at, urls_tried, successful_url
        FROM track_bpm_cache 
        WHERE spotify_track_id = ANY($1)`,
       [limitedTrackIds]
@@ -69,8 +71,20 @@ export async function POST(request: Request) {
       isrc?: string
       bpmRaw?: number
       error?: string
+      urlsTried?: string[]
+      successfulUrl?: string | null
       cached: boolean
     }> = {}
+
+    // Helper to parse urls_tried from JSONB
+    const parseUrlsTried = (urlsTried: any): string[] | undefined => {
+      if (!urlsTried) return undefined
+      try {
+        return Array.isArray(urlsTried) ? urlsTried : JSON.parse(urlsTried)
+      } catch (e) {
+        return undefined
+      }
+    }
 
     for (const trackId of limitedTrackIds) {
       const cached = validCacheMap.get(trackId)
@@ -84,6 +98,8 @@ export async function POST(request: Request) {
           source: cached.source,
           isrc: cached.isrc || undefined,
           bpmRaw: cached.bpm_raw || undefined,
+          urlsTried: parseUrlsTried(cached.urls_tried),
+          successfulUrl: cached.successful_url || undefined,
           cached: true,
         }
       } else if (errorRecord) {
@@ -94,6 +110,8 @@ export async function POST(request: Request) {
           isrc: errorRecord.isrc || undefined,
           bpmRaw: errorRecord.bpm_raw || undefined,
           error: errorRecord.error || undefined,
+          urlsTried: parseUrlsTried(errorRecord.urls_tried),
+          successfulUrl: errorRecord.successful_url || undefined,
           cached: false, // Not valid cache, will need recalculation
         }
       } else if (allCached) {
@@ -103,6 +121,8 @@ export async function POST(request: Request) {
           source: allCached.source,
           isrc: allCached.isrc || undefined,
           bpmRaw: allCached.bpm_raw || undefined,
+          urlsTried: parseUrlsTried(allCached.urls_tried),
+          successfulUrl: allCached.successful_url || undefined,
           cached: false, // Not valid cache, will need recalculation
         }
       } else {
