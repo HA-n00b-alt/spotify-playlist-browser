@@ -1,12 +1,6 @@
 import { query } from './db'
-import { exec } from 'child_process'
-import { promisify } from 'util'
-import { unlinkSync, readFileSync, writeFileSync } from 'fs'
-import { join } from 'path'
-import { tmpdir } from 'os'
 import { getTrack } from './spotify'
-
-const execAsync = promisify(exec)
+import { GoogleAuth } from 'google-auth-library'
 
 interface PreviewUrlResult {
   url: string | null
@@ -237,310 +231,96 @@ async function resolvePreviewUrl(params: {
 }
 
 /**
- * Get ffmpeg binary path
- * Handles different ways ffmpeg-static can export the path
- * Works in both local and Vercel serverless environments
+ * Get Google Cloud Identity Token for authenticating with Cloud Run service
  */
-function getFfmpegPath(): string {
-  const fs = require('fs')
-  const path = require('path')
+async function getIdentityToken(serviceUrl: string): Promise<string> {
+  const serviceAccountKeyJson = process.env.GCP_SERVICE_ACCOUNT_KEY
   
-  try {
-    // Method 1: Direct require (CommonJS) - this is the standard way
-    let ffmpegPath: string | undefined
-    
-    try {
-      const ffmpegStatic = require('ffmpeg-static')
-      
-      // ffmpeg-static exports the path directly as a string
-      if (typeof ffmpegStatic === 'string') {
-        ffmpegPath = ffmpegStatic
-      } else if (ffmpegStatic && typeof ffmpegStatic === 'object') {
-        // Sometimes it's an object with a default export
-        ffmpegPath = (ffmpegStatic as any).default || (ffmpegStatic as any).path || (ffmpegStatic as any).ffmpegPath
-      }
-      
-      console.log(`[BPM Module] ffmpeg-static require result type: ${typeof ffmpegStatic}`)
-      console.log(`[BPM Module] ffmpeg-static require result: ${JSON.stringify(ffmpegStatic).substring(0, 200)}`)
-    } catch (e) {
-      console.error('[BPM Module] Error requiring ffmpeg-static:', e)
-      throw new Error(`Cannot require ffmpeg-static: ${e instanceof Error ? e.message : 'Unknown error'}`)
-    }
-    
-    if (!ffmpegPath) {
-      throw new Error('ffmpeg-static did not return a valid path')
-    }
-    
-    // Resolve to absolute path if it's relative
-    if (!path.isAbsolute(ffmpegPath)) {
-      ffmpegPath = path.resolve(ffmpegPath)
-    }
-    
-    console.log(`[BPM Module] Resolved ffmpeg path: ${ffmpegPath}`)
-    
-    // Verify the path exists
-    if (!fs.existsSync(ffmpegPath)) {
-      console.error(`[BPM Module] ffmpeg path does not exist: ${ffmpegPath}`)
-      
-      // Try to find it in node_modules as a fallback
-      try {
-        const ffmpegStaticModulePath = require.resolve('ffmpeg-static')
-        console.log(`[BPM Module] ffmpeg-static module resolved to: ${ffmpegStaticModulePath}`)
-        
-        // ffmpeg-static v5+ stores binaries differently
-        // Check if the resolved path is the binary itself
-        if (fs.existsSync(ffmpegStaticModulePath)) {
-          const stats = fs.statSync(ffmpegStaticModulePath)
-          if (stats.isFile() && (ffmpegStaticModulePath.includes('ffmpeg') || stats.mode & 0o111)) {
-            // This might be the binary
-            console.log(`[BPM Module] Trying resolved module path as binary: ${ffmpegStaticModulePath}`)
-            if (fs.existsSync(ffmpegStaticModulePath)) {
-              ffmpegPath = ffmpegStaticModulePath
-            }
-          }
-        }
-      } catch (e) {
-        console.error(`[BPM Module] Could not resolve ffmpeg-static module:`, e)
-      }
-      
-      // Final check
-      if (!ffmpegPath || !fs.existsSync(ffmpegPath)) {
-        throw new Error(`ffmpeg binary not found at: ${ffmpegPath || 'undefined'}. This might be a Vercel deployment issue - ffmpeg-static binaries may not be included in serverless bundles.`)
-      }
-    }
-    
-    // At this point, ffmpegPath is guaranteed to be a string and exist
-    if (!ffmpegPath) {
-      throw new Error('ffmpeg path is undefined after all resolution attempts')
-    }
-    
-    // Make sure it's executable (on Unix systems)
-    if (process.platform !== 'win32') {
-      try {
-        fs.chmodSync(ffmpegPath, 0o755)
-      } catch (e) {
-        // Ignore chmod errors - might not have permission or might already be executable
-        console.warn(`[BPM Module] Could not set executable permissions:`, e)
-      }
-    }
-    
-    console.log(`[BPM Module] Using ffmpeg at: ${ffmpegPath}`)
-    return ffmpegPath
-  } catch (error) {
-    console.error('[BPM Module] Error getting ffmpeg path:', error)
-    throw new Error(`Failed to locate ffmpeg-static: ${error instanceof Error ? error.message : 'Unknown error'}`)
+  if (!serviceAccountKeyJson) {
+    throw new Error('GCP_SERVICE_ACCOUNT_KEY environment variable is not set')
   }
+  
+  let serviceAccountKey: any
+  try {
+    serviceAccountKey = JSON.parse(serviceAccountKeyJson)
+  } catch (error) {
+    throw new Error(`Failed to parse GCP_SERVICE_ACCOUNT_KEY: ${error instanceof Error ? error.message : 'Invalid JSON'}`)
+  }
+  
+  const auth = new GoogleAuth({
+    credentials: serviceAccountKey,
+    scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+  })
+  
+  const client = await auth.getIdTokenClient(serviceUrl)
+  const idToken = await client.idTokenProvider.fetchIdToken(serviceUrl)
+  
+  if (!idToken) {
+    throw new Error('Failed to obtain identity token')
+  }
+  
+  return idToken
 }
 
 /**
- * Download audio preview and convert to WAV for analysis
+ * Call external BPM service to compute BPM from preview URL
  */
-async function downloadAndConvertAudio(
-  previewUrl: string,
-  outputPath: string
-): Promise<void> {
-  const ffmpegPath = getFfmpegPath()
-  console.log(`[BPM Module] Using ffmpeg at: ${ffmpegPath}`)
+async function computeBpmFromService(previewUrl: string): Promise<{ bpm: number; bpmRaw: number; confidence?: number }> {
+  const serviceUrl = process.env.BPM_SERVICE_URL || 'https://bpm-service-340051416180.europe-west3.run.app'
   
-  // Download the audio file
+  console.log(`[BPM Module] Calling external BPM service at: ${serviceUrl}`)
+  
+  // Get identity token for authentication
+  const idToken = await getIdentityToken(serviceUrl)
+  
+  // Call the service
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 10000) // 10s timeout
+  const timeoutId = setTimeout(() => controller.abort(), 30000) // 30s timeout
   
   try {
-    console.log(`[BPM Module] Downloading audio from: ${previewUrl.substring(0, 100)}...`)
-    const response = await fetch(previewUrl, {
+    const response = await fetch(`${serviceUrl}/bpm`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${idToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ url: previewUrl }),
       signal: controller.signal,
     })
     
     clearTimeout(timeoutId)
     
     if (!response.ok) {
-      throw new Error(`Failed to download audio: ${response.status} ${response.statusText}`)
+      const errorText = await response.text()
+      throw new Error(`BPM service returned ${response.status}: ${errorText}`)
     }
     
-    const buffer = await response.arrayBuffer()
-    console.log(`[BPM Module] Downloaded ${buffer.byteLength} bytes`)
-    const tempInputPath = join(tmpdir(), `bpm-input-${Date.now()}.tmp`)
+    const data = await response.json() as {
+      bpm: number
+      bpm_raw: number
+      confidence?: number
+      source_url_host?: string
+    }
     
-    try {
-      // Write input file
-      writeFileSync(tempInputPath, Buffer.from(buffer))
-      console.log(`[BPM Module] Wrote input file to: ${tempInputPath}`)
-      
-      // Convert to mono WAV at 44.1kHz using ffmpeg
-      // Escape paths properly for shell execution
-      const escapePath = (p: string) => p.replace(/ /g, '\\ ') // Basic escaping for spaces
-      const ffmpegCommand = `${escapePath(ffmpegPath)} -i ${escapePath(tempInputPath)} -acodec pcm_s16le -ac 1 -ar 44100 -y ${escapePath(outputPath)}`
-      console.log(`[BPM Module] Running ffmpeg command (truncated): ${ffmpegCommand.substring(0, 200)}...`)
-      
-      const { stdout, stderr } = await execAsync(ffmpegCommand, {
-        maxBuffer: 10 * 1024 * 1024, // 10MB buffer
-        timeout: 30000, // 30 second timeout
-      })
-      
-      if (stdout) console.log(`[BPM Module] ffmpeg stdout: ${stdout.substring(0, 200)}`)
-      if (stderr && !stderr.includes('Stream mapping')) {
-        console.warn(`[BPM Module] ffmpeg stderr: ${stderr.substring(0, 200)}`)
-      }
-      
-      console.log(`[BPM Module] ffmpeg conversion completed: ${outputPath}`)
-      
-      // Verify output file exists
-      if (!require('fs').existsSync(outputPath)) {
-        throw new Error(`Output file was not created: ${outputPath}`)
-      }
-      
-      // Clean up input file
-      try {
-        unlinkSync(tempInputPath)
-      } catch (e) {
-        // Ignore cleanup errors
-      }
-    } catch (error) {
-      console.error(`[BPM Module] Error during ffmpeg conversion:`, error)
-      // Clean up on error
-      try {
-        unlinkSync(tempInputPath)
-      } catch (e) {
-        // Ignore cleanup errors
-      }
-      throw error
+    console.log(`[BPM Module] BPM service response:`, {
+      bpm: data.bpm,
+      bpm_raw: data.bpm_raw,
+      confidence: data.confidence,
+      source: data.source_url_host,
+    })
+    
+    return {
+      bpm: data.bpm,
+      bpmRaw: data.bpm_raw,
+      confidence: data.confidence,
     }
   } catch (error) {
     clearTimeout(timeoutId)
-    console.error(`[BPM Module] Error downloading audio:`, error)
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('BPM service request timed out')
+    }
     throw error
   }
-}
-
-/**
- * Compute BPM from audio file
- */
-async function computeBpm(audioFilePath: string): Promise<{ bpm: number; bpmRaw: number }> {
-  // Read audio file
-  const audioBuffer = readFileSync(audioFilePath)
-  
-  // Use autocorrelation-based tempo detection
-  // Note: This library expects an AudioBuffer, but we can work with raw PCM data
-  // For simplicity, we'll use a different approach with a simpler BPM detector
-  
-  // Alternative: Use a simpler tempo detection algorithm
-  // For now, we'll use a basic autocorrelation-based approach
-  
-  // Convert buffer to Float32Array (assuming 16-bit PCM)
-  const samples = new Int16Array(audioBuffer.buffer, audioBuffer.byteOffset, audioBuffer.length / 2)
-  const floatSamples = new Float32Array(samples.length)
-  for (let i = 0; i < samples.length; i++) {
-    floatSamples[i] = samples[i] / 32768.0
-  }
-  
-  // Simple BPM detection using autocorrelation
-  const sampleRate = 44100
-  const bpmRaw = detectTempo(floatSamples, sampleRate)
-  
-  // Normalize BPM (handle half/double time)
-  let bpm = bpmRaw
-  while (bpm < 70 && bpm > 0) {
-    bpm *= 2
-  }
-  while (bpm > 200) {
-    bpm /= 2
-  }
-  
-  // Round to 1 decimal place
-  bpm = Math.round(bpm * 10) / 10
-  
-  return { bpm, bpmRaw }
-}
-
-/**
- * Improved tempo detection using autocorrelation with energy-based preprocessing
- * This implementation works reasonably well for most pop/EDM tracks
- */
-function detectTempo(samples: Float32Array, sampleRate: number): number {
-  // Normalize samples
-  const normalized = new Float32Array(samples.length)
-  let max = 0
-  for (let i = 0; i < samples.length; i++) {
-    const abs = Math.abs(samples[i])
-    if (abs > max) max = abs
-  }
-  if (max === 0) return 0
-  
-  for (let i = 0; i < samples.length; i++) {
-    normalized[i] = samples[i] / max
-  }
-  
-  // Apply high-pass filter (simple difference) to emphasize beats
-  const filtered = new Float32Array(normalized.length - 1)
-  for (let i = 0; i < filtered.length; i++) {
-    filtered[i] = Math.abs(normalized[i + 1] - normalized[i])
-  }
-  
-  // Autocorrelation on filtered signal
-  const minPeriod = Math.floor(sampleRate / 200) // 200 BPM max
-  const maxPeriod = Math.floor(sampleRate / 60)   // 60 BPM min
-  
-  let maxCorrelation = 0
-  let bestPeriod = 0
-  
-  // Sample autocorrelation at intervals for performance
-  const step = Math.max(1, Math.floor((maxPeriod - minPeriod) / 200))
-  
-  for (let period = minPeriod; period < maxPeriod && period < filtered.length / 2; period += step) {
-    let correlation = 0
-    const numSamples = Math.min(filtered.length - period, 15000) // Limit for performance
-    
-    for (let i = 0; i < numSamples; i += 10) { // Sample every 10th point for speed
-      correlation += filtered[i] * filtered[i + period]
-    }
-    
-    correlation /= (numSamples / 10)
-    
-    // Weight by period (prefer common BPM ranges)
-    const bpm = (sampleRate / period) * 60
-    const weight = (bpm >= 80 && bpm <= 160) ? 1.2 : 1.0
-    correlation *= weight
-    
-    if (correlation > maxCorrelation) {
-      maxCorrelation = correlation
-      bestPeriod = period
-    }
-  }
-  
-  // Refine around best period
-  if (bestPeriod > 0) {
-    const refineRange = Math.max(2, Math.floor(step / 2))
-    for (let period = bestPeriod - refineRange; period <= bestPeriod + refineRange; period++) {
-      if (period < minPeriod || period >= maxPeriod || period >= filtered.length / 2) continue
-      
-      let correlation = 0
-      const numSamples = Math.min(filtered.length - period, 15000)
-      
-      for (let i = 0; i < numSamples; i += 5) {
-        correlation += filtered[i] * filtered[i + period]
-      }
-      
-      correlation /= (numSamples / 5)
-      
-      const bpm = (sampleRate / period) * 60
-      const weight = (bpm >= 80 && bpm <= 160) ? 1.2 : 1.0
-      correlation *= weight
-      
-      if (correlation > maxCorrelation) {
-        maxCorrelation = correlation
-        bestPeriod = period
-      }
-    }
-  }
-  
-  if (bestPeriod === 0 || maxCorrelation < 0.1) {
-    return 0
-  }
-  
-  // Convert period to BPM
-  const bpm = (sampleRate / bestPeriod) * 60
-  return bpm
 }
 
 /**
@@ -675,20 +455,14 @@ export async function getBpmForSpotifyTrack(
         }
       }
       
-      // 4. Download and convert audio
-      console.log(`[BPM Module] Step 4: Downloading and converting audio...`)
-      const outputPath = join(tmpdir(), `bpm-output-${Date.now()}.wav`)
+      // 4. Call external BPM service
+      console.log(`[BPM Module] Step 4: Calling external BPM service...`)
       try {
-        await downloadAndConvertAudio(previewResult.url, outputPath)
-        console.log(`[BPM Module] Audio downloaded and converted to: ${outputPath}`)
+        const { bpm, bpmRaw } = await computeBpmFromService(previewResult.url)
+        console.log(`[BPM Module] BPM computed by external service:`, { bpm, bpmRaw })
         
-        // 5. Compute BPM
-        console.log(`[BPM Module] Step 5: Computing BPM from audio...`)
-        const { bpm, bpmRaw } = await computeBpm(outputPath)
-        console.log(`[BPM Module] BPM computed:`, { bpm, bpmRaw })
-        
-        // 6. Store in cache
-        console.log(`[BPM Module] Step 6: Storing in cache...`)
+        // 5. Store in cache
+        console.log(`[BPM Module] Step 5: Storing in cache...`)
         await storeInCache({
           spotifyTrackId,
           isrc: identifiers.isrc,
@@ -701,13 +475,6 @@ export async function getBpmForSpotifyTrack(
         })
         console.log(`[BPM Module] Successfully cached BPM for ${spotifyTrackId}`)
         
-        // Clean up audio file
-        try {
-          unlinkSync(outputPath)
-        } catch (e) {
-          // Ignore cleanup errors
-        }
-        
         return {
           bpm,
           source: previewResult.source,
@@ -715,13 +482,6 @@ export async function getBpmForSpotifyTrack(
           bpmRaw,
         }
       } catch (error) {
-        // Clean up on error
-        try {
-          unlinkSync(outputPath)
-        } catch (e) {
-          // Ignore cleanup errors
-        }
-        
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
         console.error(`[BPM Module] Error during BPM computation:`, errorMessage)
         if (error instanceof Error) {

@@ -1,3 +1,2 @@
 onlyBuiltDependencies:
-  - ffmpeg-static
   - unrs-resolver

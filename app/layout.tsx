@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import PageViewTracker from './components/PageViewTracker'
 
 export const metadata: Metadata = {
   title: 'Spotify Playlist Browser',
@@ -35,6 +36,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="flex flex-col min-h-screen">
+        <PageViewTracker />
         {children}
       </body>
     </html>

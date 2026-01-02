@@ -5,7 +5,7 @@
 This implementation provides a reliable BPM detection pipeline that:
 - Uses Spotify only for track identification (metadata + ISRC)
 - Sources audio previews from multiple providers (Spotify, iTunes, Deezer)
-- Computes BPM from audio previews using autocorrelation
+- Calls an external BPM detection service (Google Cloud Run) to compute BPM
 - Caches results in Neon Postgres to avoid recomputation
 - Does NOT use Spotify Audio Features/Analysis (restricted since Nov 2024)
 
@@ -29,8 +29,7 @@ This implementation provides a reliable BPM detection pipeline that:
    - Extracts identifiers (ISRC, title, artists, preview URL)
    - Checks cache first
    - Resolves preview URL from multiple sources
-   - Downloads and converts audio
-   - Computes BPM using autocorrelation
+   - Calls external BPM service (Google Cloud Run) with preview URL
    - Stores results in cache
 
 3. **`app/api/bpm/route.ts`** - API endpoint
@@ -52,15 +51,20 @@ This implementation provides a reliable BPM detection pipeline that:
 
 ## BPM Computation
 
-1. Download preview audio (typically 30 seconds)
-2. Convert to mono WAV at 44.1kHz using ffmpeg
-3. Apply high-pass filter to emphasize beats
-4. Use autocorrelation to detect tempo
-5. Normalize BPM (handle half/double time):
-   - While BPM < 70: multiply by 2
-   - While BPM > 200: divide by 2
-6. Round to 1 decimal place
-7. Store both raw and normalized BPM
+The BPM computation is handled by an external microservice hosted on Google Cloud Run:
+- **Service URL**: `https://bpm-service-340051416180.europe-west3.run.app`
+- **Authentication**: Google Cloud IAM Identity Tokens
+- **Processing**: Uses Essentia (RhythmExtractor2013) and ffmpeg for accurate BPM detection
+- **Response**: Returns normalized BPM, raw BPM, confidence score, and source host
+
+The service:
+1. Downloads preview audio from the provided URL
+2. Converts to mono WAV at 44.1kHz using ffmpeg
+3. Uses Essentia's RhythmExtractor2013 algorithm for tempo detection
+4. Normalizes BPM (handles half/double time automatically)
+5. Returns BPM data with confidence score
+
+See [bpm-finder-api](https://github.com/HA-n00b-alt/bpm-finder-api) for full service documentation.
 
 ## Setup
 
@@ -73,8 +77,7 @@ npm install
 Required packages:
 - `@neondatabase/serverless` - Neon database client
 - `pg` - PostgreSQL client (for migrations)
-- `ffmpeg-static` - Static ffmpeg binary
-- `web-audio-beat-detector` - (optional, not currently used)
+- `google-auth-library` - Google Cloud authentication for BPM service
 
 ### 2. Configure Environment Variables
 
@@ -83,10 +86,14 @@ Add to `.env.local`:
 ```env
 DATABASE_URL=postgresql://user:password@host/database?sslmode=require
 DATABASE_URL_UNPOOLED=postgresql://user:password@host/database?sslmode=require
+BPM_SERVICE_URL=https://bpm-service-340051416180.europe-west3.run.app
+GCP_SERVICE_ACCOUNT_KEY={"type":"service_account","project_id":"...","private_key_id":"...","private_key":"...","client_email":"...","client_id":"...","auth_uri":"...","token_uri":"...","auth_provider_x509_cert_url":"...","client_x509_cert_url":"..."}
 ```
 
 - `DATABASE_URL` - Neon pooled connection (PgBouncer) for runtime
 - `DATABASE_URL_UNPOOLED` - Neon direct connection for migrations
+- `BPM_SERVICE_URL` - External BPM service URL (optional, defaults to provided URL)
+- `GCP_SERVICE_ACCOUNT_KEY` - Google Cloud service account key JSON (as single-line string) for authenticating with the BPM service
 
 ### 3. Run Migration
 
@@ -98,8 +105,8 @@ psql $DATABASE_URL_UNPOOLED -f migrations/001_create_track_bpm_cache.sql
 
 The implementation works on Vercel:
 - Edge runtime compatible (uses Neon serverless client)
-- ffmpeg-static works on Vercel's serverless functions
-- Audio processing happens in `/tmp` (cleaned up after)
+- BPM computation is handled by external Cloud Run service
+- No local audio processing or binary dependencies
 
 ## Usage
 
@@ -126,7 +133,7 @@ BPM is automatically fetched and displayed in the tracks table. The first 20 tra
 ## Performance
 
 - **Cache hit**: < 50ms (database query)
-- **Cache miss**: 5-15 seconds (download + compute)
+- **Cache miss**: 3-10 seconds (external service processing)
 - **Concurrency**: In-flight computations are deduplicated (same track computed once)
 
 ## Error Handling
@@ -134,20 +141,22 @@ BPM is automatically fetched and displayed in the tracks table. The first 20 tra
 - Failed preview downloads are cached with error message
 - Errors have short TTL (retry after 1 day)
 - Rate limiting from external APIs is handled gracefully
-- Timeouts: 5s for preview URL resolution, 10s for audio download
+- Timeouts: 5s for preview URL resolution, 30s for BPM service call
+- BPM service errors are logged and cached for retry
 
 ## Limitations
 
 - BPM detection accuracy depends on audio quality and preview length
 - Some tracks may not have previews available from any source
-- Autocorrelation algorithm works best for consistent tempo (pop/EDM)
+- Essentia algorithm works best for consistent tempo (pop/EDM)
 - Complex time signatures may not be detected accurately
+- Requires Google Cloud service account for authentication
 
 ## Future Improvements
 
-- Use more robust BPM detection library (e.g., Essentia.js)
 - Implement batch BPM fetching for better UX
 - Add manual BPM correction interface
 - Support for more preview sources
 - Better error recovery and retry logic
+- Caching of identity tokens to reduce authentication overhead
 

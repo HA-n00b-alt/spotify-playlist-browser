@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { getPlaylists } from '@/lib/spotify'
+import { isAdminUser } from '@/lib/analytics'
 import PlaylistsTable from './PlaylistsTable'
 
 interface Playlist {
@@ -34,6 +35,7 @@ interface Playlist {
 export default async function PlaylistsPage() {
   let playlists: Playlist[] = []
   let error: string | null = null
+  const isAdmin = await isAdminUser()
 
   try {
     playlists = await getPlaylists() as Playlist[]
@@ -73,14 +75,24 @@ export default async function PlaylistsPage() {
       <div className="max-w-7xl mx-auto flex-1 w-full">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">My Playlists</h1>
-          <form action="/api/auth/logout" method="POST">
-            <button
-              type="submit"
-              className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded transition-colors text-sm sm:text-base"
-            >
-              Logout
-            </button>
-          </form>
+          <div className="flex gap-2">
+            {isAdmin && (
+              <Link
+                href="/stats"
+                className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded transition-colors text-sm sm:text-base"
+              >
+                Stats
+              </Link>
+            )}
+            <form action="/api/auth/logout" method="POST">
+              <button
+                type="submit"
+                className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded transition-colors text-sm sm:text-base"
+              >
+                Logout
+              </button>
+            </form>
+          </div>
         </div>
         
         <PlaylistsTable playlists={playlists} />

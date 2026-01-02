@@ -234,6 +234,8 @@ SPOTIFY_CLIENT_ID=your_spotify_client_id
 SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
 SPOTIFY_REDIRECT_URI=https://searchmyplaylist.delman.it/api/auth/callback
 NEXT_PUBLIC_BASE_URL=https://searchmyplaylist.delman.it
+BPM_SERVICE_URL=https://bpm-service-340051416180.europe-west3.run.app
+GCP_SERVICE_ACCOUNT_KEY={"type":"service_account","project_id":"...","private_key_id":"...","private_key":"...","client_email":"...","client_id":"...","auth_uri":"...","token_uri":"...","auth_provider_x509_cert_url":"...","client_x509_cert_url":"..."}
 ```
 
 ### Local Development
@@ -243,7 +245,19 @@ SPOTIFY_CLIENT_ID=your_spotify_client_id
 SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
 SPOTIFY_REDIRECT_URI=http://localhost:3000/api/auth/callback
 NEXT_PUBLIC_BASE_URL=http://localhost:3000
+BPM_SERVICE_URL=https://bpm-service-340051416180.europe-west3.run.app
+GCP_SERVICE_ACCOUNT_KEY={"type":"service_account","project_id":"...","private_key_id":"...","private_key":"...","client_email":"...","client_id":"...","auth_uri":"...","token_uri":"...","auth_provider_x509_cert_url":"...","client_x509_cert_url":"..."}
 ```
+
+### BPM Service Configuration
+
+The application uses an external BPM detection service hosted on Google Cloud Run. You need to:
+
+1. **Get a service account key** from your Google Cloud project that has permission to invoke the Cloud Run service
+2. **Set `GCP_SERVICE_ACCOUNT_KEY`** to the full JSON content of the service account key file (as a single-line string)
+3. **Set `BPM_SERVICE_URL`** to the Cloud Run service URL (defaults to the provided URL if not set)
+
+**Note:** The `GCP_SERVICE_ACCOUNT_KEY` should be the complete JSON object as a single string. In Vercel, you can paste the entire JSON content directly into the environment variable field.
 
 ## Deployment
 
