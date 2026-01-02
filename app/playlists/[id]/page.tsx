@@ -83,6 +83,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [yearTo, setYearTo] = useState('')
   const [bpmFrom, setBpmFrom] = useState('')
   const [bpmTo, setBpmTo] = useState('')
+  const [includeHalfDoubleBpm, setIncludeHalfDoubleBpm] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [showBpmInfo, setShowBpmInfo] = useState(false)
 
   useEffect(() => {
     async function fetchPlaylistInfo() {
@@ -97,7 +100,20 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       }
     }
 
+    async function checkAdmin() {
+      try {
+        const res = await fetch('/api/auth/is-admin')
+        if (res.ok) {
+          const data = await res.json()
+          setIsAdmin(data.isAdmin || false)
+        }
+      } catch (e) {
+        console.error('Error checking admin status:', e)
+      }
+    }
+
     fetchPlaylistInfo()
+    checkAdmin()
   }, [params.id])
 
   useEffect(() => {
@@ -364,8 +380,31 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       : (track.tempo ? Math.round(track.tempo) : null)
     if (bpmFrom || bpmTo) {
       if (trackBpm === null) return false
-      if (bpmFrom && trackBpm < parseInt(bpmFrom, 10)) return false
-      if (bpmTo && trackBpm > parseInt(bpmTo, 10)) return false
+      
+      const bpmFromNum = bpmFrom ? parseInt(bpmFrom, 10) : null
+      const bpmToNum = bpmTo ? parseInt(bpmTo, 10) : null
+      
+      // Check if track BPM matches the range
+      const matchesBpm = (!bpmFromNum || trackBpm >= bpmFromNum) && (!bpmToNum || trackBpm <= bpmToNum)
+      
+      if (matchesBpm) {
+        return true
+      }
+      
+      // If includeHalfDoubleBpm is checked, also check half and double BPM
+      if (includeHalfDoubleBpm) {
+        const halfBpm = trackBpm / 2
+        const doubleBpm = trackBpm * 2
+        
+        const matchesHalf = (!bpmFromNum || halfBpm >= bpmFromNum) && (!bpmToNum || halfBpm <= bpmToNum)
+        const matchesDouble = (!bpmFromNum || doubleBpm >= bpmFromNum) && (!bpmToNum || doubleBpm <= bpmToNum)
+        
+        if (matchesHalf || matchesDouble) {
+          return true
+        }
+      }
+      
+      return false
     }
 
     return true
@@ -504,12 +543,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           >
             ← Back to Playlists
           </Link>
-          <button
-            onClick={() => setShowBpmDebug(!showBpmDebug)}
-            className="text-xs sm:text-sm bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-1.5 px-3 sm:py-2 sm:px-4 rounded transition-colors self-end sm:self-auto"
-          >
-            {showBpmDebug ? 'Hide' : 'Show'} BPM Debug
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setShowBpmDebug(!showBpmDebug)}
+              className="text-xs sm:text-sm bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-1.5 px-3 sm:py-2 sm:px-4 rounded transition-colors self-end sm:self-auto"
+            >
+              {showBpmDebug ? 'Hide' : 'Show'} BPM Debug
+            </button>
+          )}
         </div>
         
         {showBpmDebug && (
@@ -555,6 +596,67 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             </div>
           </div>
         )}
+
+        {/* BPM Processing Progress Indicator */}
+        {(() => {
+          const totalTracks = tracks.length
+          const tracksWithBpm = Object.values(trackBpms).filter(bpm => bpm !== null && bpm !== undefined).length
+          const tracksLoading = loadingBpms.size
+          const tracksRemaining = totalTracks - tracksWithBpm - tracksLoading
+          const isProcessing = tracksRemaining > 0 && tracksLoading > 0
+          
+          // Estimate time: assume ~5 seconds per track for uncached tracks
+          const estimatedSecondsPerTrack = 5
+          const estimatedSecondsRemaining = tracksRemaining * estimatedSecondsPerTrack
+          const estimatedMinutes = Math.ceil(estimatedSecondsRemaining / 60)
+          
+          if (isProcessing && totalTracks > 0) {
+            return (
+              <div className="mb-4 sm:mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <p className="text-sm text-blue-900">
+                      BPM information processing ongoing ({tracksWithBpm} tracks done, {tracksRemaining} remaining)
+                      {estimatedMinutes > 0 && ` • Estimated time: ~${estimatedMinutes} minute${estimatedMinutes !== 1 ? 's' : ''}`}
+                      {' '}
+                      <button
+                        onClick={() => setShowBpmInfo(!showBpmInfo)}
+                        className="text-blue-600 hover:text-blue-800 underline"
+                      >
+                        (more info)
+                      </button>
+                    </p>
+                    {showBpmInfo && (
+                      <div className="mt-3 p-3 bg-white rounded border border-blue-200">
+                        <p className="text-sm text-gray-700 mb-2">
+                          <strong>What's happening?</strong>
+                        </p>
+                        <p className="text-sm text-gray-600 mb-2">
+                          This is the first time this playlist is being opened. The system is calculating BPM (beats per minute) for each track by analyzing audio previews. This process:
+                        </p>
+                        <ul className="text-sm text-gray-600 list-disc list-inside mb-2 space-y-1">
+                          <li>Downloads 30-second audio previews from Spotify, iTunes, or Deezer</li>
+                          <li>Analyzes the audio to detect the tempo</li>
+                          <li>Stores the results for instant access next time</li>
+                        </ul>
+                        <p className="text-sm text-gray-600">
+                          <strong>Note:</strong> This only happens once per playlist. Future visits will load BPM data instantly from the cache.
+                        </p>
+                        <button
+                          onClick={() => setShowBpmInfo(false)}
+                          className="mt-2 text-xs text-blue-600 hover:text-blue-800 underline"
+                        >
+                          Hide details
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          }
+          return null
+        })()}
         
         {playlistInfo && (
           <div className="mb-6 bg-white rounded-lg border border-gray-200 shadow-sm p-4 sm:p-6">
@@ -719,6 +821,17 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       />
                     </div>
+                    <label className="flex items-center mt-2">
+                      <input
+                        type="checkbox"
+                        checked={includeHalfDoubleBpm}
+                        onChange={(e) => setIncludeHalfDoubleBpm(e.target.checked)}
+                        className="mr-2 w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                      />
+                      <span className="text-sm text-gray-700">
+                        Include tracks with half/double BPM
+                      </span>
+                    </label>
                   </div>
                 </div>
                 
@@ -730,6 +843,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       setYearTo('')
                       setBpmFrom('')
                       setBpmTo('')
+                      setIncludeHalfDoubleBpm(false)
                     }}
                     className="mt-4 text-sm text-red-600 hover:text-red-700 underline"
                   >
