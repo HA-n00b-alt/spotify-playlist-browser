@@ -7,12 +7,12 @@ A modern Next.js web application that lets you browse, search, and sort your Spo
 ## Features
 
 ### Core Functionality
-- ✅ **Spotify OAuth Authentication** - Secure login with PKCE (Proof Key for Code Exchange)
-- ✅ **Playlist Browser** - View all your playlists in a clean, sortable table
-- ✅ **Track Explorer** - Browse tracks in any playlist with detailed metadata
-- ✅ **Advanced Search** - Search playlists and tracks by multiple criteria
-- ✅ **Sorting** - Click column headers to sort by any field
-- ✅ **Mobile Responsive** - Optimized layouts for phones, tablets, and desktops
+- **Spotify OAuth Authentication** - Secure login with PKCE (Proof Key for Code Exchange)
+- **Playlist Browser** - View all your playlists in a clean, sortable table
+- **Track Explorer** - Browse tracks in any playlist with detailed metadata
+- **Advanced Search** - Search playlists and tracks by multiple criteria
+- **Sorting** - Click column headers to sort by any field
+- **Mobile Responsive** - Optimized layouts for phones, tablets, and desktops
 
 ### Playlist Page Features
 - Display playlists with cover images, names, descriptions, owners, track counts, and followers
@@ -123,7 +123,7 @@ A modern Next.js web application that lets you browse, search, and sort your Spo
 1. On your app's dashboard page, you'll see:
    - **Client ID:** Copy this value
    - **Client Secret:** Click "Show Client Secret" and copy this value
-2. ⚠️ **Keep these secure!** Never commit them to your repository.
+2. **Keep these secure!** Never commit them to your repository.
 
 ### Step 4: Update Environment Variables
 

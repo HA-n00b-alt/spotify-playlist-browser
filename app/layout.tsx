@@ -19,7 +19,7 @@ function Footer() {
       <a href="mailto:delman@delman.it" className="text-green-600 hover:text-green-700 hover:underline">
         delman@delman.it
       </a>
-      , powered by{' '}
+      . Powered by{' '}
       <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
         Spotify
       </a>

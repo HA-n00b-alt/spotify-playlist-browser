@@ -52,15 +52,9 @@ async function paginateSpotify<T>(
       }
 
       if (data.next) {
-        try {
-          // Extract path and query from full URL
-          const nextUrlObj: URL = new URL(data.next)
-          nextUrl = nextUrlObj.pathname + nextUrlObj.search
-        } catch (urlError) {
-          console.error('Error parsing next URL:', data.next, urlError)
-          // If URL parsing fails, try to continue with the next URL as-is (might be relative)
-          nextUrl = data.next.startsWith('http') ? null : data.next
-        }
+        // Spotify returns full URLs in the 'next' field, use them directly
+        // makeSpotifyRequest now handles both full URLs and relative endpoints
+        nextUrl = data.next
       } else {
         nextUrl = null
       }
@@ -150,7 +144,10 @@ async function makeSpotifyRequest<T>(
     }
   }
 
-  const url = `https://api.spotify.com/v1${endpoint}`
+  // Handle full URLs (from pagination) vs relative endpoints
+  const url = endpoint.startsWith('http') 
+    ? endpoint 
+    : `https://api.spotify.com/v1${endpoint}`
   
   const makeRequest = async (token: string): Promise<Response> => {
     return fetch(url, {
@@ -240,6 +237,10 @@ export async function getPlaylists(): Promise<any[]> {
 
 export async function getPlaylist(playlistId: string): Promise<any> {
   return await makeSpotifyRequest<any>(`/playlists/${playlistId}`)
+}
+
+export async function getTrack(trackId: string): Promise<any> {
+  return await makeSpotifyRequest<any>(`/tracks/${trackId}`)
 }
 
 export async function getPlaylistTracks(playlistId: string): Promise<any[]> {
