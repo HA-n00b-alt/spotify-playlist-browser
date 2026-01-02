@@ -51,7 +51,7 @@ export default async function Home({
         </Link>
 
         <p className="mt-6 text-xs text-gray-500">
-          You'll be redirected to Spotify to authorize this application
+          You&apos;ll be redirected to Spotify to authorize this application
         </p>
       </div>
     </main>
