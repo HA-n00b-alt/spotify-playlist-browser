@@ -851,19 +851,31 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           const totalTracks = tracks.length
           if (totalTracks === 0) return null
 
-          const tracksWithBpm = tracks.filter(t => trackBpms[t.id] != null && trackBpms[t.id] !== undefined).length
-          const tracksWithNa = tracks.filter(t => trackBpms[t.id] === null).length
-          const tracksLoading = loadingBpms.size
-          const tracksDone = tracks.filter(t => 
-            trackBpms[t.id] !== undefined && !loadingBpms.has(t.id)
-          ).length
-          
-          // Calculate songs already in DB (tracks that have an entry in database, regardless of BPM value)
+          // Calculate songs already in DB (tracks that have spotify_track_id in database)
           const songsInDb = tracks.filter(t => tracksInDb.has(t.id)).length
           
           // Tracks to search = total - tracks in DB
           const tracksToSearch = totalTracks - songsInDb
-          const isProcessing = tracksLoading > 0 || tracksToSearch > 0
+          
+          // Tracks currently being processed (loading)
+          const tracksLoading = loadingBpms.size
+          
+          // Tracks that were NOT in DB but have been processed in this session (have a result, not loading)
+          const tracksProcessedFromSearch = tracks.filter(t => 
+            !tracksInDb.has(t.id) && trackBpms[t.id] !== undefined && !loadingBpms.has(t.id)
+          ).length
+          
+          // Remaining tracks to search (tracks not in DB that haven't been processed yet)
+          const tracksRemainingToSearch = tracksToSearch - tracksProcessedFromSearch
+          
+          // Tracks with BPM value (not null)
+          const tracksWithBpm = tracks.filter(t => trackBpms[t.id] != null && trackBpms[t.id] !== undefined).length
+          
+          // Tracks with N/A (null BPM)
+          const tracksWithNa = tracks.filter(t => trackBpms[t.id] === null).length
+          
+          // Check if processing is ongoing
+          const isProcessing = tracksLoading > 0 || tracksRemainingToSearch > 0
 
           // Always show the indicator - never hide it
           return (
@@ -875,7 +887,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               </div>
               {isProcessing ? (
                 <div>
-                  BPM information processing ongoing ({tracksDone} tracks done, {tracksToSearch} remaining){' '}
+                  BPM information processing ongoing ({tracksProcessedFromSearch} of {tracksToSearch} tracks searched, {tracksRemainingToSearch} remaining){' '}
                   <button
                     onClick={() => setShowBpmMoreInfo(true)}
                     className="text-blue-600 hover:text-blue-700 hover:underline"
