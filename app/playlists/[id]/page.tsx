@@ -79,6 +79,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [bpmProcessingEndTime, setBpmProcessingEndTime] = useState<number | null>(null)
   const [bpmTracksCalculated, setBpmTracksCalculated] = useState<number>(0) // Track how many were actually calculated (not cached)
   const [retryStatus, setRetryStatus] = useState<{ loading: boolean; success?: boolean; error?: string } | null>(null)
+  const [retryAttempted, setRetryAttempted] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
@@ -314,52 +315,24 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   }
 
   /**
-   * Handle track row click - open Spotify app via deep link
+   * Handle track row click - open Spotify track in web player
    */
   const handleTrackClick = (track: Track) => {
-    // Use Spotify URI scheme to open app (opens app if available)
-    const spotifyUri = `spotify:track:${track.id}`
-    
-    // Try to open Spotify app using hidden iframe (works better than window.location)
-    // This prevents the web player from opening automatically
-    const iframe = document.createElement('iframe')
-    iframe.style.display = 'none'
-    iframe.src = spotifyUri
-    document.body.appendChild(iframe)
-    
-    // Clean up iframe after a short delay
-    setTimeout(() => {
-      document.body.removeChild(iframe)
-    }, 1000)
-    
-    // Only open web URL if user explicitly wants it (not automatic fallback)
-    // The deep link should work on mobile and desktop with Spotify installed
+    if (track.external_urls?.spotify) {
+      window.open(track.external_urls.spotify, '_blank', 'noopener,noreferrer')
+    }
   }
 
   /**
-   * Handle track title click - open Spotify app via deep link
+   * Handle track title click - open Spotify track in web player
    */
   const handleTrackTitleClick = (e: MouseEvent<HTMLAnchorElement>, track: Track) => {
     e.preventDefault()
     e.stopPropagation()
     
-    // Use Spotify URI scheme to open app (opens app if available)
-    const spotifyUri = `spotify:track:${track.id}`
-    
-    // Try to open Spotify app using hidden iframe (works better than window.location)
-    // This prevents the web player from opening automatically
-    const iframe = document.createElement('iframe')
-    iframe.style.display = 'none'
-    iframe.src = spotifyUri
-    document.body.appendChild(iframe)
-    
-    // Clean up iframe after a short delay
-    setTimeout(() => {
-      document.body.removeChild(iframe)
-    }, 1000)
-    
-    // Only open web URL if user explicitly wants it (not automatic fallback)
-    // The deep link should work on mobile and desktop with Spotify installed
+    if (track.external_urls?.spotify) {
+      window.open(track.external_urls.spotify, '_blank', 'noopener,noreferrer')
+    }
   }
 
   const formatDuration = (ms: number): string => {
@@ -642,7 +615,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           const tracksWithoutBpm = tracks.filter(t => 
             trackBpms[t.id] === undefined || trackBpms[t.id] === null
           ).length
-          const tracksRemaining = tracksWithoutBpm - tracksLoading
+          // Only count as "remaining" if they haven't been tried yet (no BPM details means not tried)
+          const tracksRemaining = tracks.filter(t => 
+            trackBpms[t.id] === undefined && !bpmDetails[t.id]
+          ).length
           const isProcessing = tracksLoading > 0 || tracksRemaining > 0
           const allTracksProcessed = tracksLoading === 0 && tracksWithoutBpm === 0
           const allTracksHaveBpm = tracksWithBpm === totalTracks
@@ -680,7 +656,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           }
 
           // If currently processing
-          if (isProcessing) {
+          if (isProcessing && tracksRemaining > 0) {
             return (
               <div className="mb-4 sm:mb-6 text-sm text-gray-600">
                 BPM information processing ongoing ({tracksWithBpm} tracks done, {tracksRemaining} remaining)
@@ -1188,6 +1164,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                           onClick={() => {
                                             setSelectedBpmTrack(track)
                                             setRetryStatus(null)
+                                            setRetryAttempted(false)
                                             setShowBpmModal(true)
                                           }}
                                           className="text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
@@ -1204,6 +1181,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                             <button
                                               onClick={() => {
                                                 setSelectedBpmTrack(track)
+                                                setRetryStatus(null)
+                                                setRetryAttempted(false)
                                                 setShowBpmModal(true)
                                               }}
                                               className="text-gray-400 hover:text-gray-600 hover:underline cursor-pointer"
@@ -1217,16 +1196,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         {track.popularity != null ? track.popularity : (
                           <span className="text-gray-400">N/A</span>
                         )}
-                      </td>
-                      <td className="px-3 lg:px-4 py-2 lg:py-3 hidden sm:table-cell" onClick={(e) => e.stopPropagation()}>
-                        <a
-                          href={track.external_urls.spotify}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-green-600 hover:text-green-700 text-xs sm:text-sm"
-                        >
-                          Open
-                        </a>
                       </td>
                     </tr>
                   ))
@@ -1338,36 +1307,48 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               }`}>
                 {retryStatus.loading && 'Retrying...'}
                 {!retryStatus.loading && retryStatus.success && 'BPM successfully calculated!'}
-                {!retryStatus.loading && retryStatus.error && `Error: ${retryStatus.error}`}
+                {!retryStatus.loading && !retryStatus.success && retryStatus.error && `Error: ${retryStatus.error}`}
               </div>
             )}
 
             <div className="mt-6 flex justify-end gap-3">
-              {trackBpms[selectedBpmTrack.id] == null && (
+              {trackBpms[selectedBpmTrack.id] == null && !retryAttempted && (
                 <button
                   onClick={async () => {
                     // Retry fetching BPM for this track
                     setRetryStatus({ loading: true })
+                    setRetryAttempted(true)
                     setLoadingBpms(prev => new Set(prev).add(selectedBpmTrack.id))
                     try {
                       const res = await fetch(`/api/bpm?spotifyTrackId=${selectedBpmTrack.id}`)
                       if (res.ok) {
                         const data = await res.json()
-                        setTrackBpms(prev => ({
-                          ...prev,
-                          [selectedBpmTrack.id]: data.bpm,
-                        }))
-                        setBpmDetails(prev => ({
-                          ...prev,
-                          [selectedBpmTrack.id]: {
-                            source: data.source,
-                            error: data.error,
-                            isrc: data.isrc,
-                          },
-                        }))
-                        setRetryStatus({ loading: false, success: true })
-                        // Clear success message after 3 seconds
-                        setTimeout(() => setRetryStatus(null), 3000)
+                        if (data.bpm != null) {
+                          setTrackBpms(prev => ({
+                            ...prev,
+                            [selectedBpmTrack.id]: data.bpm,
+                          }))
+                          setBpmDetails(prev => ({
+                            ...prev,
+                            [selectedBpmTrack.id]: {
+                              source: data.source,
+                              error: data.error,
+                              isrc: data.isrc,
+                            },
+                          }))
+                          setRetryStatus({ loading: false, success: true })
+                        } else {
+                          const errorMessage = data.error || 'No BPM available'
+                          setBpmDetails(prev => ({
+                            ...prev,
+                            [selectedBpmTrack.id]: {
+                              source: data.source,
+                              error: errorMessage,
+                              isrc: data.isrc,
+                            },
+                          }))
+                          setRetryStatus({ loading: false, success: false, error: errorMessage })
+                        }
                       } else {
                         const errorData = await res.json().catch(() => ({}))
                         const errorMessage = errorData.error || 'Failed to fetch BPM'
@@ -1407,6 +1388,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 onClick={() => {
                   setShowBpmModal(false)
                   setRetryStatus(null)
+                  setRetryAttempted(false)
                 }}
                 className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded transition-colors"
               >

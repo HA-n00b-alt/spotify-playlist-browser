@@ -26,6 +26,7 @@ function Footer() {
       <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
         Spotify
       </a>
+      .
     </footer>
   )
 }

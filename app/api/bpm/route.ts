@@ -17,7 +17,7 @@ export async function GET(request: Request) {
 
   try {
     console.log(`[BPM API] Fetching BPM for track: ${spotifyTrackId}`)
-    const result = await getBpmForSpotifyTrack(spotifyTrackId)
+    const result = await getBpmForSpotifyTrack(spotifyTrackId, request)
     console.log(`[BPM API] Result for ${spotifyTrackId}:`, JSON.stringify(result, null, 2))
     trackApiRequest(userId, '/api/bpm', 'GET', 200).catch(() => {})
     return NextResponse.json(result)

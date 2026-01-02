@@ -107,30 +107,69 @@ async function checkCache(
 }
 
 /**
+ * Get country code from Accept-Language header or default to US
+ */
+function getCountryCodeFromRequest(request?: Request): string {
+  if (!request) return 'us'
+  
+  try {
+    const acceptLanguage = request.headers.get('accept-language')
+    if (acceptLanguage) {
+      // Parse Accept-Language header (e.g., "en-US,en;q=0.9,it;q=0.8")
+      const languages = acceptLanguage.split(',')
+      for (const lang of languages) {
+        const parts = lang.split(';')[0].trim().toLowerCase()
+        // Map common language codes to iTunes country codes
+        const langToCountry: Record<string, string> = {
+          'en-us': 'us',
+          'en-gb': 'gb',
+          'en': 'us',
+          'it': 'it',
+          'it-it': 'it',
+          'fr': 'fr',
+          'fr-fr': 'fr',
+          'de': 'de',
+          'de-de': 'de',
+          'es': 'es',
+          'es-es': 'es',
+          'ja': 'jp',
+          'ja-jp': 'jp',
+        }
+        if (langToCountry[parts]) {
+          return langToCountry[parts]
+        }
+        // Extract country code if format is like "en-US"
+        const countryMatch = parts.match(/-([a-z]{2})$/)
+        if (countryMatch) {
+          return countryMatch[1]
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('[BPM Module] Error parsing Accept-Language header:', error)
+  }
+  
+  return 'us' // Default to US
+}
+
+/**
  * Resolve preview URL from multiple sources
  */
 async function resolvePreviewUrl(params: {
   isrc: string | null
   title: string
   artists: string
-  spotifyPreviewUrl: string | null
+  countryCode?: string
 }): Promise<PreviewUrlResult> {
-  const { isrc, title, artists, spotifyPreviewUrl } = params
+  const { isrc, title, artists, countryCode = 'us' } = params
   
-  console.log(`[BPM Module] Resolving preview URL for: "${title}" by "${artists}" (ISRC: ${isrc || 'none'})`)
+  console.log(`[BPM Module] Resolving preview URL for: "${title}" by "${artists}" (ISRC: ${isrc || 'none'}, Country: ${countryCode})`)
   
-  // 1. Try Spotify preview first
-  if (spotifyPreviewUrl) {
-    console.log(`[BPM Module] Using Spotify preview URL`)
-    return { url: spotifyPreviewUrl, source: 'spotify_preview' }
-  }
-  console.log(`[BPM Module] No Spotify preview URL, trying other sources...`)
-  
-  // 2. Try iTunes lookup by ISRC
+  // 1. Try iTunes lookup by ISRC
   if (isrc) {
     try {
       console.log(`[BPM Module] Trying iTunes ISRC lookup for: ${isrc}`)
-      const itunesLookupUrl = `https://itunes.apple.com/lookup?isrc=${encodeURIComponent(isrc)}`
+      const itunesLookupUrl = `https://itunes.apple.com/lookup?isrc=${encodeURIComponent(isrc)}&country=${countryCode}`
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 5000)
       
@@ -160,11 +199,11 @@ async function resolvePreviewUrl(params: {
     }
   }
   
-  // 3. Try iTunes search by artist + title
+  // 2. Try iTunes search by artist + title
   try {
     console.log(`[BPM Module] Trying iTunes search for: "${artists} ${title}"`)
     const searchTerm = `${artists} ${title}`
-    const itunesSearchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(searchTerm)}&entity=song&limit=1`
+    const itunesSearchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(searchTerm)}&entity=song&limit=1&country=${countryCode}`
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 5000)
     
@@ -193,7 +232,7 @@ async function resolvePreviewUrl(params: {
     console.warn(`[BPM Module] iTunes search error:`, error)
   }
   
-  // 4. Try Deezer search
+  // 3. Try Deezer search
   try {
     console.log(`[BPM Module] Trying Deezer search for: "${artists}" - "${title}"`)
     const deezerQuery = `artist:"${artists}" track:"${title}"`
@@ -384,7 +423,8 @@ async function storeInCache(params: {
  * Main function to get BPM for a Spotify track
  */
 export async function getBpmForSpotifyTrack(
-  spotifyTrackId: string
+  spotifyTrackId: string,
+  request?: Request
 ): Promise<BpmResult> {
   // Check in-flight computations to avoid duplicate work
   const cacheKey = spotifyTrackId
@@ -423,11 +463,12 @@ export async function getBpmForSpotifyTrack(
       
       // 3. Resolve preview URL
       console.log(`[BPM Module] Step 3: Resolving preview URL...`)
+      const countryCode = getCountryCodeFromRequest(request)
       const previewResult = await resolvePreviewUrl({
         isrc: identifiers.isrc,
         title: identifiers.title,
         artists: identifiers.artists,
-        spotifyPreviewUrl: identifiers.spotifyPreviewUrl,
+        countryCode,
       })
       console.log(`[BPM Module] Preview URL resolved:`, {
         hasUrl: !!previewResult.url,
