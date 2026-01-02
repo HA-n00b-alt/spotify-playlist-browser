@@ -256,6 +256,8 @@ export async function getAudioFeatures(trackIds: string[]): Promise<Record<strin
 
     try {
       console.log(`[DEBUG getAudioFeatures] Batch ${Math.floor(i / batchSize) + 1}: Requesting features for ${batch.length} tracks`)
+      console.log(`[DEBUG getAudioFeatures] Request URL: /audio-features?ids=${ids.substring(0, 100)}...`)
+      
       const data = await makeSpotifyRequest<{
         audio_features: Array<{
           id: string
@@ -265,27 +267,60 @@ export async function getAudioFeatures(trackIds: string[]): Promise<Record<strin
       }>(`/audio-features?ids=${ids}`)
 
       console.log(`[DEBUG getAudioFeatures] Batch ${Math.floor(i / batchSize) + 1}: Received ${data.audio_features?.length || 0} features`)
+      console.log(`[DEBUG getAudioFeatures] Raw response structure:`, {
+        hasAudioFeatures: !!data.audio_features,
+        audioFeaturesLength: data.audio_features?.length,
+        firstFeatureSample: data.audio_features?.[0] ? {
+          id: data.audio_features[0]?.id,
+          tempo: data.audio_features[0]?.tempo,
+          isNull: data.audio_features[0] === null,
+          keys: data.audio_features[0] ? Object.keys(data.audio_features[0]) : null
+        } : null
+      })
 
       if (data.audio_features) {
+        let nullCount = 0
+        let withTempoCount = 0
+        let withoutTempoCount = 0
+        
         data.audio_features.forEach((feature, index) => {
           if (feature && feature.id) {
             featuresMap[feature.id] = feature
+            if (feature.tempo != null) {
+              withTempoCount++
+            } else {
+              withoutTempoCount++
+            }
             if (index < 3) {
               console.log(`[DEBUG getAudioFeatures] Sample feature ${index + 1}:`, {
                 id: feature.id,
                 tempo: feature.tempo,
-                hasTempo: feature.tempo != null
+                hasTempo: feature.tempo != null,
+                allKeys: Object.keys(feature).slice(0, 10)
               })
             }
           } else if (feature === null) {
+            nullCount++
             console.log(`[DEBUG getAudioFeatures] Null feature at index ${index} in batch ${Math.floor(i / batchSize) + 1}`)
           }
         })
+        
+        console.log(`[DEBUG getAudioFeatures] Batch ${Math.floor(i / batchSize) + 1} summary:`, {
+          nullFeatures: nullCount,
+          withTempo: withTempoCount,
+          withoutTempo: withoutTempoCount,
+          totalProcessed: nullCount + withTempoCount + withoutTempoCount
+        })
       } else {
         console.log(`[DEBUG getAudioFeatures] No audio_features array in response`)
+        console.log(`[DEBUG getAudioFeatures] Response keys:`, Object.keys(data))
       }
     } catch (error) {
       console.error(`[DEBUG getAudioFeatures] Error fetching audio features batch ${Math.floor(i / batchSize) + 1}:`, error)
+      if (error instanceof Error) {
+        console.error(`[DEBUG getAudioFeatures] Error message:`, error.message)
+        console.error(`[DEBUG getAudioFeatures] Error stack:`, error.stack)
+      }
       // Continue with other batches even if one fails
     }
   }
