@@ -70,6 +70,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [error, setError] = useState<string | null>(null)
   const [trackBpms, setTrackBpms] = useState<Record<string, number | null>>({})
   const [loadingBpms, setLoadingBpms] = useState<Set<string>>(new Set())
+  const [showBpmDebug, setShowBpmDebug] = useState(false)
+  const [bpmDebugInfo, setBpmDebugInfo] = useState<Record<string, any>>({})
   const [searchQuery, setSearchQuery] = useState('')
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
@@ -142,16 +144,37 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       setLoadingBpms(prev => new Set(prev).add(track.id))
       
       try {
+        console.log(`[BPM Client] Fetching BPM for track: ${track.id} (${track.name})`)
         const res = await fetch(`/api/bpm?spotifyTrackId=${track.id}`)
+        console.log(`[BPM Client] Response status for ${track.id}:`, res.status)
+        
         if (res.ok) {
           const data = await res.json()
+          console.log(`[BPM Client] BPM data for ${track.id}:`, data)
           setTrackBpms(prev => ({
             ...prev,
             [track.id]: data.bpm,
           }))
+          // Store debug info
+          setBpmDebugInfo(prev => ({
+            ...prev,
+            [track.id]: data,
+          }))
+        } else {
+          const errorData = await res.json().catch(() => ({}))
+          console.error(`[BPM Client] Error response for ${track.id}:`, res.status, errorData)
+          setTrackBpms(prev => ({
+            ...prev,
+            [track.id]: null,
+          }))
+          // Store error debug info
+          setBpmDebugInfo(prev => ({
+            ...prev,
+            [track.id]: { error: errorData, status: res.status },
+          }))
         }
       } catch (error) {
-        console.error(`Error fetching BPM for track ${track.id}:`, error)
+        console.error(`[BPM Client] Exception fetching BPM for track ${track.id}:`, error)
         setTrackBpms(prev => ({
           ...prev,
           [track.id]: null,
@@ -190,34 +213,46 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     // Use Spotify URI scheme to open app (opens app if available)
     const spotifyUri = `spotify:track:${track.id}`
     
-    // Attempt to open Spotify app
-    // This works on mobile and some desktop platforms
-    window.location.href = spotifyUri
+    // Try to open Spotify app using hidden iframe (works better than window.location)
+    // This prevents the web player from opening automatically
+    const iframe = document.createElement('iframe')
+    iframe.style.display = 'none'
+    iframe.src = spotifyUri
+    document.body.appendChild(iframe)
     
-    // Fallback: if app doesn't open after a short delay, open web URL
+    // Clean up iframe after a short delay
     setTimeout(() => {
-      // Check if we're still on the same page (app didn't navigate away)
-      // If so, open web URL as fallback
-      window.open(track.external_urls.spotify, '_blank', 'noopener,noreferrer')
-    }, 500)
+      document.body.removeChild(iframe)
+    }, 1000)
+    
+    // Only open web URL if user explicitly wants it (not automatic fallback)
+    // The deep link should work on mobile and desktop with Spotify installed
   }
 
   /**
    * Handle track title click - open Spotify app via deep link
    */
   const handleTrackTitleClick = (e: MouseEvent<HTMLAnchorElement>, track: Track) => {
+    e.preventDefault()
     e.stopPropagation()
     
     // Use Spotify URI scheme to open app (opens app if available)
     const spotifyUri = `spotify:track:${track.id}`
     
-    // Attempt to open Spotify app
-    window.location.href = spotifyUri
+    // Try to open Spotify app using hidden iframe (works better than window.location)
+    // This prevents the web player from opening automatically
+    const iframe = document.createElement('iframe')
+    iframe.style.display = 'none'
+    iframe.src = spotifyUri
+    document.body.appendChild(iframe)
     
-    // Fallback: if app doesn't open after a short delay, open web URL
+    // Clean up iframe after a short delay
     setTimeout(() => {
-      window.open(track.external_urls.spotify, '_blank', 'noopener,noreferrer')
-    }, 500)
+      document.body.removeChild(iframe)
+    }, 1000)
+    
+    // Only open web URL if user explicitly wants it (not automatic fallback)
+    // The deep link should work on mobile and desktop with Spotify installed
   }
 
   const formatDuration = (ms: number): string => {
@@ -405,14 +440,64 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   return (
     <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
       <div className="max-w-7xl mx-auto flex-1 w-full">
-        <div className="mb-6">
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <Link
             href="/playlists"
             className="text-blue-600 hover:text-blue-700 inline-block text-sm sm:text-base"
           >
             ← Back to Playlists
           </Link>
+          <button
+            onClick={() => setShowBpmDebug(!showBpmDebug)}
+            className="text-xs sm:text-sm bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-1.5 px-3 sm:py-2 sm:px-4 rounded transition-colors self-end sm:self-auto"
+          >
+            {showBpmDebug ? 'Hide' : 'Show'} BPM Debug
+          </button>
         </div>
+        
+        {showBpmDebug && (
+          <div className="mb-6 p-4 bg-gray-100 rounded-lg border border-gray-300 overflow-auto max-h-96 text-xs sm:text-sm">
+            <h3 className="font-bold mb-2 text-base sm:text-lg">BPM Debug Information</h3>
+            <div className="space-y-2">
+              <p><strong>Total tracks:</strong> {tracks.length}</p>
+              <p><strong>Tracks with BPM:</strong> {Object.values(trackBpms).filter(bpm => bpm !== null && bpm !== undefined).length}</p>
+              <p><strong>Tracks loading:</strong> {loadingBpms.size}</p>
+              <details className="mt-2">
+                <summary className="cursor-pointer font-semibold">BPM Results (first 10)</summary>
+                <pre className="mt-2 text-xs bg-white p-2 rounded overflow-auto max-h-48">
+                  {JSON.stringify(
+                    Object.entries(bpmDebugInfo).slice(0, 10).reduce((acc, [id, data]) => {
+                      const track = tracks.find(t => t.id === id)
+                      acc[id] = {
+                        trackName: track?.name || 'Unknown',
+                        ...data,
+                      }
+                      return acc
+                    }, {} as Record<string, any>),
+                    null,
+                    2
+                  )}
+                </pre>
+              </details>
+              <details className="mt-2">
+                <summary className="cursor-pointer font-semibold">All BPM States</summary>
+                <pre className="mt-2 text-xs bg-white p-2 rounded overflow-auto max-h-48">
+                  {JSON.stringify(
+                    tracks.slice(0, 10).map(t => ({
+                      id: t.id,
+                      name: t.name,
+                      bpm: trackBpms[t.id],
+                      loading: loadingBpms.has(t.id),
+                      debug: bpmDebugInfo[t.id],
+                    })),
+                    null,
+                    2
+                  )}
+                </pre>
+              </details>
+            </div>
+          </div>
+        )}
         
         {playlistInfo && (
           <div className="mb-6 bg-white rounded-lg border border-gray-200 shadow-sm p-4 sm:p-6">
@@ -625,12 +710,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       <div className="flex items-start gap-2 mb-1">
                         <div className="flex-1 min-w-0">
                           <a
-                            href={track.external_urls.spotify}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                            href="#"
                             className="font-medium text-gray-900 text-sm truncate hover:text-green-600 hover:underline block"
                             onClick={(e) => handleTrackTitleClick(e, track)}
-                            title="Open in Spotify"
+                            title="Open in Spotify app"
                           >
                             {track.name}
                             {track.explicit && (
@@ -808,12 +891,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       <td className="px-3 lg:px-4 py-2 lg:py-3">
                         <div className="flex items-center gap-2">
                           <a
-                            href={track.external_urls.spotify}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                            href="#"
                             className="font-medium text-gray-900 text-xs sm:text-sm hover:text-green-600 hover:underline"
                             onClick={(e) => handleTrackTitleClick(e, track)}
-                            title="Open in Spotify"
+                            title="Open in Spotify app"
                           >
                             {track.name}
                           </a>

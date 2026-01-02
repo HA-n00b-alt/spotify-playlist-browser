@@ -48,7 +48,15 @@ async function extractSpotifyIdentifiers(spotifyTrackId: string): Promise<{
   artists: string
   spotifyPreviewUrl: string | null
 }> {
+  console.log(`[BPM Module] Fetching track data from Spotify for: ${spotifyTrackId}`)
   const track = await getTrack(spotifyTrackId)
+  console.log(`[BPM Module] Track data received:`, {
+    name: track.name,
+    hasISRC: !!track.external_ids?.isrc,
+    isrc: track.external_ids?.isrc,
+    hasPreview: !!track.preview_url,
+    artists: track.artists?.map((a: any) => a.name).join(', '),
+  })
   
   return {
     isrc: track.external_ids?.isrc || null,
@@ -65,16 +73,20 @@ async function checkCache(
   spotifyTrackId: string,
   isrc: string | null
 ): Promise<CacheRecord | null> {
+  console.log(`[BPM Module] Checking cache for track: ${spotifyTrackId}, ISRC: ${isrc || 'none'}`)
+  
   // Try ISRC first if available
   if (isrc) {
     const isrcResults = await query<CacheRecord>(
       `SELECT * FROM track_bpm_cache WHERE isrc = $1 LIMIT 1`,
       [isrc]
     )
+    console.log(`[BPM Module] ISRC cache query result: ${isrcResults.length} records`)
     if (isrcResults.length > 0) {
       const record = isrcResults[0]
       // Check if cache is still valid
       const ageDays = (Date.now() - new Date(record.updated_at).getTime()) / (1000 * 60 * 60 * 24)
+      console.log(`[BPM Module] ISRC cache record age: ${ageDays.toFixed(2)} days, BPM: ${record.bpm}, valid: ${record.bpm !== null && ageDays < CACHE_TTL_DAYS}`)
       if (record.bpm !== null && ageDays < CACHE_TTL_DAYS) {
         return record
       }
@@ -86,14 +98,17 @@ async function checkCache(
     `SELECT * FROM track_bpm_cache WHERE spotify_track_id = $1 LIMIT 1`,
     [spotifyTrackId]
   )
+  console.log(`[BPM Module] Track ID cache query result: ${trackResults.length} records`)
   if (trackResults.length > 0) {
     const record = trackResults[0]
     const ageDays = (Date.now() - new Date(record.updated_at).getTime()) / (1000 * 60 * 60 * 24)
+    console.log(`[BPM Module] Track ID cache record age: ${ageDays.toFixed(2)} days, BPM: ${record.bpm}, valid: ${record.bpm !== null && ageDays < CACHE_TTL_DAYS}`)
     if (record.bpm !== null && ageDays < CACHE_TTL_DAYS) {
       return record
     }
   }
   
+  console.log(`[BPM Module] No valid cache found`)
   return null
 }
 
@@ -108,14 +123,19 @@ async function resolvePreviewUrl(params: {
 }): Promise<PreviewUrlResult> {
   const { isrc, title, artists, spotifyPreviewUrl } = params
   
+  console.log(`[BPM Module] Resolving preview URL for: "${title}" by "${artists}" (ISRC: ${isrc || 'none'})`)
+  
   // 1. Try Spotify preview first
   if (spotifyPreviewUrl) {
+    console.log(`[BPM Module] Using Spotify preview URL`)
     return { url: spotifyPreviewUrl, source: 'spotify_preview' }
   }
+  console.log(`[BPM Module] No Spotify preview URL, trying other sources...`)
   
   // 2. Try iTunes lookup by ISRC
   if (isrc) {
     try {
+      console.log(`[BPM Module] Trying iTunes ISRC lookup for: ${isrc}`)
       const itunesLookupUrl = `https://itunes.apple.com/lookup?isrc=${encodeURIComponent(isrc)}`
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 5000)
@@ -129,21 +149,26 @@ async function resolvePreviewUrl(params: {
         
         if (response.ok) {
           const data = await response.json() as any
+          console.log(`[BPM Module] iTunes ISRC lookup result: ${data.resultCount} results`)
           if (data.resultCount > 0 && data.results[0]?.previewUrl) {
+            console.log(`[BPM Module] Found iTunes preview URL via ISRC`)
             return { url: data.results[0].previewUrl, source: 'itunes_isrc' }
           }
+        } else {
+          console.log(`[BPM Module] iTunes ISRC lookup failed with status: ${response.status}`)
         }
       } catch (error) {
         clearTimeout(timeoutId)
         throw error
       }
     } catch (error) {
-      console.warn('iTunes ISRC lookup failed:', error)
+      console.warn(`[BPM Module] iTunes ISRC lookup error:`, error)
     }
   }
   
   // 3. Try iTunes search by artist + title
   try {
+    console.log(`[BPM Module] Trying iTunes search for: "${artists} ${title}"`)
     const searchTerm = `${artists} ${title}`
     const itunesSearchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(searchTerm)}&entity=song&limit=1`
     const controller = new AbortController()
@@ -158,20 +183,25 @@ async function resolvePreviewUrl(params: {
       
       if (response.ok) {
         const data = await response.json() as any
+        console.log(`[BPM Module] iTunes search result: ${data.resultCount} results`)
         if (data.resultCount > 0 && data.results[0]?.previewUrl) {
+          console.log(`[BPM Module] Found iTunes preview URL via search`)
           return { url: data.results[0].previewUrl, source: 'itunes_search' }
         }
+      } else {
+        console.log(`[BPM Module] iTunes search failed with status: ${response.status}`)
       }
     } catch (error) {
       clearTimeout(timeoutId)
       throw error
     }
   } catch (error) {
-    console.warn('iTunes search failed:', error)
+    console.warn(`[BPM Module] iTunes search error:`, error)
   }
   
   // 4. Try Deezer search
   try {
+    console.log(`[BPM Module] Trying Deezer search for: "${artists}" - "${title}"`)
     const deezerQuery = `artist:"${artists}" track:"${title}"`
     const deezerUrl = `https://api.deezer.com/search?q=${encodeURIComponent(deezerQuery)}`
     const controller = new AbortController()
@@ -185,19 +215,24 @@ async function resolvePreviewUrl(params: {
       
       if (response.ok) {
         const data = await response.json() as any
+        console.log(`[BPM Module] Deezer search result: ${data.data?.length || 0} results`)
         if (data.data && data.data.length > 0 && data.data[0]?.preview) {
+          console.log(`[BPM Module] Found Deezer preview URL`)
           return { url: data.data[0].preview, source: 'deezer' }
         }
+      } else {
+        console.log(`[BPM Module] Deezer search failed with status: ${response.status}`)
       }
     } catch (error) {
       clearTimeout(timeoutId)
       throw error
     }
   } catch (error) {
-    console.warn('Deezer search failed:', error)
+    console.warn(`[BPM Module] Deezer search error:`, error)
   }
   
   // No preview URL found
+  console.log(`[BPM Module] No preview URL found from any source`)
   return { url: null, source: 'computed_failed' }
 }
 
@@ -461,12 +496,23 @@ export async function getBpmForSpotifyTrack(
   // Create computation promise
   const computationPromise = (async (): Promise<BpmResult> => {
     try {
+      console.log(`[BPM Module] Starting BPM computation for track: ${spotifyTrackId}`)
+      
       // 1. Extract identifiers from Spotify
+      console.log(`[BPM Module] Step 1: Extracting identifiers from Spotify...`)
       const identifiers = await extractSpotifyIdentifiers(spotifyTrackId)
+      console.log(`[BPM Module] Identifiers extracted:`, {
+        isrc: identifiers.isrc,
+        title: identifiers.title,
+        artists: identifiers.artists,
+        hasSpotifyPreview: !!identifiers.spotifyPreviewUrl,
+      })
       
       // 2. Check cache
+      console.log(`[BPM Module] Step 2: Checking cache...`)
       const cached = await checkCache(spotifyTrackId, identifiers.isrc)
       if (cached && cached.bpm !== null) {
+        console.log(`[BPM Module] Cache hit! Returning cached BPM: ${cached.bpm} (source: ${cached.source})`)
         return {
           bpm: cached.bpm,
           source: cached.source,
@@ -474,17 +520,25 @@ export async function getBpmForSpotifyTrack(
           bpmRaw: cached.bpm_raw || undefined,
         }
       }
+      console.log(`[BPM Module] Cache miss or null BPM. Cached record:`, cached)
       
       // 3. Resolve preview URL
+      console.log(`[BPM Module] Step 3: Resolving preview URL...`)
       const previewResult = await resolvePreviewUrl({
         isrc: identifiers.isrc,
         title: identifiers.title,
         artists: identifiers.artists,
         spotifyPreviewUrl: identifiers.spotifyPreviewUrl,
       })
+      console.log(`[BPM Module] Preview URL resolved:`, {
+        hasUrl: !!previewResult.url,
+        source: previewResult.source,
+        url: previewResult.url?.substring(0, 100) + '...' || 'null',
+      })
       
       if (!previewResult.url) {
         // No preview available - cache failure
+        console.log(`[BPM Module] No preview URL found. Caching failure.`)
         await storeInCache({
           spotifyTrackId,
           isrc: identifiers.isrc,
@@ -504,14 +558,19 @@ export async function getBpmForSpotifyTrack(
       }
       
       // 4. Download and convert audio
+      console.log(`[BPM Module] Step 4: Downloading and converting audio...`)
       const outputPath = join(tmpdir(), `bpm-output-${Date.now()}.wav`)
       try {
         await downloadAndConvertAudio(previewResult.url, outputPath)
+        console.log(`[BPM Module] Audio downloaded and converted to: ${outputPath}`)
         
         // 5. Compute BPM
+        console.log(`[BPM Module] Step 5: Computing BPM from audio...`)
         const { bpm, bpmRaw } = await computeBpm(outputPath)
+        console.log(`[BPM Module] BPM computed:`, { bpm, bpmRaw })
         
         // 6. Store in cache
+        console.log(`[BPM Module] Step 6: Storing in cache...`)
         await storeInCache({
           spotifyTrackId,
           isrc: identifiers.isrc,
@@ -522,6 +581,7 @@ export async function getBpmForSpotifyTrack(
           source: previewResult.source,
           error: null,
         })
+        console.log(`[BPM Module] Successfully cached BPM for ${spotifyTrackId}`)
         
         // Clean up audio file
         try {
@@ -545,6 +605,10 @@ export async function getBpmForSpotifyTrack(
         }
         
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        console.error(`[BPM Module] Error during BPM computation:`, errorMessage)
+        if (error instanceof Error) {
+          console.error(`[BPM Module] Error stack:`, error.stack)
+        }
         
         // Cache the error (with short TTL - retry after 1 day)
         await storeInCache({
