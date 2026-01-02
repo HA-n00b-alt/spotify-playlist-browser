@@ -150,9 +150,14 @@ export default function StatsClient() {
           <h2 className="text-xl font-bold mb-4">Pageviews Over Time (Last 30 Days)</h2>
           {stats.pageviewsOverTime.length > 0 ? (
             <div className="space-y-1">
-              {stats.pageviewsOverTime.map((item, index) => (
+              {stats.pageviewsOverTime.map((item, index) => {
+                // Handle date string - could be "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM:SS..."
+                const dateStr = typeof item.date === 'string' ? item.date.split('T')[0] : item.date
+                const date = new Date(dateStr + 'T00:00:00') // Add time to avoid timezone issues
+                const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                return (
                 <div key={index} className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500 w-20">{item.date}</span>
+                  <span className="text-xs text-gray-500 w-20">{formattedDate}</span>
                   <div className="flex-1 bg-gray-200 rounded-full h-6 relative">
                     <div
                       className="bg-green-500 h-6 rounded-full flex items-center justify-end pr-2"
@@ -166,7 +171,8 @@ export default function StatsClient() {
                     </div>
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           ) : (
             <p className="text-gray-500 text-sm">No data available</p>
@@ -177,9 +183,14 @@ export default function StatsClient() {
           <h2 className="text-xl font-bold mb-4">API Requests Over Time (Last 30 Days)</h2>
           {stats.apiRequestsOverTime.length > 0 ? (
             <div className="space-y-1">
-              {stats.apiRequestsOverTime.map((item, index) => (
+              {stats.apiRequestsOverTime.map((item, index) => {
+                // Handle date string - could be "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM:SS..."
+                const dateStr = typeof item.date === 'string' ? item.date.split('T')[0] : item.date
+                const date = new Date(dateStr + 'T00:00:00') // Add time to avoid timezone issues
+                const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                return (
                 <div key={index} className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500 w-20">{item.date}</span>
+                  <span className="text-xs text-gray-500 w-20">{formattedDate}</span>
                   <div className="flex-1 bg-gray-200 rounded-full h-6 relative">
                     <div
                       className="bg-blue-500 h-6 rounded-full flex items-center justify-end pr-2"
@@ -193,7 +204,8 @@ export default function StatsClient() {
                     </div>
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           ) : (
             <p className="text-gray-500 text-sm">No data available</p>

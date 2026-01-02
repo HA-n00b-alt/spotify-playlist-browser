@@ -629,7 +629,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     {showBpmInfo && (
                       <div className="mt-3 p-3 bg-white rounded border border-blue-200">
                         <p className="text-sm text-gray-700 mb-2">
-                          <strong>What's happening?</strong>
+                          <strong>What&apos;s happening?</strong>
                         </p>
                         <p className="text-sm text-gray-600 mb-2">
                           This is the first time this playlist is being opened. The system is calculating BPM (beats per minute) for each track by analyzing audio previews. This process:
