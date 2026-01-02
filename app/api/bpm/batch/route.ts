@@ -43,15 +43,22 @@ export async function POST(request: Request) {
       [limitedTrackIds]
     )
 
-    // Build a map of cached results
+    // Build a map of all cached results (including errors)
     const cacheMap = new Map<string, CacheRecord>()
+    const validCacheMap = new Map<string, CacheRecord>()
+    const errorCacheMap = new Map<string, CacheRecord>() // Records with errors (even if expired)
     const now = Date.now()
     
     for (const record of cacheResults) {
       const ageDays = (now - new Date(record.updated_at).getTime()) / (1000 * 60 * 60 * 24)
-      // Only include valid cached results (not expired and not errors)
+      cacheMap.set(record.spotify_track_id, record)
+      // Only include valid cached results (not expired and not errors) for valid cache
       if (record.bpm !== null && ageDays < CACHE_TTL_DAYS) {
-        cacheMap.set(record.spotify_track_id, record)
+        validCacheMap.set(record.spotify_track_id, record)
+      }
+      // Also track records with errors (for showing error messages)
+      if (record.error || record.source === 'computed_failed') {
+        errorCacheMap.set(record.spotify_track_id, record)
       }
     }
 
@@ -66,14 +73,37 @@ export async function POST(request: Request) {
     }> = {}
 
     for (const trackId of limitedTrackIds) {
-      const cached = cacheMap.get(trackId)
+      const cached = validCacheMap.get(trackId)
+      const errorRecord = errorCacheMap.get(trackId)
+      const allCached = cacheMap.get(trackId)
+      
       if (cached) {
+        // Valid cached result with BPM
         results[trackId] = {
           bpm: cached.bpm,
           source: cached.source,
           isrc: cached.isrc || undefined,
           bpmRaw: cached.bpm_raw || undefined,
           cached: true,
+        }
+      } else if (errorRecord) {
+        // Has error record - return error info even if expired
+        results[trackId] = {
+          bpm: errorRecord.bpm,
+          source: errorRecord.source,
+          isrc: errorRecord.isrc || undefined,
+          bpmRaw: errorRecord.bpm_raw || undefined,
+          error: errorRecord.error || undefined,
+          cached: false, // Not valid cache, will need recalculation
+        }
+      } else if (allCached) {
+        // Cached but expired - return basic info
+        results[trackId] = {
+          bpm: allCached.bpm,
+          source: allCached.source,
+          isrc: allCached.isrc || undefined,
+          bpmRaw: allCached.bpm_raw || undefined,
+          cached: false, // Not valid cache, will need recalculation
         }
       } else {
         // Return null to indicate not cached (frontend can fetch individually if needed)
@@ -98,4 +128,5 @@ export async function POST(request: Request) {
     )
   }
 }
+
 

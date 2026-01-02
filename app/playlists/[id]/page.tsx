@@ -198,7 +198,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         for (const [trackId, result] of Object.entries(data.results || {})) {
           const r = result as any
           newBpms[trackId] = r.bpm
-          if (r.source || r.error) {
+          // Always store details if available (source, error, isrc)
+          if (r.source || r.error || r.isrc) {
             newDetails[trackId] = {
               source: r.source,
               error: r.error,
@@ -220,7 +221,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         if (uncachedTracks.length > 0) {
           console.log(`[BPM Client] Fetching ${uncachedTracks.length} uncached tracks individually`)
           fetchBpmsForTracks(uncachedTracks)
-        } else if (uncachedTracks.length === 0 && cachedCount === totalTracks) {
+        } else if (uncachedTracks.length === 0 && cachedCount === tracks.length) {
           // All tracks were cached, no processing happened
           setBpmProcessingStartTime(null)
         }
@@ -1301,6 +1302,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       <span className="font-semibold text-gray-700">Reason: </span>
                       <span className="text-gray-600">{bpmDetails[selectedBpmTrack.id].error}</span>
                     </div>
+                  ) : bpmDetails[selectedBpmTrack.id]?.source === 'computed_failed' ? (
+                    <div>
+                      <span className="text-gray-600 text-sm">
+                        BPM calculation failed. {bpmDetails[selectedBpmTrack.id]?.error || 'No preview audio available for this track.'}
+                      </span>
+                    </div>
                   ) : (
                     <div>
                       <span className="text-gray-600 text-sm">
@@ -1308,7 +1315,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       </span>
                     </div>
                   )}
-                  {bpmDetails[selectedBpmTrack.id]?.source && (
+                  {bpmDetails[selectedBpmTrack.id]?.source && bpmDetails[selectedBpmTrack.id].source !== 'computed_failed' && (
                     <div>
                       <span className="font-semibold text-gray-700">Last attempt source: </span>
                       <span className="text-gray-900 capitalize">
