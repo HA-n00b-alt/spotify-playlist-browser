@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 
 interface Playlist {
   id: string
@@ -80,9 +81,11 @@ export default async function PlaylistsPage() {
               className="bg-gray-800 rounded-lg p-4 hover:bg-gray-700 transition-colors"
             >
               {playlist.images[0] && (
-                <img
+                <Image
                   src={playlist.images[0].url}
                   alt={playlist.name}
+                  width={300}
+                  height={300}
                   className="w-full aspect-square object-cover rounded mb-3"
                 />
               )}

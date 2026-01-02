@@ -122,7 +122,10 @@ export async function getPlaylists(): Promise<any[]> {
   let nextUrl: string | null = '/me/playlists?limit=50'
 
   while (nextUrl) {
-    const data = await makeSpotifyRequest<{
+    const data: {
+      items: any[]
+      next: string | null
+    } = await makeSpotifyRequest<{
       items: any[]
       next: string | null
     }>(nextUrl)
@@ -145,7 +148,13 @@ export async function getPlaylistTracks(playlistId: string): Promise<any[]> {
   let nextUrl: string | null = `/playlists/${playlistId}/tracks?limit=50`
 
   while (nextUrl) {
-    const data = await makeSpotifyRequest<{
+    const data: {
+      items: Array<{
+        added_at: string
+        track: any
+      }>
+      next: string | null
+    } = await makeSpotifyRequest<{
       items: Array<{
         added_at: string
         track: any
