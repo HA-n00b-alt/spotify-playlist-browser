@@ -267,7 +267,7 @@ async function computeBpm(audioFilePath: string): Promise<{ bpm: number; bpmRaw:
   // Read audio file
   const audioBuffer = readFileSync(audioFilePath)
   
-  // Use web-audio-beat-detector
+  // Use autocorrelation-based tempo detection
   // Note: This library expects an AudioBuffer, but we can work with raw PCM data
   // For simplicity, we'll use a different approach with a simpler BPM detector
   
