@@ -77,18 +77,18 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-xl">Loading tracks...</p>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <p className="text-xl text-gray-700">Loading tracks...</p>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4 text-red-500">Error</h1>
-          <p className="mb-4">{error}</p>
+          <h1 className="text-2xl font-bold mb-4 text-red-600">Error</h1>
+          <p className="mb-4 text-gray-700">{error}</p>
           <Link
             href="/api/auth/login"
             className="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-full"
@@ -101,12 +101,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   }
 
   return (
-    <div className="min-h-screen p-8">
+    <div className="min-h-screen p-8 bg-gray-50">
       <div className="max-w-7xl mx-auto">
         <div className="mb-6 flex items-center justify-between">
           <Link
             href="/playlists"
-            className="text-blue-400 hover:text-blue-300 mb-4 inline-block"
+            className="text-blue-600 hover:text-blue-700 mb-4 inline-block"
           >
             ← Back to Playlists
           </Link>
@@ -118,51 +118,51 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             placeholder="Search tracks by name, artist, album, or release date..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full px-4 py-2 bg-gray-800 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
           />
         </div>
 
-        <div className="bg-gray-800 rounded-lg overflow-hidden">
+        <div className="bg-white rounded-lg overflow-hidden border border-gray-200 shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-900">
+              <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Track</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Artists</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Album</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Release Date</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Duration</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Added At</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Link</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Track</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Artists</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Album</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Release Date</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Duration</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Added At</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Link</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-gray-200">
                 {filteredTracks.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                       {searchQuery ? 'No tracks match your search' : 'No tracks found'}
                     </td>
                   </tr>
                 ) : (
                   filteredTracks.map((track) => (
-                    <tr key={track.id} className="border-t border-gray-700 hover:bg-gray-750">
+                    <tr key={track.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3">
-                        <span className="font-medium">{track.name}</span>
+                        <span className="font-medium text-gray-900">{track.name}</span>
                         {track.explicit && (
-                          <span className="ml-2 text-xs bg-gray-700 px-1.5 py-0.5 rounded">E</span>
+                          <span className="ml-2 text-xs bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded">E</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-gray-300">
+                      <td className="px-4 py-3 text-gray-700">
                         {track.artists.map((artist) => artist.name).join(', ')}
                       </td>
-                      <td className="px-4 py-3 text-gray-300">{track.album.name}</td>
-                      <td className="px-4 py-3 text-gray-400 text-sm">
+                      <td className="px-4 py-3 text-gray-700">{track.album.name}</td>
+                      <td className="px-4 py-3 text-gray-600 text-sm">
                         {track.album.release_date || 'N/A'}
                       </td>
-                      <td className="px-4 py-3 text-gray-400 text-sm">
+                      <td className="px-4 py-3 text-gray-600 text-sm">
                         {formatDuration(track.duration_ms)}
                       </td>
-                      <td className="px-4 py-3 text-gray-400 text-sm">
+                      <td className="px-4 py-3 text-gray-600 text-sm">
                         {track.added_at ? formatDate(track.added_at) : 'N/A'}
                       </td>
                       <td className="px-4 py-3">
@@ -170,7 +170,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           href={track.external_urls.spotify}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-green-400 hover:text-green-300"
+                          className="text-green-600 hover:text-green-700"
                         >
                           Open
                         </a>
@@ -182,7 +182,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             </table>
           </div>
         </div>
-        <div className="mt-4 text-sm text-gray-400">
+        <div className="mt-4 text-sm text-gray-600">
           Showing {filteredTracks.length} of {tracks.length} tracks
         </div>
       </div>
