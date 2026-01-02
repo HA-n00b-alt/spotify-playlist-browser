@@ -21,7 +21,7 @@ export async function GET(request: Request) {
 
   const clientId = process.env.SPOTIFY_CLIENT_ID
   const clientSecret = process.env.SPOTIFY_CLIENT_SECRET
-  const redirectUri = process.env.SPOTIFY_REDIRECT_URI || 'http://localhost:3000/api/auth/callback'
+  const redirectUri = process.env.SPOTIFY_REDIRECT_URI || 'https://searchmyplaylist.delman.it/api/auth/callback'
 
   if (!clientId || !clientSecret) {
     return NextResponse.json(

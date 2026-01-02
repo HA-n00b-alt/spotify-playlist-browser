@@ -23,13 +23,24 @@ npm install
 ```env
 SPOTIFY_CLIENT_ID=your_client_id_here
 SPOTIFY_CLIENT_SECRET=your_client_secret_here
+SPOTIFY_REDIRECT_URI=https://searchmyplaylist.delman.it/api/auth/callback
+NEXT_PUBLIC_BASE_URL=https://searchmyplaylist.delman.it
+```
+
+   For local development, use:
+```env
+SPOTIFY_CLIENT_ID=your_client_id_here
+SPOTIFY_CLIENT_SECRET=your_client_secret_here
 SPOTIFY_REDIRECT_URI=http://localhost:3000/api/auth/callback
+NEXT_PUBLIC_BASE_URL=http://localhost:3000
 ```
 
 3. Get your Spotify credentials:
    - Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
-   - Create a new app
-   - Add `http://localhost:3000/api/auth/callback` to your app's redirect URIs
+   - Create a new app or select your existing app
+   - Add the following redirect URIs to your app:
+     - `https://searchmyplaylist.delman.it/api/auth/callback` (production)
+     - `http://localhost:3000/api/auth/callback` (local development)
 
 4. Run the development server:
 ```bash

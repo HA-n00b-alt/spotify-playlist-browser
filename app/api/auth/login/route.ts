@@ -3,7 +3,7 @@ import crypto from 'crypto'
 
 export async function GET() {
   const clientId = process.env.SPOTIFY_CLIENT_ID
-  const redirectUri = process.env.SPOTIFY_REDIRECT_URI || 'http://localhost:3000/api/auth/callback'
+  const redirectUri = process.env.SPOTIFY_REDIRECT_URI || 'https://searchmyplaylist.delman.it/api/auth/callback'
   
   if (!clientId) {
     return NextResponse.json(

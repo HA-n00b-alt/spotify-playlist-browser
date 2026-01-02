@@ -123,10 +123,17 @@ Required environment variables:
 ```env
 SPOTIFY_CLIENT_ID=your_client_id
 SPOTIFY_CLIENT_SECRET=your_client_secret
-SPOTIFY_REDIRECT_URI=http://localhost:3000/api/auth/callback
+SPOTIFY_REDIRECT_URI=https://searchmyplaylist.delman.it/api/auth/callback
+NEXT_PUBLIC_BASE_URL=https://searchmyplaylist.delman.it
 ```
 
-For production, update `SPOTIFY_REDIRECT_URI` to your production URL.
+For local development:
+```env
+SPOTIFY_CLIENT_ID=your_client_id
+SPOTIFY_CLIENT_SECRET=your_client_secret
+SPOTIFY_REDIRECT_URI=http://localhost:3000/api/auth/callback
+NEXT_PUBLIC_BASE_URL=http://localhost:3000
+```
 
 ## Scopes
 

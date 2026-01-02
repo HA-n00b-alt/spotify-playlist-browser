@@ -16,7 +16,7 @@ interface Playlist {
 
 async function getPlaylists(): Promise<Playlist[]> {
   // Use absolute URL for server-side fetch
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://searchmyplaylist.delman.it'
   const res = await fetch(`${baseUrl}/api/playlists`, {
     cache: 'no-store',
   })
