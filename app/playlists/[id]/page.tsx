@@ -612,15 +612,13 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           const tracksWithBpm = Object.values(trackBpms).filter(bpm => bpm !== null && bpm !== undefined).length
           const tracksWithNa = Object.values(trackBpms).filter(bpm => bpm === null).length
           const tracksLoading = loadingBpms.size
-          const tracksWithoutBpm = tracks.filter(t => 
-            trackBpms[t.id] === undefined || trackBpms[t.id] === null
-          ).length
           // Only count as "remaining" if they haven't been tried yet (no BPM details means not tried)
           const tracksRemaining = tracks.filter(t => 
             trackBpms[t.id] === undefined && !bpmDetails[t.id]
           ).length
           const isProcessing = tracksLoading > 0 || tracksRemaining > 0
-          const allTracksProcessed = tracksLoading === 0 && tracksWithoutBpm === 0
+          // All tracks have been processed if: no tracks are loading AND no tracks are remaining (untried)
+          const allTracksProcessed = tracksLoading === 0 && tracksRemaining === 0
           const allTracksHaveBpm = tracksWithBpm === totalTracks
 
           // If all tracks have BPM, don't show anything
@@ -648,6 +646,15 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               timeText = `${seconds} second${seconds !== 1 ? 's' : ''}`
             }
 
+            // If there are N/A tracks, show the N/A message instead of completion message
+            if (tracksWithNa > 0) {
+              return (
+                <div className="mb-4 sm:mb-6 text-sm text-gray-600">
+                  {tracksWithNa} of {totalTracks} tracks have no BPM information available. You can retry by clicking on the N/A value.
+                </div>
+              )
+            }
+
             return (
               <div className="mb-4 sm:mb-6 text-sm text-gray-600">
                 {bpmTracksCalculated} track{bpmTracksCalculated !== 1 ? 's' : ''} calculated in {timeText}.
@@ -656,10 +663,21 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           }
 
           // If currently processing
-          if (isProcessing && tracksRemaining > 0) {
+          if (isProcessing) {
+            // Calculate total remaining (untried + currently loading)
+            const totalRemaining = tracksRemaining + tracksLoading
             return (
               <div className="mb-4 sm:mb-6 text-sm text-gray-600">
-                BPM information processing ongoing ({tracksWithBpm} tracks done, {tracksRemaining} remaining)
+                BPM information processing ongoing ({tracksWithBpm} tracks done, {totalRemaining} remaining)
+              </div>
+            )
+          }
+
+          // Fallback: if all tracks processed but no completion time set (e.g., all were already tried)
+          if (allTracksProcessed && tracksWithNa > 0) {
+            return (
+              <div className="mb-4 sm:mb-6 text-sm text-gray-600">
+                {tracksWithNa} of {totalTracks} tracks have no BPM information available. You can retry by clicking on the N/A value.
               </div>
             )
           }
@@ -1338,7 +1356,20 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           }))
                           setRetryStatus({ loading: false, success: true })
                         } else {
-                          const errorMessage = data.error || 'No BPM available'
+                          // Use error from API, or generate descriptive message from source
+                          let errorMessage = data.error
+                          if (!errorMessage) {
+                            // Generate descriptive message based on source
+                            if (data.source === 'computed_failed') {
+                              errorMessage = 'No preview audio available from any source (iTunes, Deezer)'
+                            } else if (data.source === 'itunes_isrc' || data.source === 'itunes_search') {
+                              errorMessage = 'No preview available on iTunes/Apple Music'
+                            } else if (data.source === 'deezer') {
+                              errorMessage = 'No preview available on Deezer'
+                            } else {
+                              errorMessage = 'BPM calculation failed. No preview audio available.'
+                            }
+                          }
                           setBpmDetails(prev => ({
                             ...prev,
                             [selectedBpmTrack.id]: {

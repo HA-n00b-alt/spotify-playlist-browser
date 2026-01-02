@@ -12,6 +12,7 @@ interface BpmResult {
   source: string
   isrc?: string
   bpmRaw?: number
+  error?: string
 }
 
 interface CacheRecord {
@@ -81,7 +82,11 @@ async function checkCache(
       // Check if cache is still valid
       const ageDays = (Date.now() - new Date(record.updated_at).getTime()) / (1000 * 60 * 60 * 24)
       console.log(`[BPM Module] ISRC cache record age: ${ageDays.toFixed(2)} days, BPM: ${record.bpm}, valid: ${record.bpm !== null && ageDays < CACHE_TTL_DAYS}`)
+      // Return valid BPM records, or records with null BPM (for error info)
       if (record.bpm !== null && ageDays < CACHE_TTL_DAYS) {
+        return record
+      } else if (record.bpm === null) {
+        // Return null BPM records to get error information
         return record
       }
     }
@@ -97,7 +102,11 @@ async function checkCache(
     const record = trackResults[0]
     const ageDays = (Date.now() - new Date(record.updated_at).getTime()) / (1000 * 60 * 60 * 24)
     console.log(`[BPM Module] Track ID cache record age: ${ageDays.toFixed(2)} days, BPM: ${record.bpm}, valid: ${record.bpm !== null && ageDays < CACHE_TTL_DAYS}`)
+    // Return valid BPM records, or records with null BPM (for error info)
     if (record.bpm !== null && ageDays < CACHE_TTL_DAYS) {
+      return record
+    } else if (record.bpm === null) {
+      // Return null BPM records to get error information
       return record
     }
   }
@@ -459,7 +468,17 @@ export async function getBpmForSpotifyTrack(
           bpmRaw: cached.bpm_raw || undefined,
         }
       }
-      console.log(`[BPM Module] Cache miss or null BPM. Cached record:`, cached)
+      // If cached but bpm is null, return the error if available
+      if (cached && cached.bpm === null) {
+        console.log(`[BPM Module] Cache hit with null BPM. Source: ${cached.source}, Error: ${cached.error}`)
+        return {
+          bpm: null,
+          source: cached.source,
+          isrc: cached.isrc || undefined,
+          error: cached.error || undefined,
+        }
+      }
+      console.log(`[BPM Module] Cache miss. Cached record:`, cached)
       
       // 3. Resolve preview URL
       console.log(`[BPM Module] Step 3: Resolving preview URL...`)
@@ -490,10 +509,21 @@ export async function getBpmForSpotifyTrack(
           error: 'No preview URL found',
         })
         
+        // Generate descriptive error message based on source
+        let errorMessage = 'No preview URL found'
+        if (previewResult.source === 'computed_failed') {
+          errorMessage = 'No preview audio available from any source (iTunes, Deezer)'
+        } else if (previewResult.source === 'itunes_isrc' || previewResult.source === 'itunes_search') {
+          errorMessage = 'No preview available on iTunes/Apple Music'
+        } else if (previewResult.source === 'deezer') {
+          errorMessage = 'No preview available on Deezer'
+        }
+        
         return {
           bpm: null,
           source: previewResult.source,
           isrc: identifiers.isrc || undefined,
+          error: errorMessage,
         }
       }
       
