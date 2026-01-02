@@ -840,46 +840,48 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           const tracksRemaining = totalTracks - tracksDone
           const isProcessing = tracksLoading > 0 || tracksRemaining > 0
 
+          // Calculate songs already in DB (with BPM or N/A)
+          const songsInDb = tracksDone
+
           // Always show the indicator - never hide it
-          if (isProcessing) {
-            return (
-              <div className="mb-4 sm:mb-6 text-sm text-gray-600">
-                BPM information processing ongoing ({tracksDone} tracks done, {tracksRemaining} remaining){' '}
-                <button
-                  onClick={() => setShowBpmMoreInfo(true)}
-                  className="text-blue-600 hover:text-blue-700 hover:underline"
-                >
-                  (more info)
-                </button>
-              </div>
-            )
-          }
-
-          // Show completion status
-          if (tracksWithNa > 0) {
-            return (
-              <div className="mb-4 sm:mb-6 text-sm text-gray-600">
-                {tracksWithNa} of {totalTracks} tracks have no BPM information available. You can retry by clicking on the N/A value.{' '}
-                <button
-                  onClick={() => setShowBpmMoreInfo(true)}
-                  className="text-blue-600 hover:text-blue-700 hover:underline"
-                >
-                  (more info)
-                </button>
-              </div>
-            )
-          }
-
-          // All tracks have BPM
           return (
-            <div className="mb-4 sm:mb-6 text-sm text-gray-600">
-              All {totalTracks} tracks have BPM information available.{' '}
-              <button
-                onClick={() => setShowBpmMoreInfo(true)}
-                className="text-blue-600 hover:text-blue-700 hover:underline"
-              >
-                (more info)
-              </button>
+            <div className="mb-4 sm:mb-6 text-sm text-gray-600 space-y-1">
+              <div>
+                <span className="font-semibold">Playlist:</span> {totalTracks} songs |{' '}
+                <span className="font-semibold">In DB:</span> {songsInDb} songs (with BPM or N/A) |{' '}
+                <span className="font-semibold">To search:</span> {tracksRemaining} songs
+              </div>
+              {isProcessing ? (
+                <div>
+                  BPM information processing ongoing ({tracksDone} tracks done, {tracksRemaining} remaining){' '}
+                  <button
+                    onClick={() => setShowBpmMoreInfo(true)}
+                    className="text-blue-600 hover:text-blue-700 hover:underline"
+                  >
+                    (more info)
+                  </button>
+                </div>
+              ) : tracksWithNa > 0 ? (
+                <div>
+                  {tracksWithNa} of {totalTracks} tracks have no BPM information available. You can retry by clicking on the N/A value.{' '}
+                  <button
+                    onClick={() => setShowBpmMoreInfo(true)}
+                    className="text-blue-600 hover:text-blue-700 hover:underline"
+                  >
+                    (more info)
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  All {totalTracks} tracks have BPM information available.{' '}
+                  <button
+                    onClick={() => setShowBpmMoreInfo(true)}
+                    className="text-blue-600 hover:text-blue-700 hover:underline"
+                  >
+                    (more info)
+                  </button>
+                </div>
+              )}
             </div>
           )
         })()}
