@@ -116,12 +116,18 @@ async function checkCache(
 }
 
 /**
- * Get country code from Accept-Language header or default to US
+ * Get country code from request header override, IP address, Accept-Language header, or default to US
  */
 function getCountryCodeFromRequest(request?: Request): string {
   if (!request) return 'us'
   
   try {
+    // Check for manual override first
+    const override = request.headers.get('x-country-override')
+    if (override) {
+      return override.toLowerCase()
+    }
+    
     const acceptLanguage = request.headers.get('accept-language')
     if (acceptLanguage) {
       // Parse Accept-Language header (e.g., "en-US,en;q=0.9,it;q=0.8")

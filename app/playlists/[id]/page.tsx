@@ -81,6 +81,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [retryStatus, setRetryStatus] = useState<{ loading: boolean; success?: boolean; error?: string } | null>(null)
   const [retryAttempted, setRetryAttempted] = useState(false)
   const [showBpmMoreInfo, setShowBpmMoreInfo] = useState(false)
+  const [countryCode, setCountryCode] = useState<string>('us')
+  const [allTracksInDb, setAllTracksInDb] = useState(false) // Track if all tracks are already in DB
   const [searchQuery, setSearchQuery] = useState('')
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
@@ -145,14 +147,58 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     fetchTracks()
   }, [params.id])
 
+  // Fetch country code on mount
+  useEffect(() => {
+    const fetchCountry = async () => {
+      try {
+        const res = await fetch('/api/country')
+        if (res.ok) {
+          const data = await res.json()
+          setCountryCode(data.countryCode || 'us')
+        }
+      } catch (error) {
+        console.error('[BPM Client] Error fetching country:', error)
+      }
+    }
+    fetchCountry()
+  }, [])
+
   // Fetch BPM for all tracks using batch endpoint
   useEffect(() => {
     if (tracks.length > 0 && Object.keys(trackBpms).length === 0) {
+      // Check if all tracks are already in DB
+      checkAllTracksInDb()
       setBpmProcessingStartTime(Date.now())
       fetchBpmsBatch()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tracks.length])
+
+  // Check if all tracks are already in the database
+  const checkAllTracksInDb = async () => {
+    const trackIds = tracks.map(t => t.id)
+    if (trackIds.length === 0) return
+
+    try {
+      const res = await fetch('/api/bpm/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trackIds }),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        // Check if all tracks have results (either BPM or N/A with details)
+        const allHaveResults = trackIds.every(id => {
+          const result = data.results?.[id]
+          return result && (result.bpm !== undefined || result.error !== undefined || result.source !== undefined)
+        })
+        setAllTracksInDb(allHaveResults)
+      }
+    } catch (error) {
+      console.error('[BPM Client] Error checking tracks in DB:', error)
+    }
+  }
 
   // Track when BPM processing completes
   useEffect(() => {
@@ -257,7 +303,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           setLoadingBpms(prev => new Set(prev).add(track.id))
           
           try {
-            const res = await fetch(`/api/bpm?spotifyTrackId=${track.id}`)
+            const res = await fetch(`/api/bpm?spotifyTrackId=${track.id}&country=${countryCode}`)
             
             if (res.ok) {
               const data = await res.json()
@@ -714,15 +760,17 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           const tracksTriedButFailed = tracks.filter(t => 
             trackBpms[t.id] === null && bpmDetails[t.id]
           ).length
-          // Tracks that haven't been tried yet (no bpmDetails and no bpm)
+          // Tracks that haven't been tried yet (no bpmDetails and no bpm) - actual remaining, not queued
           const tracksNotTried = tracks.filter(t => 
-            trackBpms[t.id] === undefined && !bpmDetails[t.id]
+            trackBpms[t.id] === undefined && !bpmDetails[t.id] && !loadingBpms.has(t.id)
           ).length
           const isProcessing = tracksLoading > 0 || tracksNotTried > 0
           const allTracksHaveBpm = tracksWithBpm === totalTracks
 
-          // 1. If all tracks have BPM, don't show anything
-          if (allTracksHaveBpm) return null
+          // Only hide if ALL tracks are already in DB (either with BPM or N/A with details) AND all have BPM
+          if (allTracksInDb && !isProcessing && allTracksHaveBpm) {
+            return null
+          }
 
           // 2. If tracks have N/A that were previously tried (not currently processing)
           if (!isProcessing && tracksTriedButFailed > 0) {
@@ -730,25 +778,19 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               <div className="mb-4 sm:mb-6 text-sm text-gray-600">
                 {tracksTriedButFailed} of {totalTracks} tracks have no BPM information available. You can retry by clicking on the N/A value.{' '}
                 <button
-                  onClick={() => setShowBpmMoreInfo(!showBpmMoreInfo)}
+                  onClick={() => setShowBpmMoreInfo(true)}
                   className="text-blue-600 hover:text-blue-700 hover:underline"
                 >
                   (more info)
                 </button>
-                {showBpmMoreInfo && (
-                  <div className="mt-2 p-3 bg-gray-50 rounded text-xs text-gray-700">
-                    Some tracks don&apos;t have preview audio available from iTunes, Deezer, or other sources. 
-                    This is needed to calculate BPM. You can retry by clicking on the N/A value, which will attempt 
-                    to find a preview audio source again.
-                  </div>
-                )}
               </div>
             )
           }
 
           // 3. If currently processing or just completed
           if (isProcessing || (bpmProcessingEndTime && bpmProcessingStartTime)) {
-            const totalRemaining = tracksNotTried + tracksLoading
+            // Actual remaining = tracks not tried (excluding those currently loading)
+            const actualRemaining = tracksNotTried
             
             // If processing just completed
             if (bpmProcessingEndTime && bpmProcessingStartTime && bpmTracksCalculated > 0 && !isProcessing) {
@@ -772,18 +814,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </>
                   )}
                   <button
-                    onClick={() => setShowBpmMoreInfo(!showBpmMoreInfo)}
+                    onClick={() => setShowBpmMoreInfo(true)}
                     className="text-blue-600 hover:text-blue-700 hover:underline"
                   >
                     (more info)
                   </button>
-                  {showBpmMoreInfo && (
-                    <div className="mt-2 p-3 bg-gray-50 rounded text-xs text-gray-700">
-                      BPM calculation requires preview audio from iTunes, Deezer, or other sources. 
-                      This process happens automatically the first time you open a playlist. 
-                      Some tracks may not have preview audio available, which is why they show as N/A.
-                    </div>
-                  )}
                 </div>
               )
             }
@@ -791,19 +826,13 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             // If currently processing
             return (
               <div className="mb-4 sm:mb-6 text-sm text-gray-600">
-                BPM information processing ongoing ({tracksWithBpm} tracks done, {totalRemaining} remaining){' '}
+                BPM information processing ongoing ({tracksWithBpm} tracks done, {actualRemaining} remaining){' '}
                 <button
-                  onClick={() => setShowBpmMoreInfo(!showBpmMoreInfo)}
+                  onClick={() => setShowBpmMoreInfo(true)}
                   className="text-blue-600 hover:text-blue-700 hover:underline"
                 >
                   (more info)
                 </button>
-                {showBpmMoreInfo && (
-                  <div className="mt-2 p-3 bg-gray-50 rounded text-xs text-gray-700">
-                    BPM calculation requires preview audio from iTunes, Deezer, or other sources. 
-                    This process happens automatically the first time you open a playlist and may take a few moments.
-                  </div>
-                )}
               </div>
             )
           }
@@ -1257,6 +1286,90 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         </div>
       </div>
 
+      {/* BPM More Info Modal */}
+      {showBpmMoreInfo && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowBpmMoreInfo(false)}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-md w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-900">BPM Processing Information</h2>
+              <button
+                onClick={() => setShowBpmMoreInfo(false)}
+                className="text-gray-400 hover:text-gray-600 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="space-y-4 text-sm text-gray-700">
+              <p>
+                BPM calculation requires preview audio from iTunes, Deezer, or other sources. 
+                This process happens automatically the first time you open a playlist.
+              </p>
+              
+              <div>
+                <p className="font-semibold mb-2">Country used for search:</p>
+                <select
+                  value={countryCode}
+                  onChange={(e) => {
+                    setCountryCode(e.target.value)
+                    // Reload page to apply new country
+                    window.location.reload()
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                >
+                  <option value="us">United States (US)</option>
+                  <option value="gb">United Kingdom (GB)</option>
+                  <option value="it">Italy (IT)</option>
+                  <option value="fr">France (FR)</option>
+                  <option value="de">Germany (DE)</option>
+                  <option value="es">Spain (ES)</option>
+                  <option value="jp">Japan (JP)</option>
+                  <option value="ca">Canada (CA)</option>
+                  <option value="au">Australia (AU)</option>
+                  <option value="br">Brazil (BR)</option>
+                  <option value="mx">Mexico (MX)</option>
+                  <option value="nl">Netherlands (NL)</option>
+                  <option value="se">Sweden (SE)</option>
+                  <option value="no">Norway (NO)</option>
+                  <option value="dk">Denmark (DK)</option>
+                  <option value="fi">Finland (FI)</option>
+                  <option value="pl">Poland (PL)</option>
+                  <option value="pt">Portugal (PT)</option>
+                  <option value="ch">Switzerland (CH)</option>
+                  <option value="at">Austria (AT)</option>
+                  <option value="be">Belgium (BE)</option>
+                  <option value="ie">Ireland (IE)</option>
+                  <option value="nz">New Zealand (NZ)</option>
+                </select>
+                <p className="mt-2 text-xs text-gray-500">
+                  Changing the country will reload the page and search stores in the selected country.
+                </p>
+              </div>
+
+              <p className="text-xs text-gray-500">
+                Some tracks may not have preview audio available in the selected country, which is why they show as N/A. 
+                You can retry by clicking on the N/A value, or try selecting a different country.
+              </p>
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setShowBpmMoreInfo(false)}
+                className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* BPM Details Modal */}
       {showBpmModal && selectedBpmTrack && (
         <div 
@@ -1368,7 +1481,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     setRetryAttempted(true)
                     setLoadingBpms(prev => new Set(prev).add(selectedBpmTrack.id))
                     try {
-                      const res = await fetch(`/api/bpm?spotifyTrackId=${selectedBpmTrack.id}`)
+                      const res = await fetch(`/api/bpm?spotifyTrackId=${selectedBpmTrack.id}&country=${countryCode}`)
                       if (res.ok) {
                         const data = await res.json()
                         if (data.bpm != null) {

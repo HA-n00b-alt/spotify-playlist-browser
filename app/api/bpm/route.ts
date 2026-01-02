@@ -5,6 +5,7 @@ import { trackApiRequest, getCurrentUserId } from '@/lib/analytics'
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const spotifyTrackId = searchParams.get('spotifyTrackId')
+  const countryParam = searchParams.get('country')
   const userId = await getCurrentUserId()
 
   if (!spotifyTrackId) {
@@ -16,8 +17,21 @@ export async function GET(request: Request) {
   }
 
   try {
-    console.log(`[BPM API] Fetching BPM for track: ${spotifyTrackId}`)
-    const result = await getBpmForSpotifyTrack(spotifyTrackId, request)
+    console.log(`[BPM API] Fetching BPM for track: ${spotifyTrackId}, country: ${countryParam || 'auto'}`)
+    // Create a modified request with country in header if provided
+    const modifiedRequest = countryParam 
+      ? new Request(request.url, {
+          ...request,
+          headers: new Headers(request.headers),
+        })
+      : request
+    
+    if (countryParam) {
+      // Store country in a custom header for getCountryCodeFromRequest to use
+      modifiedRequest.headers.set('x-country-override', countryParam)
+    }
+    
+    const result = await getBpmForSpotifyTrack(spotifyTrackId, modifiedRequest)
     console.log(`[BPM API] Result for ${spotifyTrackId}:`, JSON.stringify(result, null, 2))
     trackApiRequest(userId, '/api/bpm', 'GET', 200).catch(() => {})
     return NextResponse.json(result)
