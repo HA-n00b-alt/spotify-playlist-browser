@@ -131,7 +131,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       document.addEventListener('click', handleClickOutside)
       document.addEventListener('keydown', handleEscape)
       // Prevent default browser context menu
-      const handleContextMenu = (e: MouseEvent) => e.preventDefault()
+      const handleContextMenu = (e: Event) => e.preventDefault()
       document.addEventListener('contextmenu', handleContextMenu)
       
       return () => {
