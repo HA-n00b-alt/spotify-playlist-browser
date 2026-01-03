@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
-export default function RateLimitPage() {
+function RateLimitContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [countdown, setCountdown] = useState<number | null>(null)
@@ -178,6 +178,38 @@ export default function RateLimitPage() {
         </p>
       </div>
     </div>
+  )
+}
+
+export default function RateLimitPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex flex-col items-center justify-center p-8 bg-gray-50">
+        <div className="text-center">
+          <div className="mb-6">
+            <svg
+              className="w-20 h-20 mx-auto text-yellow-500 animate-spin"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-bold mb-4 text-gray-900">
+            Loading...
+          </h1>
+        </div>
+      </div>
+    }>
+      <RateLimitContent />
+    </Suspense>
   )
 }
 
