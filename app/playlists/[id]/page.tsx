@@ -420,16 +420,27 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             )
             
             if (isDeezerSuccessful && r.urlsTried && Array.isArray(r.urlsTried)) {
-              // Find a Deezer URL in urlsTried (prefer the last one, might be more recent)
-              const deezerUrls = r.urlsTried.filter((url: string) => 
-                url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
+              // Find Deezer API search URLs in urlsTried
+              const deezerApiUrls = r.urlsTried.filter((url: string) => 
+                url.includes('api.deezer.com/search') || url.includes('api.deezer.com/album')
               )
-              if (deezerUrls.length > 0) {
-                // Use the last Deezer URL from urlsTried (most recent attempt)
-                newPreviewUrls[trackId] = deezerUrls[deezerUrls.length - 1]
-                console.log(`[Preview Debug] Using Deezer URL from urlsTried for track ${trackId}:`, deezerUrls[deezerUrls.length - 1])
+              if (deezerApiUrls.length > 0) {
+                // Store the API URL - we'll fetch it when needed to get the preview URL
+                // For now, mark it so we know to fetch it later
+                newPreviewUrls[trackId] = deezerApiUrls[deezerApiUrls.length - 1] // Store API URL temporarily
               } else {
-                newPreviewUrls[trackId] = r.successfulUrl
+                // Check for direct preview URLs
+                const deezerPreviewUrls = r.urlsTried.filter((url: string) => {
+                  const isDeezerUrl = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
+                  const isAudioFile = url.includes('.mp3') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('/preview')
+                  const isNotApiEndpoint = !url.includes('api.deezer.com/search') && !url.includes('api.deezer.com/album') && !url.includes('api.deezer.com/track')
+                  return isDeezerUrl && isAudioFile && isNotApiEndpoint
+                })
+                if (deezerPreviewUrls.length > 0) {
+                  newPreviewUrls[trackId] = deezerPreviewUrls[deezerPreviewUrls.length - 1]
+                } else {
+                  newPreviewUrls[trackId] = r.successfulUrl
+                }
               }
             } else {
               newPreviewUrls[trackId] = r.successfulUrl
@@ -601,16 +612,83 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   }
 
   /**
+   * Fetch preview URL from Deezer API
+   */
+  const fetchDeezerPreviewUrl = async (apiUrl: string): Promise<string | null> => {
+    try {
+      console.log('[Preview Debug] Fetching Deezer API to get preview URL:', apiUrl)
+      const response = await fetch(apiUrl)
+      if (!response.ok) {
+        console.error('[Preview Debug] Deezer API fetch failed:', response.status)
+        return null
+      }
+      const data = await response.json()
+      console.log('[Preview Debug] Deezer API response:', data)
+      
+      // Parse the response to find preview URL
+      if (data.data && Array.isArray(data.data) && data.data.length > 0) {
+        const track = data.data[0]
+        if (track.preview) {
+          console.log('[Preview Debug] Found Deezer preview URL:', track.preview)
+          return track.preview
+        }
+      }
+      
+      // Also check for album tracklist
+      if (data.tracks && data.tracks.data && Array.isArray(data.tracks.data) && data.tracks.data.length > 0) {
+        const tracksWithPreview = data.tracks.data.filter((t: any) => t.preview)
+        if (tracksWithPreview.length > 0 && tracksWithPreview[0].preview) {
+          console.log('[Preview Debug] Found Deezer preview URL from album tracklist:', tracksWithPreview[0].preview)
+          return tracksWithPreview[0].preview
+        }
+      }
+      
+      console.log('[Preview Debug] No preview URL found in Deezer API response')
+      return null
+    } catch (error) {
+      console.error('[Preview Debug] Error fetching Deezer API:', error)
+      return null
+    }
+  }
+  
+  /**
    * Load audio with CORS support and caching
    */
   const loadAudioWithCache = async (url: string): Promise<string> => {
     console.log('[Preview Debug] loadAudioWithCache called with URL:', url)
     
+    const originalUrl = url // Keep original for cache key if it's an API URL
+    
+    // Check if it's a Deezer API URL - if so, fetch it to get the preview URL
+    if (url.includes('api.deezer.com/search') || url.includes('api.deezer.com/album')) {
+      // Check cache first using the API URL as key
+      if (audioCache.current.has(originalUrl)) {
+        const cachedUrl = audioCache.current.get(originalUrl)!
+        console.log('[Preview Debug] Found cached preview URL from API:', cachedUrl)
+        // If cached value is a blob URL, return it; otherwise it's the preview URL, fetch it
+        if (cachedUrl.startsWith('blob:')) {
+          return cachedUrl
+        } else {
+          url = cachedUrl // Use the cached preview URL
+        }
+      } else {
+        // Fetch the preview URL from API
+        const previewUrl = await fetchDeezerPreviewUrl(url)
+        if (!previewUrl) {
+          throw new Error('Failed to get preview URL from Deezer API')
+        }
+        // Cache the preview URL using the API URL as key
+        audioCache.current.set(originalUrl, previewUrl)
+        url = previewUrl
+        console.log('[Preview Debug] Using preview URL from Deezer API:', url)
+      }
+    }
+    
     // Check if it's a Deezer URL (needs CORS proxy)
     const isDeezer = url.includes('cdn-preview') || url.includes('deezer.com') || url.includes('e-cdn-preview') || url.includes('cdnt-preview')
     console.log('[Preview Debug] URL type check:', { url, isDeezer })
     
-    // Check cache first
+    // Check cache first (use the final preview URL as cache key)
     if (audioCache.current.has(url)) {
       const cachedUrl = audioCache.current.get(url)!
       console.log('[Preview Debug] Found cached URL:', cachedUrl)
@@ -757,23 +835,35 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             )
             
             if (isDeezerSuccessful && data.urlsTried && Array.isArray(data.urlsTried)) {
-              // Find a Deezer URL in urlsTried (prefer the last one, might be more recent)
-              const deezerUrls = data.urlsTried.filter((url: string) => 
-                url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
+              // Find Deezer API search URLs in urlsTried
+              const deezerApiUrls = data.urlsTried.filter((url: string) => 
+                url.includes('api.deezer.com/search') || url.includes('api.deezer.com/album')
               )
-              if (deezerUrls.length > 0) {
-                // Use the last Deezer URL from urlsTried (most recent attempt)
-                previewUrl = deezerUrls[deezerUrls.length - 1]
-                console.log(`[Preview Debug] handleTrackClick - Using Deezer URL from urlsTried:`, previewUrl)
+              if (deezerApiUrls.length > 0) {
+                // Use the API URL - we'll fetch it when loading audio to get the preview URL
+                previewUrl = deezerApiUrls[deezerApiUrls.length - 1]
+                console.log(`[Preview Debug] handleTrackClick - Using Deezer API URL from urlsTried (will fetch preview):`, previewUrl)
                 setPreviewUrls(prev => ({
                   ...prev,
                   [track.id]: previewUrl,
                 }))
               } else {
-                previewUrl = data.successfulUrl
+                // Check for direct preview URLs
+                const deezerPreviewUrls = data.urlsTried.filter((url: string) => {
+                  const isDeezerUrl = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
+                  const isAudioFile = url.includes('.mp3') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('/preview')
+                  const isNotApiEndpoint = !url.includes('api.deezer.com/search') && !url.includes('api.deezer.com/album') && !url.includes('api.deezer.com/track')
+                  return isDeezerUrl && isAudioFile && isNotApiEndpoint
+                })
+                if (deezerPreviewUrls.length > 0) {
+                  previewUrl = deezerPreviewUrls[deezerPreviewUrls.length - 1]
+                  console.log(`[Preview Debug] handleTrackClick - Using Deezer preview URL from urlsTried:`, previewUrl)
+                } else {
+                  previewUrl = data.successfulUrl
+                }
                 setPreviewUrls(prev => ({
                   ...prev,
-                  [track.id]: data.successfulUrl,
+                  [track.id]: previewUrl,
                 }))
               }
             } else {
@@ -913,23 +1003,35 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             )
             
             if (isDeezerSuccessful && data.urlsTried && Array.isArray(data.urlsTried)) {
-              // Find a Deezer URL in urlsTried (prefer the last one, might be more recent)
-              const deezerUrls = data.urlsTried.filter((url: string) => 
-                url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
+              // Find Deezer API search URLs in urlsTried
+              const deezerApiUrls = data.urlsTried.filter((url: string) => 
+                url.includes('api.deezer.com/search') || url.includes('api.deezer.com/album')
               )
-              if (deezerUrls.length > 0) {
-                // Use the last Deezer URL from urlsTried (most recent attempt)
-                previewUrl = deezerUrls[deezerUrls.length - 1]
-                console.log(`[Preview Debug] handleTrackTitleClick - Using Deezer URL from urlsTried:`, previewUrl)
+              if (deezerApiUrls.length > 0) {
+                // Use the API URL - we'll fetch it when loading audio to get the preview URL
+                previewUrl = deezerApiUrls[deezerApiUrls.length - 1]
+                console.log(`[Preview Debug] handleTrackTitleClick - Using Deezer API URL from urlsTried (will fetch preview):`, previewUrl)
                 setPreviewUrls(prev => ({
                   ...prev,
                   [track.id]: previewUrl,
                 }))
               } else {
-                previewUrl = data.successfulUrl
+                // Check for direct preview URLs
+                const deezerPreviewUrls = data.urlsTried.filter((url: string) => {
+                  const isDeezerUrl = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
+                  const isAudioFile = url.includes('.mp3') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('/preview')
+                  const isNotApiEndpoint = !url.includes('api.deezer.com/search') && !url.includes('api.deezer.com/album') && !url.includes('api.deezer.com/track')
+                  return isDeezerUrl && isAudioFile && isNotApiEndpoint
+                })
+                if (deezerPreviewUrls.length > 0) {
+                  previewUrl = deezerPreviewUrls[deezerPreviewUrls.length - 1]
+                  console.log(`[Preview Debug] handleTrackTitleClick - Using Deezer preview URL from urlsTried:`, previewUrl)
+                } else {
+                  previewUrl = data.successfulUrl
+                }
                 setPreviewUrls(prev => ({
                   ...prev,
-                  [track.id]: data.successfulUrl,
+                  [track.id]: previewUrl,
                 }))
               }
             } else {
