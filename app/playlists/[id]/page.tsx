@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import type { MouseEvent } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import UserMenu from '../../components/UserMenu'
 
 interface Track {
   id: string
@@ -650,20 +651,32 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
       <div className="max-w-7xl mx-auto flex-1 w-full">
         <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <Link
-            href="/playlists"
-            className="text-blue-600 hover:text-blue-700 inline-block text-sm sm:text-base"
-          >
-            ← Back to Playlists
-          </Link>
-          {isAdmin && (
-            <button
-              onClick={() => setShowBpmDebug(!showBpmDebug)}
-              className="text-xs sm:text-sm bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-1.5 px-3 sm:py-2 sm:px-4 rounded transition-colors self-end sm:self-auto"
+          <div className="flex gap-2 items-center">
+            <Link
+              href="/"
+              className="text-blue-600 hover:text-blue-700 inline-block text-sm sm:text-base"
             >
-              {showBpmDebug ? 'Hide' : 'Show'} BPM Debug
-            </button>
-          )}
+              Home
+            </Link>
+            <span className="text-gray-400">|</span>
+            <Link
+              href="/playlists"
+              className="text-blue-600 hover:text-blue-700 inline-block text-sm sm:text-base"
+            >
+              ← Back to Playlists
+            </Link>
+          </div>
+          <div className="flex gap-2 items-center">
+            {isAdmin && (
+              <button
+                onClick={() => setShowBpmDebug(!showBpmDebug)}
+                className="text-xs sm:text-sm bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-1.5 px-3 sm:py-2 sm:px-4 rounded transition-colors"
+              >
+                {showBpmDebug ? 'Hide' : 'Show'} BPM Debug
+              </button>
+            )}
+            <UserMenu />
+          </div>
         </div>
         
         {showBpmDebug && (

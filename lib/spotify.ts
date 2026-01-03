@@ -195,6 +195,16 @@ async function makeSpotifyRequest<T>(
     return makeSpotifyRequest<T>(endpoint, options, retryCount + 1)
   }
 
+  // Handle forbidden (403) - insufficient permissions or scopes
+  if (response.status === 403) {
+    const error: SpotifyError = await response.json().catch(() => ({
+      error: { status: 403, message: 'Forbidden' },
+    }))
+    throw new Error(
+      `Forbidden: ${error.error?.message || 'Insufficient permissions. Please ensure the app has access to your playlists.'}`
+    )
+  }
+
   if (!response.ok) {
     const error: SpotifyError = await response.json().catch(() => ({
       error: { status: response.status, message: response.statusText },

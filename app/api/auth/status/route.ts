@@ -10,12 +10,44 @@ export async function GET() {
     return NextResponse.json({ authenticated: false })
   }
 
-  // Optionally verify the token is still valid by making a lightweight API call
-  if (accessToken) {
+  // Try to get user info with current access token
+  let tokenToUse = accessToken
+  
+  // If no access token but we have refresh token, try to refresh
+  if (!tokenToUse && refreshToken) {
+    const clientId = process.env.SPOTIFY_CLIENT_ID
+    const clientSecret = process.env.SPOTIFY_CLIENT_SECRET
+
+    if (clientId && clientSecret) {
+      try {
+        const refreshResponse = await fetch('https://accounts.spotify.com/api/token', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
+          },
+          body: new URLSearchParams({
+            grant_type: 'refresh_token',
+            refresh_token: refreshToken,
+          }),
+        })
+
+        if (refreshResponse.ok) {
+          const data = await refreshResponse.json()
+          tokenToUse = data.access_token
+        }
+      } catch {
+        // Refresh failed
+      }
+    }
+  }
+
+  // Try to fetch user info
+  if (tokenToUse) {
     try {
       const response = await fetch('https://api.spotify.com/v1/me', {
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${tokenToUse}`,
         },
       })
 
@@ -31,14 +63,18 @@ export async function GET() {
         })
       }
     } catch {
-      // Token might be expired, but we have refresh token
+      // API call failed
     }
   }
 
-  // If we have refresh token but access token is invalid/expired, still consider authenticated
-  return NextResponse.json({
-    authenticated: true,
-    needsRefresh: !accessToken && !!refreshToken,
-  })
+  // If we have refresh token but couldn't get user info, still consider authenticated
+  if (refreshToken) {
+    return NextResponse.json({
+      authenticated: true,
+      needsRefresh: true,
+    })
+  }
+
+  return NextResponse.json({ authenticated: false })
 }
 

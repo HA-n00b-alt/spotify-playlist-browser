@@ -22,6 +22,17 @@ export async function GET() {
       return response
     }
     
+    // Handle forbidden (403)
+    if (error instanceof Error && (error.message.includes('Forbidden') || error.message.includes('403'))) {
+      console.error('Forbidden error fetching playlists:', error)
+      response = NextResponse.json(
+        { error: error.message || 'Access forbidden. Please check your Spotify app permissions.' },
+        { status: 403 }
+      )
+      trackApiRequest(userId, '/api/playlists', 'GET', 403).catch(() => {})
+      return response
+    }
+    
     // Handle rate limiting (429)
     if (error instanceof Error && (error.message.includes('Rate limit') || error.message.includes('429'))) {
       console.error('Rate limit error fetching playlists:', error)

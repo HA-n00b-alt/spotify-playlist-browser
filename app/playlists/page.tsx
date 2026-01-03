@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { getPlaylists } from '@/lib/spotify'
 import { isAdminUser } from '@/lib/analytics'
 import PlaylistsTable from './PlaylistsTable'
+import UserMenu from '../components/UserMenu'
 
 interface Playlist {
   id: string
@@ -41,8 +42,11 @@ export default async function PlaylistsPage() {
     playlists = await getPlaylists() as Playlist[]
   } catch (e) {
     if (e instanceof Error) {
-      // Handle rate limiting (429) specifically
-      if (e.message.includes('Rate limit') || e.message.includes('429')) {
+      // Handle forbidden (403) specifically
+      if (e.message.includes('Forbidden') || e.message.includes('403')) {
+        error = 'Access forbidden. Please ensure the Spotify app has permission to access your playlists. You may need to re-authorize the app.'
+      } else if (e.message.includes('Rate limit') || e.message.includes('429')) {
+        // Handle rate limiting (429) specifically
         error = 'Spotify API rate limit exceeded. Please wait a moment and refresh the page.'
       } else {
         error = e.message
@@ -84,7 +88,13 @@ export default async function PlaylistsPage() {
       <div className="max-w-7xl mx-auto flex-1 w-full">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">My Playlists</h1>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            <Link
+              href="/"
+              className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded transition-colors text-sm sm:text-base"
+            >
+              Home
+            </Link>
             {isAdmin && (
               <Link
                 href="/stats"
@@ -93,23 +103,62 @@ export default async function PlaylistsPage() {
                 Stats
               </Link>
             )}
-            <form action="/api/auth/logout" method="POST">
-              <button
-                type="submit"
-                className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded transition-colors text-sm sm:text-base"
-              >
-                Logout
-              </button>
-            </form>
+            <UserMenu />
           </div>
         </div>
         
-        <PlaylistsTable playlists={playlists} />
-        
-        {playlists.length === 0 && (
-          <div className="text-center py-12 text-gray-500">
-            No playlists found
+        {playlists.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 sm:py-24 bg-white rounded-lg border border-gray-200 shadow-sm">
+            <div className="text-center max-w-md px-4">
+              <div className="mb-6">
+                <svg
+                  className="w-24 h-24 mx-auto text-gray-300"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"
+                  />
+                </svg>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">
+                No playlists yet
+              </h2>
+              <p className="text-gray-600 mb-6 text-base sm:text-lg">
+                You don&apos;t have any playlists in your Spotify account. Create a playlist in Spotify to get started!
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <a
+                  href="https://open.spotify.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-full transition-colors inline-flex items-center justify-center gap-2"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56-.299.421-1.02.599-1.559.3z" />
+                  </svg>
+                  Open Spotify
+                </a>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 px-6 rounded-full transition-colors"
+                >
+                  Refresh
+                </button>
+              </div>
+            </div>
           </div>
+        ) : (
+          <PlaylistsTable playlists={playlists} />
         )}
       </div>
       
