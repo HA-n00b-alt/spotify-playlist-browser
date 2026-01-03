@@ -607,22 +607,54 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     
     try {
       if (isDeezer) {
-        // For Deezer, always use proxy to handle CORS
-        const proxyUrl = `/api/audio-proxy?url=${encodeURIComponent(url)}`
-        console.log('[Preview Debug] Fetching Deezer audio via proxy:', proxyUrl)
-        const response = await fetch(proxyUrl)
-        console.log('[Preview Debug] Proxy response status:', response.status, response.ok)
-        if (!response.ok) {
-          const errorText = await response.text()
-          console.error('[Preview Debug] Proxy fetch failed:', response.status, errorText)
-          throw new Error(`Failed to fetch audio from proxy: ${response.status} ${errorText}`)
+        // For Deezer, try direct fetch first (might work if CORS allows or URL is still valid)
+        // If that fails, try proxy as fallback
+        console.log('[Preview Debug] Trying direct Deezer URL first...')
+        try {
+          const directResponse = await fetch(url, {
+            method: 'HEAD', // Just check if accessible
+            mode: 'no-cors', // This won't throw on CORS errors, but we can't read the response
+          })
+          console.log('[Preview Debug] Direct fetch HEAD check completed')
+          
+          // Try full fetch - if CORS allows it, this will work
+          const fullResponse = await fetch(url, {
+            mode: 'cors',
+            credentials: 'omit',
+          })
+          
+          if (fullResponse.ok) {
+            console.log('[Preview Debug] Direct Deezer URL works, using it')
+            const blob = await fullResponse.blob()
+            const blobUrl = URL.createObjectURL(blob)
+            audioCache.current.set(url, blobUrl)
+            return blobUrl
+          } else {
+            console.log('[Preview Debug] Direct fetch failed, trying proxy...')
+            throw new Error('Direct fetch failed')
+          }
+        } catch (directError) {
+          console.log('[Preview Debug] Direct fetch not possible, using proxy:', directError)
+          // Fall back to proxy
+          const proxyUrl = `/api/audio-proxy?url=${encodeURIComponent(url)}`
+          console.log('[Preview Debug] Fetching Deezer audio via proxy:', proxyUrl)
+          const response = await fetch(proxyUrl)
+          console.log('[Preview Debug] Proxy response status:', response.status, response.ok)
+          if (!response.ok) {
+            const errorText = await response.text()
+            console.error('[Preview Debug] Proxy fetch failed:', response.status, errorText)
+            // If proxy also fails, try direct URL as last resort (might work in some browsers)
+            console.log('[Preview Debug] Proxy failed, trying direct URL as last resort...')
+            audioCache.current.set(url, url)
+            return url
+          }
+          const blob = await response.blob()
+          console.log('[Preview Debug] Blob created:', { size: blob.size, type: blob.type })
+          const blobUrl = URL.createObjectURL(blob)
+          console.log('[Preview Debug] Blob URL created:', blobUrl)
+          audioCache.current.set(url, blobUrl)
+          return blobUrl
         }
-        const blob = await response.blob()
-        console.log('[Preview Debug] Blob created:', { size: blob.size, type: blob.type })
-        const blobUrl = URL.createObjectURL(blob)
-        console.log('[Preview Debug] Blob URL created:', blobUrl)
-        audioCache.current.set(url, blobUrl)
-        return blobUrl
       } else {
         // For iTunes and other sources, use direct URL
         // Cache the URL itself

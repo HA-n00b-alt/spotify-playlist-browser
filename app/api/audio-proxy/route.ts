@@ -17,11 +17,17 @@ export async function GET(request: Request) {
   try {
     console.log('[Audio Proxy Debug] Fetching audio from:', audioUrl)
     // Fetch the audio file from the source
+    // For Deezer, we need to preserve the original request headers and use proper user agent
     const response = await fetch(audioUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Referer': 'https://www.deezer.com/',
+        'Origin': 'https://www.deezer.com',
+        'Accept': 'audio/webm,audio/ogg,audio/ogg;codecs=opus,audio/mpeg,audio/mp4,audio/*;q=0.9,application/ogg;q=0.7,video/*;q=0.6,*/*;q=0.5',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'identity', // Don't compress, we need the raw audio
       },
+      redirect: 'follow',
     })
 
     console.log('[Audio Proxy Debug] Response status:', response.status, response.ok)
@@ -33,11 +39,30 @@ export async function GET(request: Request) {
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unable to read error')
+      const responseHeaders: Record<string, string> = {}
+      response.headers.forEach((value, key) => {
+        responseHeaders[key] = value
+      })
       console.error('[Audio Proxy Debug] Fetch failed:', {
         status: response.status,
         statusText: response.statusText,
-        errorText: errorText.substring(0, 200),
+        errorText: errorText.substring(0, 500),
+        responseHeaders,
+        url: audioUrl,
       })
+      
+      // For 403 errors, the URL might have expired or require different authentication
+      // Return a more descriptive error
+      if (response.status === 403) {
+        return NextResponse.json(
+          { 
+            error: 'Failed to fetch audio: 403 Forbidden. The preview URL may have expired or requires authentication.',
+            details: 'Deezer preview URLs contain time-limited authentication tokens that may expire.'
+          },
+          { status: 403 }
+        )
+      }
+      
       return NextResponse.json(
         { error: `Failed to fetch audio: ${response.status} ${response.statusText}` },
         { status: response.status }
