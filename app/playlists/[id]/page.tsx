@@ -9,6 +9,7 @@ import { ErrorBoundary } from '../../components/ErrorBoundary'
 import { TrackTableSkeleton, SkeletonLoader } from '../../components/SkeletonLoader'
 import { usePlaylist, useRefreshPlaylist } from '../../hooks/usePlaylist'
 import { usePlaylistTracks, useRefreshPlaylistTracks } from '../../hooks/usePlaylistTracks'
+import { useQueryClient } from '@tanstack/react-query'
 import type { 
   SpotifyTrack, 
   SpotifyPlaylistInfo, 
@@ -50,6 +51,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   
   const refreshPlaylist = useRefreshPlaylist(params.id)
   const refreshTracks = useRefreshPlaylistTracks(params.id)
+  const queryClient = useQueryClient()
   
   const loading = isLoadingPlaylist || isLoadingTracks
   const error = playlistError?.message || tracksError?.message || null
@@ -150,6 +152,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     }
   }, [contextMenu])
 
+  // Reset auth error ref when playlist ID changes (user navigates to different playlist)
+  useEffect(() => {
+    authErrorHandledRef.current = false
+    // Clear React Query cache for this playlist to force fresh fetch
+    queryClient.removeQueries({ queryKey: ['playlist', params.id] })
+    queryClient.removeQueries({ queryKey: ['playlistTracks', params.id] })
+  }, [params.id, queryClient])
+
   // Handle auth errors and redirect
   useEffect(() => {
     if (authErrorHandledRef.current) {
@@ -158,11 +168,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
     if (error && (error.includes('Unauthorized') || error.includes('No access token') || error.includes('Please log in'))) {
       authErrorHandledRef.current = true
+      // Clear React Query cache to prevent stale errors
+      queryClient.clear()
+      // Redirect to login
       setTimeout(() => {
         window.location.href = '/api/auth/login'
       }, 1000)
     }
-  }, [error])
+  }, [error, queryClient])
 
   // Check admin status
   useEffect(() => {
@@ -1379,6 +1392,42 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           </div>
         </div>
         
+        {/* Show auth error with manual login option */}
+        {error && (error.includes('Unauthorized') || error.includes('No access token') || error.includes('Please log in')) && (
+          <div className="mb-6 p-6 bg-red-50 border-2 border-red-300 rounded-lg">
+            <h2 className="text-xl font-bold text-red-800 mb-2">Authentication Required</h2>
+            <p className="text-red-700 mb-4">{error}</p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <a
+                href="/api/auth/login"
+                className="inline-block bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-6 rounded transition-colors text-center"
+              >
+                Login with Spotify
+              </a>
+              <button
+                onClick={() => {
+                  // Clear React Query cache and reset error state
+                  queryClient.clear()
+                  authErrorHandledRef.current = false
+                  // Force refetch
+                  queryClient.invalidateQueries({ queryKey: ['playlist', params.id] })
+                  queryClient.invalidateQueries({ queryKey: ['playlistTracks', params.id] })
+                }}
+                className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-6 rounded transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Show other errors */}
+        {error && !error.includes('Unauthorized') && !error.includes('No access token') && !error.includes('Please log in') && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-300 rounded-lg">
+            <p className="text-red-700">Error: {error}</p>
+          </div>
+        )}
+
         {showBpmDebug && (
           <div className="mb-6 p-4 bg-gray-100 rounded-lg border border-gray-300 overflow-auto max-h-96 text-xs sm:text-sm">
             <h3 className="font-bold mb-2 text-base sm:text-lg">BPM Debug Information</h3>
