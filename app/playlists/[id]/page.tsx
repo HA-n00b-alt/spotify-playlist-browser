@@ -410,8 +410,30 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           const r = result as any
           newBpms[trackId] = r.bpm
           // Store successful preview URL from DB
+          // For Deezer, prefer a URL from urlsTried if available (might be more recent/valid)
           if (r.successfulUrl) {
-            newPreviewUrls[trackId] = r.successfulUrl
+            // Check if it's a Deezer URL and if we have urlsTried with Deezer URLs
+            const isDeezerSuccessful = r.successfulUrl && (
+              r.successfulUrl.includes('deezer.com') || 
+              r.successfulUrl.includes('cdn-preview') || 
+              r.successfulUrl.includes('cdnt-preview')
+            )
+            
+            if (isDeezerSuccessful && r.urlsTried && Array.isArray(r.urlsTried)) {
+              // Find a Deezer URL in urlsTried (prefer the last one, might be more recent)
+              const deezerUrls = r.urlsTried.filter((url: string) => 
+                url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
+              )
+              if (deezerUrls.length > 0) {
+                // Use the last Deezer URL from urlsTried (most recent attempt)
+                newPreviewUrls[trackId] = deezerUrls[deezerUrls.length - 1]
+                console.log(`[Preview Debug] Using Deezer URL from urlsTried for track ${trackId}:`, deezerUrls[deezerUrls.length - 1])
+              } else {
+                newPreviewUrls[trackId] = r.successfulUrl
+              }
+            } else {
+              newPreviewUrls[trackId] = r.successfulUrl
+            }
           }
           // Always store details if available (source, error, upc, urls)
           if (r.source || r.error || r.upc || r.urlsTried || r.successfulUrl) {
@@ -723,13 +745,44 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         const res = await fetch(`/api/bpm?spotifyTrackId=${track.id}&country=${countryCode}`)
         if (res.ok) {
           const data = await res.json()
+          console.log('[Preview Debug] handleTrackClick - BPM API response successfulUrl:', data.successfulUrl)
+          console.log('[Preview Debug] handleTrackClick - BPM API response urlsTried:', data.urlsTried)
           // Store the successful URL if found
+          // For Deezer, prefer a URL from urlsTried if available
           if (data.successfulUrl) {
-            previewUrl = data.successfulUrl
-            setPreviewUrls(prev => ({
-              ...prev,
-              [track.id]: data.successfulUrl,
-            }))
+            const isDeezerSuccessful = data.successfulUrl && (
+              data.successfulUrl.includes('deezer.com') || 
+              data.successfulUrl.includes('cdn-preview') || 
+              data.successfulUrl.includes('cdnt-preview')
+            )
+            
+            if (isDeezerSuccessful && data.urlsTried && Array.isArray(data.urlsTried)) {
+              // Find a Deezer URL in urlsTried (prefer the last one, might be more recent)
+              const deezerUrls = data.urlsTried.filter((url: string) => 
+                url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
+              )
+              if (deezerUrls.length > 0) {
+                // Use the last Deezer URL from urlsTried (most recent attempt)
+                previewUrl = deezerUrls[deezerUrls.length - 1]
+                console.log(`[Preview Debug] handleTrackClick - Using Deezer URL from urlsTried:`, previewUrl)
+                setPreviewUrls(prev => ({
+                  ...prev,
+                  [track.id]: previewUrl,
+                }))
+              } else {
+                previewUrl = data.successfulUrl
+                setPreviewUrls(prev => ({
+                  ...prev,
+                  [track.id]: data.successfulUrl,
+                }))
+              }
+            } else {
+              previewUrl = data.successfulUrl
+              setPreviewUrls(prev => ({
+                ...prev,
+                [track.id]: data.successfulUrl,
+              }))
+            }
           }
         }
       } catch (error) {
@@ -848,13 +901,44 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         const res = await fetch(`/api/bpm?spotifyTrackId=${track.id}&country=${countryCode}`)
         if (res.ok) {
           const data = await res.json()
+          console.log('[Preview Debug] handleTrackTitleClick - BPM API response successfulUrl:', data.successfulUrl)
+          console.log('[Preview Debug] handleTrackTitleClick - BPM API response urlsTried:', data.urlsTried)
           // Store the successful URL if found
+          // For Deezer, prefer a URL from urlsTried if available
           if (data.successfulUrl) {
-            previewUrl = data.successfulUrl
-            setPreviewUrls(prev => ({
-              ...prev,
-              [track.id]: data.successfulUrl,
-            }))
+            const isDeezerSuccessful = data.successfulUrl && (
+              data.successfulUrl.includes('deezer.com') || 
+              data.successfulUrl.includes('cdn-preview') || 
+              data.successfulUrl.includes('cdnt-preview')
+            )
+            
+            if (isDeezerSuccessful && data.urlsTried && Array.isArray(data.urlsTried)) {
+              // Find a Deezer URL in urlsTried (prefer the last one, might be more recent)
+              const deezerUrls = data.urlsTried.filter((url: string) => 
+                url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
+              )
+              if (deezerUrls.length > 0) {
+                // Use the last Deezer URL from urlsTried (most recent attempt)
+                previewUrl = deezerUrls[deezerUrls.length - 1]
+                console.log(`[Preview Debug] handleTrackTitleClick - Using Deezer URL from urlsTried:`, previewUrl)
+                setPreviewUrls(prev => ({
+                  ...prev,
+                  [track.id]: previewUrl,
+                }))
+              } else {
+                previewUrl = data.successfulUrl
+                setPreviewUrls(prev => ({
+                  ...prev,
+                  [track.id]: data.successfulUrl,
+                }))
+              }
+            } else {
+              previewUrl = data.successfulUrl
+              setPreviewUrls(prev => ({
+                ...prev,
+                [track.id]: data.successfulUrl,
+              }))
+            }
           }
         }
       } catch (error) {
