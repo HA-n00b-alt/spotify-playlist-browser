@@ -58,27 +58,124 @@ export default async function PlaylistsPage() {
 
   if (error === 'Unauthorized') {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Please log in</h1>
-          <Link
-            href="/api/auth/login"
-            className="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-full"
-          >
-            Login with Spotify
-          </Link>
+      <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
+        <div className="max-w-7xl mx-auto flex-1 w-full">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sm:mb-8">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">My Playlists</h1>
+            <div className="flex gap-2 items-center">
+              <Link
+                href="/"
+                className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded transition-colors text-sm sm:text-base"
+              >
+                Home
+              </Link>
+              <UserMenu />
+            </div>
+          </div>
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center">
+              <h1 className="text-2xl font-bold mb-4">Please log in</h1>
+              <Link
+                href="/api/auth/login"
+                className="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-full"
+              >
+                Login with Spotify
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
     )
   }
 
   if (error) {
+    const isForbidden = error.includes('Forbidden') || error.includes('403')
+    
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4 text-red-500">Error</h1>
-          <p>{error}</p>
+      <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
+        <div className="max-w-7xl mx-auto flex-1 w-full">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sm:mb-8">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">My Playlists</h1>
+            <div className="flex gap-2 items-center">
+              <Link
+                href="/"
+                className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded transition-colors text-sm sm:text-base"
+              >
+                Home
+              </Link>
+              <UserMenu />
+            </div>
+          </div>
+          
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center max-w-md px-4">
+              <div className="mb-6">
+                <svg
+                  className="w-20 h-20 mx-auto text-red-500"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
+                </svg>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-bold mb-4 text-red-500">Error</h1>
+              <p className="text-gray-700 mb-6 text-base sm:text-lg">{error}</p>
+              
+              {isForbidden ? (
+                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  <form action="/api/auth/reauthorize" method="POST" className="inline">
+                    <button
+                      type="submit"
+                      className="bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-full transition-colors w-full sm:w-auto"
+                    >
+                      Re-authorize with Spotify
+                    </button>
+                  </form>
+                  <Link
+                    href="/"
+                    className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 px-6 rounded-full transition-colors inline-block text-center"
+                  >
+                    Go to Home
+                  </Link>
+                </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 px-6 rounded-full transition-colors"
+                  >
+                    Refresh Page
+                  </button>
+                  <Link
+                    href="/"
+                    className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 px-6 rounded-full transition-colors inline-block text-center"
+                  >
+                    Go to Home
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
+        
+        <footer className="mt-auto py-6 sm:py-8 text-center text-xs sm:text-sm text-gray-500 border-t border-gray-200">
+          Created by{' '}
+          <a href="mailto:delman@delman.it" className="text-green-600 hover:text-green-700 hover:underline">
+            delman@delman.it
+          </a>
+          . Powered by{' '}
+          <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
+            Spotify
+          </a>
+          .
+        </footer>
       </div>
     )
   }
