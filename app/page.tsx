@@ -32,6 +32,16 @@ export default async function Home({
           Search and sort your Spotify playlists with ease
         </p>
 
+        <div className="mb-6 p-4 bg-yellow-900/50 border border-yellow-700 rounded-lg">
+          <p className="text-yellow-200 text-sm leading-relaxed">
+            Due to <a href="https://developer.spotify.com/blog/2025-04-15-updating-the-criteria-for-web-api-extended-access" target="_blank" rel="noopener noreferrer" className="text-yellow-300 hover:text-yellow-200 underline">new policies</a> from Spotify that prevent community developments, this app is open only to a few authorized users. If you are interested in using it, please email me at{' '}
+            <a href="mailto:delman@delman.it" className="text-yellow-300 hover:text-yellow-200 underline">
+              delman@delman.it
+            </a>
+            .
+          </p>
+        </div>
+
         {error && (
           <div className="mb-6 p-4 bg-red-900/50 border border-red-700 rounded-lg">
             <p className="text-red-200 text-sm">
