@@ -1905,7 +1905,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               </p>
               
               <p>
-                The playlist content should be the same as the current version because we use Spotify's <strong>snapshot_id</strong> to verify that the playlist hasn't changed since it was cached.
+                The playlist content should be the same as the current version because we use Spotify&apos;s <strong>snapshot_id</strong> to verify that the playlist hasn&apos;t changed since it was cached.
               </p>
               
               <div className="pt-2 border-t border-gray-200">
