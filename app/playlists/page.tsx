@@ -100,8 +100,12 @@ export default async function PlaylistsPage() {
   if (error) {
     // Check if error is a 403/Forbidden error (case insensitive)
     const isForbidden = error.toLowerCase().includes('forbidden') || error.includes('403')
+    // Check if error is an authentication error
+    const isAuthError = error.toLowerCase().includes('no access token') || 
+                       error.toLowerCase().includes('unauthorized') || 
+                       error.toLowerCase().includes('please log in')
     
-    console.log('[Playlists Page] Error page rendering:', { error, isForbidden })
+    console.log('[Playlists Page] Error page rendering:', { error, isForbidden, isAuthError })
     
     return (
       <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
@@ -140,7 +144,22 @@ export default async function PlaylistsPage() {
               <h1 className="text-2xl sm:text-3xl font-bold mb-4 text-red-500">Error</h1>
               <p className="text-gray-700 mb-6 text-base sm:text-lg">{error}</p>
               
-              {isForbidden ? (
+              {isAuthError ? (
+                <div className="flex flex-col items-center gap-4">
+                  <Link
+                    href="/api/auth/login"
+                    className="bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-full transition-colors inline-block"
+                  >
+                    Login with Spotify
+                  </Link>
+                  <Link
+                    href="/"
+                    className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded transition-colors text-sm"
+                  >
+                    Go to Home
+                  </Link>
+                </div>
+              ) : isForbidden ? (
                 <div className="flex flex-col items-center gap-4">
                   <form action="/api/auth/logout" method="POST" className="inline">
                     <button
