@@ -12,14 +12,15 @@ async function checkAuth() {
 export default async function Home({
   searchParams,
 }: {
-  searchParams?: Promise<{ error?: string }>
+  searchParams?: Promise<{ error?: string; skipRedirect?: string }>
 }) {
   const isAuthenticated = await checkAuth()
   const params = await searchParams
   const error = params?.error
+  const skipRedirect = params?.skipRedirect
 
-  // If authenticated, redirect to playlists
-  if (isAuthenticated && !error) {
+  // If authenticated, redirect to playlists (unless skipRedirect is set)
+  if (isAuthenticated && !error && !skipRedirect) {
     redirect('/playlists')
   }
 

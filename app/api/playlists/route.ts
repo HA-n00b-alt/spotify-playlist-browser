@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getPlaylists } from '@/lib/spotify'
 import { trackApiRequest, getCurrentUserId } from '@/lib/analytics'
 
-export async function GET() {
+export async function GET(request: Request) {
   const userId = await getCurrentUserId()
   let response: NextResponse
 
@@ -33,15 +33,18 @@ export async function GET() {
       return response
     }
     
-    // Handle rate limiting (429)
+    // Handle rate limiting (429) - redirect to rate-limit page
     if (error instanceof Error && (error.message.includes('Rate limit') || error.message.includes('429'))) {
       console.error('Rate limit error fetching playlists:', error)
-      response = NextResponse.json(
-        { error: 'Rate limit exceeded. Please try again in a moment.' },
-        { status: 429 }
-      )
       trackApiRequest(userId, '/api/playlists', 'GET', 429).catch(() => {})
-      return response
+      // Extract retryAfter from error message if available, or use 0
+      const retryAfterMatch = error.message.match(/retryAfter[:\s]+(\d+)/i)
+      const retryAfter = retryAfterMatch ? retryAfterMatch[1] : '0'
+      // Redirect to rate-limit page with endpoint and retryAfter info
+      const rateLimitUrl = new URL('/rate-limit', request.url)
+      rateLimitUrl.searchParams.set('endpoint', '/api/playlists')
+      rateLimitUrl.searchParams.set('retryAfter', retryAfter)
+      return NextResponse.redirect(rateLimitUrl)
     }
     
     console.error('Error fetching playlists:', error)

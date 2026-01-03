@@ -235,21 +235,25 @@ async function makeSpotifyRequest<T>(
 
   // Handle rate limiting (429) with retry logic
   if (response.status === 429) {
+    const retryAfter = response.headers.get('Retry-After')
+    const retryAfterSeconds = retryAfter ? parseInt(retryAfter, 10) : 0
+    
     if (retryCount >= maxRetries) {
       console.error('[Spotify API DEBUG] Rate limit exceeded: Maximum retries reached', {
         endpoint,
         retryCount,
         maxRetries,
+        retryAfter: retryAfterSeconds,
       })
-      throw new Error('Rate limit exceeded: Maximum retries reached')
+      // Include retryAfter in error message for rate-limit page
+      throw new Error(`Rate limit exceeded: Maximum retries reached. retryAfter: ${retryAfterSeconds}`)
     }
 
-    const retryAfter = response.headers.get('Retry-After')
-    const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : 1000 * (retryCount + 1)
+    const waitTime = retryAfterSeconds > 0 ? retryAfterSeconds * 1000 : 1000 * (retryCount + 1)
     
     console.warn('[Spotify API DEBUG] Rate limit hit (429). Retrying:', {
       endpoint,
-      retryAfter,
+      retryAfter: retryAfterSeconds,
       waitTime,
       attempt: retryCount + 1,
       maxRetries,

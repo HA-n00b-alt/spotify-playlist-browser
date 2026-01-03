@@ -52,8 +52,10 @@ export default async function PlaylistsPage() {
           : 'Please ensure the Spotify app has permission to access your playlists. You may need to re-authorize the app.'
         error = `Access forbidden. ${forbiddenMessage}`
       } else if (e.message.includes('Rate limit') || e.message.includes('429')) {
-        // Handle rate limiting (429) specifically
-        error = 'Spotify API rate limit exceeded. Please wait a moment and refresh the page.'
+        // Handle rate limiting (429) - redirect to rate-limit page
+        const retryAfterMatch = e.message.match(/retryAfter[:\s]+(\d+)/i)
+        const retryAfter = retryAfterMatch ? retryAfterMatch[1] : '0'
+        redirect(`/rate-limit?endpoint=/playlists&retryAfter=${retryAfter}`)
       } else {
         error = e.message
       }
