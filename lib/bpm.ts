@@ -1,6 +1,7 @@
 import { query } from './db'
 import { getTrack } from './spotify'
 import { GoogleAuth } from 'google-auth-library'
+import { isValidSpotifyTrackId } from './spotify-validation'
 
 interface PreviewUrlResult {
   url: string | null
@@ -578,6 +579,17 @@ export async function getBpmForSpotifyTrack(
   spotifyTrackId: string,
   request?: Request
 ): Promise<BpmResult> {
+  // Validate track ID format
+  if (!isValidSpotifyTrackId(spotifyTrackId)) {
+    const errorMessage = `Invalid Spotify track ID format: ${spotifyTrackId}`
+    console.error(`[BPM Module] ${errorMessage}`)
+    return {
+      bpm: null,
+      source: 'computed_failed',
+      error: errorMessage,
+    }
+  }
+  
   // Check in-flight computations to avoid duplicate work
   const cacheKey = spotifyTrackId
   if (inFlightComputations.has(cacheKey)) {

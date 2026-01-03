@@ -6,7 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import UserMenu from '../../components/UserMenu'
 import { ErrorBoundary } from '../../components/ErrorBoundary'
-import { TrackTableSkeleton } from '../../components/SkeletonLoader'
+import { TrackTableSkeleton, SkeletonLoader } from '../../components/SkeletonLoader'
 import type { 
   SpotifyTrack, 
   SpotifyPlaylistInfo, 
@@ -29,21 +29,6 @@ type PlaylistInfo = SpotifyPlaylistInfo
 interface PlaylistTracksPageProps {
   params: {
     id: string
-  }
-}
-  description: string | null
-  images: Array<{ url: string }>
-  owner: {
-    display_name: string
-    external_urls?: {
-      spotify: string
-    }
-  }
-  tracks?: {
-    total: number
-  }
-  external_urls: {
-    spotify: string
   }
 }
 
@@ -2461,6 +2446,13 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             } else {
                               errorMessage = 'BPM calculation failed. No preview audio available.'
                             }
+                          }
+                          
+                          // Make error messages more user-friendly
+                          if (errorMessage.includes('Invalid base62 id') || errorMessage.includes('base62')) {
+                            errorMessage = 'Invalid track ID format. This track may have been removed or is unavailable.'
+                          } else if (errorMessage.includes('Invalid Spotify track ID')) {
+                            errorMessage = 'Invalid track ID. This track may have been removed or is unavailable.'
                           }
                           setBpmDetails(prev => ({
                             ...prev,
