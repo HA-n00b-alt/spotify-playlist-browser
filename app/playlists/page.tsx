@@ -147,12 +147,14 @@ export default async function PlaylistsPage() {
                 </div>
               ) : (
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                  <button
-                    onClick={() => window.location.reload()}
-                    className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 px-6 rounded-full transition-colors"
-                  >
-                    Refresh Page
-                  </button>
+                  <form action="/playlists" method="GET" className="inline">
+                    <button
+                      type="submit"
+                      className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 px-6 rounded-full transition-colors w-full sm:w-auto"
+                    >
+                      Refresh Page
+                    </button>
+                  </form>
                   <Link
                     href="/"
                     className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 px-6 rounded-full transition-colors inline-block text-center"
@@ -245,12 +247,14 @@ export default async function PlaylistsPage() {
                   </svg>
                   Open Spotify
                 </a>
-                <button
-                  onClick={() => window.location.reload()}
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 px-6 rounded-full transition-colors"
-                >
-                  Refresh
-                </button>
+                <form action="/playlists" method="GET" className="inline">
+                  <button
+                    type="submit"
+                    className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 px-6 rounded-full transition-colors w-full sm:w-auto"
+                  >
+                    Refresh
+                  </button>
+                </form>
               </div>
             </div>
           </div>
