@@ -746,8 +746,95 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     e.preventDefault()
     e.stopPropagation()
     
-    // Left click - play preview (same as row click)
-    await handleTrackClick(track, e)
+    // Left click - play preview directly (bypass the link check in handleTrackClick)
+    // Get preview URL from DB only
+    let previewUrl = previewUrls[track.id] || null
+
+    // If no preview URL available in DB, try to fetch from BPM API (which will search and update DB)
+    if (!previewUrl && !loadingBpms.has(track.id)) {
+      try {
+        setLoadingBpms(prev => new Set(prev).add(track.id))
+        const res = await fetch(`/api/bpm?spotifyTrackId=${track.id}&country=${countryCode}`)
+        if (res.ok) {
+          const data = await res.json()
+          // Store the successful URL if found
+          if (data.successfulUrl) {
+            previewUrl = data.successfulUrl
+            setPreviewUrls(prev => ({
+              ...prev,
+              [track.id]: data.successfulUrl,
+            }))
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching preview URL:', error)
+      } finally {
+        setLoadingBpms(prev => {
+          const next = new Set(prev)
+          next.delete(track.id)
+          return next
+        })
+      }
+    }
+
+    // If we have a preview URL from DB, play it
+    if (previewUrl) {
+      // Stop any currently playing audio
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.currentTime = 0
+      }
+
+      // If clicking the same track that's playing, stop it
+      if (playingTrackId === track.id) {
+        setPlayingTrackId(null)
+        if (audioRef.current) {
+          audioRef.current.pause()
+          audioRef.current.currentTime = 0
+        }
+        return
+      }
+
+      // Play the preview
+      setPlayingTrackId(track.id)
+      
+      try {
+        // Load audio with caching and CORS handling
+        const audioUrl = await loadAudioWithCache(previewUrl)
+        const audio = new Audio(audioUrl)
+        audio.volume = 0.5
+        audio.crossOrigin = 'anonymous' // Enable CORS for cross-origin audio
+        audioRef.current = audio
+        
+        audio.play().catch((error) => {
+          console.error('Error playing preview:', error)
+          setPlayingTrackId(null)
+          audioRef.current = null
+          // If preview fails to play, open Spotify
+          if (track.external_urls?.spotify) {
+            window.open(track.external_urls.spotify, '_blank', 'noopener,noreferrer')
+          }
+        })
+
+        // When audio ends, reset playing state
+        audio.addEventListener('ended', () => {
+          setPlayingTrackId(null)
+          audioRef.current = null
+        })
+      } catch (error) {
+        console.error('Error loading audio:', error)
+        setPlayingTrackId(null)
+        // If preview fails to load, open Spotify
+        if (track.external_urls?.spotify) {
+          window.open(track.external_urls.spotify, '_blank', 'noopener,noreferrer')
+        }
+      }
+    } else {
+      // No preview available from DB, open Spotify
+      if (track.external_urls?.spotify) {
+        window.open(track.external_urls.spotify, '_blank', 'noopener,noreferrer')
+      }
+    }
   }
   
   /**
@@ -1075,6 +1162,18 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           <div className="mb-6 p-4 bg-gray-100 rounded-lg border border-gray-300 overflow-auto max-h-96 text-xs sm:text-sm">
             <h3 className="font-bold mb-2 text-base sm:text-lg">BPM Debug Information</h3>
             <div className="space-y-2">
+              {(() => {
+                const totalTracks = tracks.length
+                const songsInDb = tracks.filter(t => tracksInDb.has(t.id)).length
+                const tracksToSearch = totalTracks - songsInDb
+                return (
+                  <div className="mb-3 pb-3 border-b border-gray-300">
+                    <p><strong>Playlist:</strong> {totalTracks} songs</p>
+                    <p><strong>In DB:</strong> {songsInDb} songs (with BPM or N/A)</p>
+                    <p><strong>To search:</strong> {tracksToSearch} songs</p>
+                  </div>
+                )
+              })()}
               <p><strong>Total tracks:</strong> {tracks.length}</p>
               <p><strong>Tracks with BPM:</strong> {Object.values(trackBpms).filter(bpm => bpm !== null && bpm !== undefined).length}</p>
               <p><strong>Tracks loading:</strong> {loadingBpms.size}</p>
@@ -1282,16 +1381,15 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           
           // Check if processing is ongoing
           const isProcessing = tracksLoading > 0 || tracksRemainingToSearch > 0
+          // Check if we've started processing (have processed at least one track or are currently loading)
+          const hasStartedProcessing = tracksProcessedFromSearch > 0 || tracksLoading > 0
+          // Show progress if we have tracks to search (even if processing hasn't started yet, show 0 of X)
+          const shouldShowProgress = tracksToSearch > 0 && (isProcessing || hasStartedProcessing || bpmProcessingStartTime !== null)
 
           // Always show the indicator - never hide it
           return (
             <div className="mb-4 sm:mb-6 text-sm text-gray-600 space-y-1">
-              <div>
-                <span className="font-semibold">Playlist:</span> {totalTracks} songs |{' '}
-                <span className="font-semibold">In DB:</span> {songsInDb} songs (with BPM or N/A) |{' '}
-                <span className="font-semibold">To search:</span> {tracksToSearch} songs
-              </div>
-              {isProcessing ? (
+              {shouldShowProgress ? (
                 <div>
                   BPM information processing ongoing ({tracksProcessedFromSearch} of {tracksToSearch} tracks searched, {tracksRemainingToSearch} remaining){' '}
                   <button
