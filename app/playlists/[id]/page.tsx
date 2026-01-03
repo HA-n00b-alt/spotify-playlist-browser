@@ -584,16 +584,26 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const loadAudioWithCache = async (url: string): Promise<string> => {
     console.log('[Preview Debug] loadAudioWithCache called with URL:', url)
     
+    // Check if it's a Deezer URL (needs CORS proxy)
+    const isDeezer = url.includes('cdn-preview') || url.includes('deezer.com') || url.includes('e-cdn-preview') || url.includes('cdnt-preview')
+    console.log('[Preview Debug] URL type check:', { url, isDeezer })
+    
     // Check cache first
     if (audioCache.current.has(url)) {
       const cachedUrl = audioCache.current.get(url)!
-      console.log('[Preview Debug] Using cached audio URL:', cachedUrl)
-      return cachedUrl
+      console.log('[Preview Debug] Found cached URL:', cachedUrl)
+      
+      // If it's a Deezer URL, make sure we cached a blob URL, not the direct URL
+      if (isDeezer && !cachedUrl.startsWith('blob:')) {
+        console.log('[Preview Debug] Cached Deezer URL is not a blob, re-fetching through proxy')
+        // Remove the invalid cache entry
+        audioCache.current.delete(url)
+        // Fall through to fetch via proxy
+      } else {
+        console.log('[Preview Debug] Using cached audio URL:', cachedUrl)
+        return cachedUrl
+      }
     }
-    
-    // Check if it's a Deezer URL (needs CORS proxy)
-    const isDeezer = url.includes('cdn-preview') || url.includes('deezer.com') || url.includes('e-cdn-preview')
-    console.log('[Preview Debug] URL type check:', { url, isDeezer })
     
     try {
       if (isDeezer) {
@@ -622,10 +632,16 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       }
     } catch (error) {
       console.error('[Preview Debug] Error loading audio:', error)
-      // On error, still cache the original URL and let the browser try
-      console.log('[Preview Debug] Falling back to direct URL:', url)
-      audioCache.current.set(url, url)
-      return url
+      // On error, don't cache for Deezer (it will fail again)
+      // For non-Deezer, we can try direct URL
+      if (!isDeezer) {
+        console.log('[Preview Debug] Falling back to direct URL:', url)
+        audioCache.current.set(url, url)
+        return url
+      } else {
+        // For Deezer, throw the error so the caller can handle it
+        throw error
+      }
     }
   }
   
@@ -742,10 +758,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           })
           setPlayingTrackId(null)
           audioRef.current = null
-          // If preview fails to play, open Spotify
-          if (track.external_urls?.spotify) {
-            window.open(track.external_urls.spotify, '_blank', 'noopener,noreferrer')
-          }
         })
 
         // When audio ends, reset playing state
@@ -776,17 +788,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           trackName: track.name
         })
         setPlayingTrackId(null)
-        // If preview fails to load, open Spotify
-        if (track.external_urls?.spotify) {
-          window.open(track.external_urls.spotify, '_blank', 'noopener,noreferrer')
-        }
       }
     } else {
-      // No preview available from DB, open Spotify
+      // No preview available from DB
       console.log('[Preview Debug] handleTrackClick - No preview URL available for track:', track.name)
-      if (track.external_urls?.spotify) {
-        window.open(track.external_urls.spotify, '_blank', 'noopener,noreferrer')
-      }
     }
   }
 
@@ -878,10 +883,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           })
           setPlayingTrackId(null)
           audioRef.current = null
-          // If preview fails to play, open Spotify
-          if (track.external_urls?.spotify) {
-            window.open(track.external_urls.spotify, '_blank', 'noopener,noreferrer')
-          }
         })
 
         // When audio ends, reset playing state
@@ -912,17 +913,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           trackName: track.name
         })
         setPlayingTrackId(null)
-        // If preview fails to load, open Spotify
-        if (track.external_urls?.spotify) {
-          window.open(track.external_urls.spotify, '_blank', 'noopener,noreferrer')
-        }
       }
     } else {
-      // No preview available from DB, open Spotify
+      // No preview available from DB
       console.log('[Preview Debug] handleTrackTitleClick - No preview URL available for track:', track.name)
-      if (track.external_urls?.spotify) {
-        window.open(track.external_urls.spotify, '_blank', 'noopener,noreferrer')
-      }
     }
   }
   
