@@ -5,49 +5,32 @@ import type { MouseEvent } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import UserMenu from '../../components/UserMenu'
+import { ErrorBoundary } from '../../components/ErrorBoundary'
+import { TrackTableSkeleton } from '../../components/SkeletonLoader'
+import type { 
+  SpotifyTrack, 
+  SpotifyPlaylistInfo, 
+  SortField, 
+  SortDirection,
+  BpmResult,
+  BpmDetails
+} from '@/lib/types'
+import { 
+  AuthenticationError, 
+  RateLimitError, 
+  NetworkError,
+  SpotifyAPIError 
+} from '@/lib/errors'
 
-interface Track {
-  id: string
-  name: string
-  artists: Array<{
-    name: string
-    id?: string
-    external_urls?: {
-      spotify: string
-    }
-  }>
-  album: {
-    name: string
-    release_date: string
-    images: Array<{ url: string }>
-    id?: string
-    external_urls?: {
-      spotify: string
-    }
-  }
-  duration_ms: number
-  explicit: boolean
-  external_urls: {
-    spotify: string
-  }
-  preview_url?: string | null
-  added_at?: string
-  tempo?: number | null
-  popularity?: number
-}
+// Use shared types
+type Track = SpotifyTrack
+type PlaylistInfo = SpotifyPlaylistInfo
 
 interface PlaylistTracksPageProps {
   params: {
     id: string
   }
 }
-
-type SortField = 'name' | 'artists' | 'album' | 'release_date' | 'duration' | 'added_at' | 'tempo' | 'popularity'
-type SortDirection = 'asc' | 'desc'
-
-interface PlaylistInfo {
-  id: string
-  name: string
   description: string | null
   images: Array<{ url: string }>
   owner: {
@@ -1380,8 +1363,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <p className="text-xl text-gray-700">Loading tracks...</p>
+      <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="mb-6">
+            <SkeletonLoader variant="text" width="300px" height="32px" className="mb-2" />
+            <SkeletonLoader variant="text" width="200px" height="20px" />
+          </div>
+          <TrackTableSkeleton />
+        </div>
       </div>
     )
   }

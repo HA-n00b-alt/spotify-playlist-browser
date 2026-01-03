@@ -1,5 +1,12 @@
 import { cookies } from 'next/headers'
 import { query } from './db'
+import { 
+  AuthenticationError, 
+  RateLimitError, 
+  NetworkError,
+  SpotifyAPIError,
+  createErrorFromResponse 
+} from './errors'
 
 interface SpotifyError {
   error: {
@@ -187,7 +194,7 @@ async function makeSpotifyRequest<T>(
   if (!accessToken) {
     accessToken = await refreshAccessToken()
     if (!accessToken) {
-      throw new Error('Unauthorized')
+      throw new AuthenticationError('No access token available. Please log in again.')
     }
   }
 
@@ -257,7 +264,10 @@ async function makeSpotifyRequest<T>(
     }
     
     // If we've exceeded retries or no Retry-After header, throw error
-    throw new Error(`Rate limit exceeded. retryAfter: ${retryAfterSeconds}`)
+    throw new RateLimitError(
+      'Rate limit exceeded. Please try again later.',
+      retryAfterSeconds > 0 ? retryAfterSeconds : null
+    )
   }
 
   // Handle token expiration (401) with retry logic
@@ -268,7 +278,7 @@ async function makeSpotifyRequest<T>(
         retryCount,
         maxRetries,
       })
-      throw new Error('Unauthorized: Token refresh failed after maximum retries')
+      throw new AuthenticationError('Token refresh failed after maximum retries')
     }
 
     console.warn('[Spotify API DEBUG] Token expired (401). Refreshing token:', {
@@ -280,7 +290,7 @@ async function makeSpotifyRequest<T>(
     
     if (!accessToken) {
       console.error('[Spotify API DEBUG] Token refresh failed - no access token returned')
-      throw new Error('Unauthorized: Failed to refresh access token')
+      throw new AuthenticationError('Failed to refresh access token. Please log in again.')
     }
     
     console.log('[Spotify API DEBUG] Token refreshed successfully, retrying request')

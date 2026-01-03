@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import './globals.css'
 import PageViewTracker from './components/PageViewTracker'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 export const metadata: Metadata = {
   title: 'Spotify Playlist Browser',
@@ -40,9 +41,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="flex flex-col min-h-screen">
-        <PageViewTracker />
-        {children}
-        <SpeedInsights />
+        <ErrorBoundary>
+          <PageViewTracker />
+          {children}
+          <SpeedInsights />
+        </ErrorBoundary>
       </body>
     </html>
   )
