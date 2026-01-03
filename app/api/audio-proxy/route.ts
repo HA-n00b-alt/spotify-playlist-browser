@@ -17,17 +17,17 @@ export async function GET(request: Request) {
   try {
     console.log('[Audio Proxy Debug] Fetching audio from:', audioUrl)
     // Fetch the audio file from the source
-    // For Deezer, we need to preserve the original request headers and use proper user agent
+    // Try to match what Python requests library does (which the BPM service uses)
+    // Python requests typically sends minimal headers and lets the server handle it
     const response = await fetch(audioUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Referer': 'https://www.deezer.com/',
-        'Origin': 'https://www.deezer.com',
-        'Accept': 'audio/webm,audio/ogg,audio/ogg;codecs=opus,audio/mpeg,audio/mp4,audio/*;q=0.9,application/ogg;q=0.7,video/*;q=0.6,*/*;q=0.5',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Accept-Encoding': 'identity', // Don't compress, we need the raw audio
+        // Minimal headers - let the server handle the rest
+        // Python requests sends: User-Agent: python-requests/X.X.X, Accept: */*
+        'User-Agent': 'python-requests/2.31.0', // Match Python requests default
+        'Accept': '*/*', // Python requests default
       },
       redirect: 'follow',
+      // Don't send Referer/Origin - Python requests doesn't by default
     })
 
     console.log('[Audio Proxy Debug] Response status:', response.status, response.ok)

@@ -671,7 +671,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         audioCache.current.set(url, url)
         return url
       } else {
-        // For Deezer, throw the error so the caller can handle it
+        // For Deezer, the URL might be expired or blocked
+        // Clear any cached entry and throw the error
+        audioCache.current.delete(url)
+        console.error('[Preview Debug] Deezer URL failed, cleared from cache. URL may be expired:', url)
         throw error
       }
     }
@@ -936,6 +939,16 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             previewUrl,
             trackName: track.name
           })
+          
+          // If it's a Deezer URL that failed, clear it from previewUrls so we can try to refresh it
+          if (previewUrl && (previewUrl.includes('deezer.com') || previewUrl.includes('cdn-preview') || previewUrl.includes('cdnt-preview'))) {
+            console.log('[Preview Debug] Deezer preview failed, clearing from state to allow refresh')
+            setPreviewUrls(prev => {
+              const next = { ...prev }
+              delete next[track.id]
+              return next
+            })
+          }
         })
       } catch (error) {
         console.error('[Preview Debug] handleTrackTitleClick - Error loading audio:', error)

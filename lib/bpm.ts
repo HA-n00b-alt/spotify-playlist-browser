@@ -451,6 +451,13 @@ async function computeBpmFromService(previewUrl: string): Promise<{ bpm: number;
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 30000) // 30s timeout
   
+  console.log(`[BPM Module] Sending preview URL to BPM service:`, previewUrl)
+  console.log(`[BPM Module] URL details:`, {
+    isDeezer: previewUrl.includes('deezer') || previewUrl.includes('cdn-preview') || previewUrl.includes('cdnt-preview'),
+    hasHdnea: previewUrl.includes('hdnea'),
+    urlLength: previewUrl.length,
+  })
+  
   try {
     const response = await fetch(`${serviceUrl}/bpm`, {
       method: 'POST',
@@ -459,6 +466,8 @@ async function computeBpmFromService(previewUrl: string): Promise<{ bpm: number;
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ url: previewUrl }),
+      // Log the URL being sent to BPM service
+      // Note: This is the same URL that gets stored in successful_url in the database
       signal: controller.signal,
     })
     
