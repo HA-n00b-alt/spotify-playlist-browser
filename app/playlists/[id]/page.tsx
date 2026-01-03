@@ -1391,7 +1391,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             <div className="mb-4 sm:mb-6 text-sm text-gray-600 space-y-1">
               {shouldShowProgress ? (
                 <div>
-                  BPM information processing ongoing ({tracksProcessedFromSearch} of {tracksToSearch} tracks searched, {tracksRemainingToSearch} remaining){' '}
+                  BPM information processing ongoing ({tracksRemainingToSearch} remaining){' '}
                   <button
                     onClick={() => setShowBpmMoreInfo(true)}
                     className="text-blue-600 hover:text-blue-700 hover:underline"
@@ -1762,13 +1762,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       <SortIcon field="popularity" />
                     </div>
                   </th>
-                  <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 hidden sm:table-cell">Link</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {sortedTracks.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={10} className="px-4 py-8 text-center text-gray-500">
                       {(searchQuery || yearFrom || yearTo || bpmFrom || bpmTo) ? 'No tracks match your filters' : 'No tracks found'}
                     </td>
                   </tr>
@@ -1835,7 +1834,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           )}
                         </div>
                       </td>
-                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-700 text-xs sm:text-sm hidden md:table-cell" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-700 text-xs sm:text-sm hidden md:table-cell">
                         {track.artists.map((artist, index) => (
                           <span key={artist.id || index}>
                             {artist.external_urls?.spotify ? (
@@ -1854,7 +1853,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           </span>
                         ))}
                       </td>
-                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-700 text-xs sm:text-sm hidden lg:table-cell" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-700 text-xs sm:text-sm hidden lg:table-cell">
                         {track.album.external_urls?.spotify ? (
                           <a
                             href={track.album.external_urls.spotify}
