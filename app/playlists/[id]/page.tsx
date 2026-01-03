@@ -101,6 +101,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [isCached, setIsCached] = useState(false)
   const [cachedAt, setCachedAt] = useState<Date | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [showCacheModal, setShowCacheModal] = useState(false)
+  const [refreshDone, setRefreshDone] = useState(false)
 
   // Cleanup audio on unmount
   useEffect(() => {
@@ -921,43 +923,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           </div>
         )}
 
-        
-        {/* Cached Data Message */}
-        {isCached && cachedAt && (
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              <span className="text-sm text-blue-800">
-                Using cached data from {cachedAt.toLocaleString()}
-              </span>
-            </div>
-            <button
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              className="text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-1.5 px-4 rounded transition-colors flex items-center gap-2"
-            >
-              {isRefreshing ? (
-                <>
-                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Refreshing...
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Refresh
-                </>
-              )}
-            </button>
-          </div>
-        )}
-
         {playlistInfo && (
           <div className="mb-6 bg-white rounded-lg border border-gray-200 shadow-sm p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
@@ -1230,6 +1195,18 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             )}
           </div>
         </div>
+
+        {/* Cached Data Indicator - Discrete, just before table */}
+        {isCached && cachedAt && (
+          <div className="mb-2 text-right">
+            <button
+              onClick={() => setShowCacheModal(true)}
+              className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
+            >
+              Using cached data
+            </button>
+          </div>
+        )}
 
         {/* Mobile Card View */}
         <div className="block sm:hidden space-y-3">
@@ -1895,6 +1872,81 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Cache Info Modal */}
+      {showCacheModal && isCached && cachedAt && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={refreshDone ? handleDone : undefined}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-md w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Cached Data</h2>
+              {!isRefreshing && !refreshDone && (
+                <button
+                  onClick={() => setShowCacheModal(false)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+            
+            <div className="space-y-4 text-sm text-gray-700">
+              <p>
+                This playlist is using cached data to reduce API calls to Spotify.
+              </p>
+              
+              <p>
+                The playlist content should be the same as the current version because we use Spotify's <strong>snapshot_id</strong> to verify that the playlist hasn't changed since it was cached.
+              </p>
+              
+              <div className="pt-2 border-t border-gray-200">
+                <p className="text-xs text-gray-500">
+                  <strong>Retrieved on:</strong> {cachedAt.toLocaleString()}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              {refreshDone ? (
+                <button
+                  onClick={handleDone}
+                  className="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded transition-colors"
+                >
+                  Done
+                </button>
+              ) : (
+                <button
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-400 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded transition-colors flex items-center gap-2"
+                >
+                  {isRefreshing ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Refreshing...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Refresh
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>
