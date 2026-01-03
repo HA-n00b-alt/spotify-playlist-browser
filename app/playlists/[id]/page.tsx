@@ -103,6 +103,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [showCacheModal, setShowCacheModal] = useState(false)
   const [refreshDone, setRefreshDone] = useState(false)
+  const [contextMenu, setContextMenu] = useState<{
+    x: number
+    y: number
+    spotifyUrl: string
+    spotifyUri: string
+  } | null>(null)
 
   // Cleanup audio on unmount
   useEffect(() => {
@@ -113,6 +119,28 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       }
     }
   }, [])
+  
+  // Close context menu on click outside or escape key
+  useEffect(() => {
+    const handleClickOutside = () => setContextMenu(null)
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setContextMenu(null)
+    }
+    
+    if (contextMenu) {
+      document.addEventListener('click', handleClickOutside)
+      document.addEventListener('keydown', handleEscape)
+      // Prevent default browser context menu
+      const handleContextMenu = (e: MouseEvent) => e.preventDefault()
+      document.addEventListener('contextmenu', handleContextMenu)
+      
+      return () => {
+        document.removeEventListener('click', handleClickOutside)
+        document.removeEventListener('keydown', handleEscape)
+        document.removeEventListener('contextmenu', handleContextMenu)
+      }
+    }
+  }, [contextMenu])
 
   useEffect(() => {
     async function fetchPlaylistInfo() {
@@ -191,6 +219,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   // Function to refresh playlist data
   const handleRefresh = async () => {
     setIsRefreshing(true)
+    setRefreshDone(false)
     try {
       // Fetch both playlist and tracks with refresh=true
       const [playlistRes, tracksRes] = await Promise.all([
@@ -201,19 +230,45 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       if (playlistRes.ok) {
         const playlist = await playlistRes.json()
         setPlaylistInfo(playlist)
-        setIsCached(playlistRes.headers.get('X-Cached') === 'true')
+        const wasCached = playlistRes.headers.get('X-Cached') === 'true'
+        setIsCached(wasCached)
+        if (wasCached) {
+          const cachedAtStr = playlistRes.headers.get('X-Cached-At')
+          if (cachedAtStr) {
+            setCachedAt(new Date(cachedAtStr))
+          }
+        } else {
+          setCachedAt(null)
+        }
       }
       
       if (tracksRes.ok) {
         const tracks = await tracksRes.json()
         setTracks(tracks)
-        setIsCached(tracksRes.headers.get('X-Cached') === 'true')
+        const wasCached = tracksRes.headers.get('X-Cached') === 'true'
+        setIsCached(wasCached)
+        if (wasCached) {
+          const cachedAtStr = tracksRes.headers.get('X-Cached-At')
+          if (cachedAtStr) {
+            setCachedAt(new Date(cachedAtStr))
+          }
+        } else {
+          setCachedAt(null)
+        }
       }
+      
+      setRefreshDone(true)
     } catch (e) {
       console.error('Error refreshing playlist:', e)
+      setRefreshDone(true)
     } finally {
       setIsRefreshing(false)
     }
+  }
+  
+  const handleDone = () => {
+    setShowCacheModal(false)
+    setRefreshDone(false)
   }
 
   // Fetch country code on mount
@@ -592,14 +647,97 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   }
 
   /**
-   * Handle track title click - open Spotify track in web player
+   * Handle track title click - play preview (same as row click)
    */
-  const handleTrackTitleClick = (e: MouseEvent<HTMLAnchorElement>, track: Track) => {
+  const handleTrackTitleClick = async (e: MouseEvent<HTMLAnchorElement>, track: Track) => {
     e.preventDefault()
     e.stopPropagation()
     
+    // Left click - play preview (same as row click)
+    await handleTrackClick(track, e)
+  }
+  
+  /**
+   * Handle track context menu (right-click)
+   */
+  const handleTrackContextMenu = (e: MouseEvent, track: Track) => {
+    e.preventDefault()
+    e.stopPropagation()
     if (track.external_urls?.spotify) {
-      window.open(track.external_urls.spotify, '_blank', 'noopener,noreferrer')
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        spotifyUrl: track.external_urls.spotify,
+        spotifyUri: `spotify:track:${track.id}`,
+      })
+    }
+  }
+  
+  /**
+   * Open Spotify app using URI scheme
+   */
+  const openSpotifyApp = (uri: string, webUrl: string) => {
+    window.location.href = uri
+    setTimeout(() => {
+      window.open(webUrl, '_blank', 'noopener,noreferrer')
+    }, 500)
+  }
+  
+  /**
+   * Handle artist click - open in Spotify app
+   */
+  const handleArtistClick = (e: MouseEvent<HTMLAnchorElement>, artist: { id?: string; external_urls?: { spotify: string } }) => {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    // Left click - open in Spotify app
+    if (artist.external_urls?.spotify && artist.id) {
+      openSpotifyApp(`spotify:artist:${artist.id}`, artist.external_urls.spotify)
+    }
+  }
+  
+  /**
+   * Handle artist context menu (right-click)
+   */
+  const handleArtistContextMenu = (e: MouseEvent, artist: { id?: string; external_urls?: { spotify: string } }) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (artist.external_urls?.spotify && artist.id) {
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        spotifyUrl: artist.external_urls.spotify,
+        spotifyUri: `spotify:artist:${artist.id}`,
+      })
+    }
+  }
+  
+  /**
+   * Handle album click - open in Spotify app
+   */
+  const handleAlbumClick = (e: MouseEvent<HTMLAnchorElement>, album: { id?: string; external_urls?: { spotify: string } }) => {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    // Left click - open in Spotify app
+    if (album.external_urls?.spotify && album.id) {
+      openSpotifyApp(`spotify:album:${album.id}`, album.external_urls.spotify)
+    }
+  }
+  
+  /**
+   * Handle album context menu (right-click)
+   */
+  const handleAlbumContextMenu = (e: MouseEvent, album: { id?: string; external_urls?: { spotify: string } }) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (album.external_urls?.spotify && album.id) {
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        spotifyUrl: album.external_urls.spotify,
+        spotifyUri: `spotify:album:${album.id}`,
+      })
     }
   }
 
@@ -1197,16 +1335,21 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         </div>
 
         {/* Cached Data Indicator - Discrete, just before table */}
-        {isCached && cachedAt && (
-          <div className="mb-2 text-right">
-            <button
-              onClick={() => setShowCacheModal(true)}
-              className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
-            >
-              Using cached data
-            </button>
+        <div className="mb-2 flex items-center justify-between">
+          {isCached && cachedAt && (
+            <div className="text-right">
+              <button
+                onClick={() => setShowCacheModal(true)}
+                className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
+              >
+                Using cached data
+              </button>
+            </div>
+          )}
+          <div className="text-xs text-gray-500 ml-auto">
+            Right click on a track for play options
           </div>
-        )}
+        </div>
 
         {/* Mobile Card View */}
         <div className="block sm:hidden space-y-3">
@@ -1250,7 +1393,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             href="#"
                             className="font-medium text-gray-900 text-sm truncate hover:text-green-600 hover:underline block"
                             onClick={(e) => handleTrackTitleClick(e, track)}
-                            title="Open in Spotify app"
+                            onContextMenu={(e) => handleTrackContextMenu(e, track)}
+                            title="Click to play preview"
                           >
                             {track.name}
                             {track.explicit && (
@@ -1263,10 +1407,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             {artist.external_urls?.spotify ? (
                               <a
                                 href={artist.external_urls.spotify}
-                                target="_blank"
-                                rel="noopener noreferrer"
                                 className="text-green-600 hover:text-green-700"
-                                onClick={(e) => e.stopPropagation()}
+                                onClick={(e) => handleArtistClick(e, artist)}
+                                onContextMenu={(e) => handleArtistContextMenu(e, artist)}
                               >
                                 {artist.name}
                               </a>
@@ -1281,10 +1424,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         {track.album.external_urls?.spotify ? (
                           <a
                             href={track.album.external_urls.spotify}
-                            target="_blank"
-                            rel="noopener noreferrer"
                             className="text-green-600 hover:text-green-700"
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={(e) => handleAlbumClick(e, track.album)}
+                            onContextMenu={(e) => handleAlbumContextMenu(e, track.album)}
                           >
                             {track.album.name}
                           </a>
@@ -1439,6 +1581,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           : 'hover:bg-gray-50'
                       }`}
                       onClick={(e) => handleTrackClick(track, e)}
+                      onContextMenu={(e) => {
+                        e.preventDefault()
+                        handleTrackClick(track, e)
+                      }}
                     >
                       <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-500 text-xs sm:text-sm">
                         <div className="flex items-center justify-center">
@@ -1472,7 +1618,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             href="#"
                             className="font-medium text-gray-900 text-xs sm:text-sm hover:text-green-600 hover:underline"
                             onClick={(e) => handleTrackTitleClick(e, track)}
-                            title="Open in Spotify app"
+                            onContextMenu={(e) => handleTrackContextMenu(e, track)}
+                            title="Click to play preview"
                           >
                             {track.name}
                           </a>
@@ -1487,9 +1634,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             {artist.external_urls?.spotify ? (
                               <a
                                 href={artist.external_urls.spotify}
-                                target="_blank"
-                                rel="noopener noreferrer"
                                 className="text-green-600 hover:text-green-700 hover:underline"
+                                onClick={(e) => handleArtistClick(e, artist)}
+                                onContextMenu={(e) => handleArtistContextMenu(e, artist)}
                               >
                                 {artist.name}
                               </a>
@@ -1504,9 +1651,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         {track.album.external_urls?.spotify ? (
                           <a
                             href={track.album.external_urls.spotify}
-                            target="_blank"
-                            rel="noopener noreferrer"
                             className="text-green-600 hover:text-green-700 hover:underline"
+                            onClick={(e) => handleAlbumClick(e, track.album)}
+                            onContextMenu={(e) => handleAlbumContextMenu(e, track.album)}
                           >
                             {track.album.name}
                           </a>
@@ -1949,6 +2096,44 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               )}
             </div>
           </div>
+        </div>
+      )}
+      
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          className="fixed bg-white border border-gray-300 rounded-lg shadow-lg z-50 py-1 min-w-[180px]"
+          style={{
+            left: `${contextMenu.x}px`,
+            top: `${contextMenu.y}px`,
+          }}
+          onClick={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <button
+            onClick={() => {
+              openSpotifyApp(contextMenu.spotifyUri, contextMenu.spotifyUrl)
+              setContextMenu(null)
+            }}
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" />
+            </svg>
+            Open in Spotify app
+          </button>
+          <button
+            onClick={() => {
+              window.open(contextMenu.spotifyUrl, '_blank', 'noopener,noreferrer')
+              setContextMenu(null)
+            }}
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+            </svg>
+            Open in web player
+          </button>
         </div>
       )}
       
