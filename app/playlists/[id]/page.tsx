@@ -612,35 +612,24 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   }
 
   /**
-   * Fetch preview URL from Deezer API
+   * Fetch preview URL from Deezer API (via our proxy to avoid CORS)
    */
   const fetchDeezerPreviewUrl = async (apiUrl: string): Promise<string | null> => {
     try {
-      console.log('[Preview Debug] Fetching Deezer API to get preview URL:', apiUrl)
-      const response = await fetch(apiUrl)
+      console.log('[Preview Debug] Fetching Deezer API via proxy to get preview URL:', apiUrl)
+      const proxyUrl = `/api/deezer-preview?url=${encodeURIComponent(apiUrl)}`
+      const response = await fetch(proxyUrl)
       if (!response.ok) {
-        console.error('[Preview Debug] Deezer API fetch failed:', response.status)
+        const errorText = await response.text()
+        console.error('[Preview Debug] Deezer API proxy fetch failed:', response.status, errorText)
         return null
       }
       const data = await response.json()
-      console.log('[Preview Debug] Deezer API response:', data)
+      console.log('[Preview Debug] Deezer API proxy response:', data)
       
-      // Parse the response to find preview URL
-      if (data.data && Array.isArray(data.data) && data.data.length > 0) {
-        const track = data.data[0]
-        if (track.preview) {
-          console.log('[Preview Debug] Found Deezer preview URL:', track.preview)
-          return track.preview
-        }
-      }
-      
-      // Also check for album tracklist
-      if (data.tracks && data.tracks.data && Array.isArray(data.tracks.data) && data.tracks.data.length > 0) {
-        const tracksWithPreview = data.tracks.data.filter((t: any) => t.preview)
-        if (tracksWithPreview.length > 0 && tracksWithPreview[0].preview) {
-          console.log('[Preview Debug] Found Deezer preview URL from album tracklist:', tracksWithPreview[0].preview)
-          return tracksWithPreview[0].preview
-        }
+      if (data.previewUrl) {
+        console.log('[Preview Debug] Found Deezer preview URL:', data.previewUrl)
+        return data.previewUrl
       }
       
       console.log('[Preview Debug] No preview URL found in Deezer API response')
