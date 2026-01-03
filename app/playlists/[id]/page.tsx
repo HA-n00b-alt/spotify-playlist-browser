@@ -98,6 +98,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [showBpmInfo, setShowBpmInfo] = useState(false)
   const [playingTrackId, setPlayingTrackId] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const audioCache = useRef<Map<string, string>>(new Map()) // Cache audio blobs by URL
   const [isCached, setIsCached] = useState(false)
   const [cachedAt, setCachedAt] = useState<Date | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -110,13 +111,33 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     spotifyUri: string
   } | null>(null)
 
-  // Cleanup audio on unmount
+  // Cleanup audio on unmount and clear cache on page unload
   useEffect(() => {
+    const handleBeforeUnload = () => {
+      // Clear all blob URLs from cache
+      audioCache.current.forEach((blobUrl) => {
+        if (blobUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(blobUrl)
+        }
+      })
+      audioCache.current.clear()
+    }
+    
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    
     return () => {
       if (audioRef.current) {
         audioRef.current.pause()
         audioRef.current = null
       }
+      // Cleanup blob URLs
+      audioCache.current.forEach((blobUrl) => {
+        if (blobUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(blobUrl)
+        }
+      })
+      audioCache.current.clear()
+      window.removeEventListener('beforeunload', handleBeforeUnload)
     }
   }, [])
   
@@ -558,6 +579,65 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   }
 
   /**
+   * Load audio with CORS support and caching
+   */
+  const loadAudioWithCache = async (url: string): Promise<string> => {
+    // Check cache first
+    if (audioCache.current.has(url)) {
+      return audioCache.current.get(url)!
+    }
+    
+    // Check if it's a Deezer URL (needs CORS proxy)
+    const isDeezer = url.includes('cdn-preview') || url.includes('deezer.com') || url.includes('e-cdn-preview')
+    
+    try {
+      if (isDeezer) {
+        // For Deezer, always use proxy to handle CORS
+        const proxyUrl = `/api/audio-proxy?url=${encodeURIComponent(url)}`
+        const response = await fetch(proxyUrl)
+        if (!response.ok) {
+          throw new Error('Failed to fetch audio from proxy')
+        }
+        const blob = await response.blob()
+        const blobUrl = URL.createObjectURL(blob)
+        audioCache.current.set(url, blobUrl)
+        return blobUrl
+      } else {
+        // For iTunes and other sources, use direct URL
+        // Cache the URL itself
+        audioCache.current.set(url, url)
+        return url
+      }
+    } catch (error) {
+      console.error('Error loading audio:', error)
+      // On error, still cache the original URL and let the browser try
+      audioCache.current.set(url, url)
+      return url
+    }
+  }
+  
+  /**
+   * Check if track has preview available
+   */
+  const hasPreview = (trackId: string): boolean => {
+    const url = previewUrls[trackId]
+    return url !== null && url !== undefined && url !== ''
+  }
+  
+  /**
+   * Get preview tooltip text
+   */
+  const getPreviewTooltip = (trackId: string): string => {
+    if (loadingBpms.has(trackId)) {
+      return 'Loading preview...'
+    }
+    if (hasPreview(trackId)) {
+      return 'Click to play preview'
+    }
+    return 'Preview not available'
+  }
+  
+  /**
    * Handle track row click - play preview if available from DB, otherwise trigger search
    * Only uses preview URLs from DB (iTunes/Deezer), never Spotify's preview_url
    */
@@ -619,25 +699,38 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
       // Play the preview
       setPlayingTrackId(track.id)
-      const audio = new Audio(previewUrl)
-      audio.volume = 0.5
-      audioRef.current = audio
       
-      audio.play().catch((error) => {
-        console.error('Error playing preview:', error)
+      try {
+        // Load audio with caching and CORS handling
+        const audioUrl = await loadAudioWithCache(previewUrl)
+        const audio = new Audio(audioUrl)
+        audio.volume = 0.5
+        audio.crossOrigin = 'anonymous' // Enable CORS for cross-origin audio
+        audioRef.current = audio
+        
+        audio.play().catch((error) => {
+          console.error('Error playing preview:', error)
+          setPlayingTrackId(null)
+          audioRef.current = null
+          // If preview fails to play, open Spotify
+          if (track.external_urls?.spotify) {
+            window.open(track.external_urls.spotify, '_blank', 'noopener,noreferrer')
+          }
+        })
+
+        // When audio ends, reset playing state
+        audio.addEventListener('ended', () => {
+          setPlayingTrackId(null)
+          audioRef.current = null
+        })
+      } catch (error) {
+        console.error('Error loading audio:', error)
         setPlayingTrackId(null)
-        audioRef.current = null
-        // If preview fails to play, open Spotify
+        // If preview fails to load, open Spotify
         if (track.external_urls?.spotify) {
           window.open(track.external_urls.spotify, '_blank', 'noopener,noreferrer')
         }
-      })
-
-      // When audio ends, reset playing state
-      audio.addEventListener('ended', () => {
-        setPlayingTrackId(null)
-        audioRef.current = null
-      })
+      }
     } else {
       // No preview available from DB, open Spotify
       if (track.external_urls?.spotify) {
@@ -1361,7 +1454,17 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   ? 'border-green-500 bg-green-50'
                   : 'border-gray-200 hover:bg-gray-50'
               }`}
-              onClick={(e) => handleTrackClick(track, e)}
+              onClick={(e) => {
+                // Only handle left click
+                if (e.button === 0 || !e.button) {
+                  handleTrackClick(track, e)
+                }
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                handleTrackContextMenu(e, track)
+              }}
+              title={getPreviewTooltip(track.id)}
             >
               <div className="flex gap-3">
                 <div className="text-gray-500 text-sm font-medium w-6 flex-shrink-0 pt-1 flex items-center justify-center">
@@ -1394,7 +1497,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             className="font-medium text-gray-900 text-sm truncate hover:text-green-600 hover:underline block"
                             onClick={(e) => handleTrackTitleClick(e, track)}
                             onContextMenu={(e) => handleTrackContextMenu(e, track)}
-                            title="Click to play preview"
+                            title={getPreviewTooltip(track.id)}
                           >
                             {track.name}
                             {track.explicit && (
@@ -1580,11 +1683,17 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           ? 'bg-green-50 hover:bg-green-100'
                           : 'hover:bg-gray-50'
                       }`}
-                      onClick={(e) => handleTrackClick(track, e)}
+                      onClick={(e) => {
+                        // Only handle left click
+                        if (e.button === 0 || !e.button) {
+                          handleTrackClick(track, e)
+                        }
+                      }}
                       onContextMenu={(e) => {
                         e.preventDefault()
-                        handleTrackClick(track, e)
+                        handleTrackContextMenu(e, track)
                       }}
+                      title={getPreviewTooltip(track.id)}
                     >
                       <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-500 text-xs sm:text-sm">
                         <div className="flex items-center justify-center">
@@ -1619,7 +1728,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             className="font-medium text-gray-900 text-xs sm:text-sm hover:text-green-600 hover:underline"
                             onClick={(e) => handleTrackTitleClick(e, track)}
                             onContextMenu={(e) => handleTrackContextMenu(e, track)}
-                            title="Click to play preview"
+                            title={getPreviewTooltip(track.id)}
                           >
                             {track.name}
                           </a>
@@ -2115,11 +2224,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               openSpotifyApp(contextMenu.spotifyUri, contextMenu.spotifyUrl)
               setContextMenu(null)
             }}
-            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
           >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" />
-            </svg>
             Open in Spotify app
           </button>
           <button
@@ -2127,11 +2233,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               window.open(contextMenu.spotifyUrl, '_blank', 'noopener,noreferrer')
               setContextMenu(null)
             }}
-            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
           >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-            </svg>
             Open in web player
           </button>
         </div>
