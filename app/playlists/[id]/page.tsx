@@ -582,35 +582,48 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
    * Load audio with CORS support and caching
    */
   const loadAudioWithCache = async (url: string): Promise<string> => {
+    console.log('[Preview Debug] loadAudioWithCache called with URL:', url)
+    
     // Check cache first
     if (audioCache.current.has(url)) {
-      return audioCache.current.get(url)!
+      const cachedUrl = audioCache.current.get(url)!
+      console.log('[Preview Debug] Using cached audio URL:', cachedUrl)
+      return cachedUrl
     }
     
     // Check if it's a Deezer URL (needs CORS proxy)
     const isDeezer = url.includes('cdn-preview') || url.includes('deezer.com') || url.includes('e-cdn-preview')
+    console.log('[Preview Debug] URL type check:', { url, isDeezer })
     
     try {
       if (isDeezer) {
         // For Deezer, always use proxy to handle CORS
         const proxyUrl = `/api/audio-proxy?url=${encodeURIComponent(url)}`
+        console.log('[Preview Debug] Fetching Deezer audio via proxy:', proxyUrl)
         const response = await fetch(proxyUrl)
+        console.log('[Preview Debug] Proxy response status:', response.status, response.ok)
         if (!response.ok) {
-          throw new Error('Failed to fetch audio from proxy')
+          const errorText = await response.text()
+          console.error('[Preview Debug] Proxy fetch failed:', response.status, errorText)
+          throw new Error(`Failed to fetch audio from proxy: ${response.status} ${errorText}`)
         }
         const blob = await response.blob()
+        console.log('[Preview Debug] Blob created:', { size: blob.size, type: blob.type })
         const blobUrl = URL.createObjectURL(blob)
+        console.log('[Preview Debug] Blob URL created:', blobUrl)
         audioCache.current.set(url, blobUrl)
         return blobUrl
       } else {
         // For iTunes and other sources, use direct URL
         // Cache the URL itself
+        console.log('[Preview Debug] Using direct URL (non-Deezer):', url)
         audioCache.current.set(url, url)
         return url
       }
     } catch (error) {
-      console.error('Error loading audio:', error)
+      console.error('[Preview Debug] Error loading audio:', error)
       // On error, still cache the original URL and let the browser try
+      console.log('[Preview Debug] Falling back to direct URL:', url)
       audioCache.current.set(url, url)
       return url
     }
@@ -681,6 +694,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
     // If we have a preview URL from DB, play it
     if (previewUrl) {
+      console.log('[Preview Debug] handleTrackClick - Playing preview for track:', track.name, 'URL:', previewUrl)
+      
       // Stop any currently playing audio
       if (audioRef.current) {
         audioRef.current.pause()
@@ -689,6 +704,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
       // If clicking the same track that's playing, stop it
       if (playingTrackId === track.id) {
+        console.log('[Preview Debug] handleTrackClick - Stopping already playing track')
         setPlayingTrackId(null)
         if (audioRef.current) {
           audioRef.current.pause()
@@ -702,14 +718,28 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       
       try {
         // Load audio with caching and CORS handling
+        console.log('[Preview Debug] handleTrackClick - Loading audio with cache...')
         const audioUrl = await loadAudioWithCache(previewUrl)
+        console.log('[Preview Debug] handleTrackClick - Audio URL loaded:', audioUrl)
+        
         const audio = new Audio(audioUrl)
         audio.volume = 0.5
         audio.crossOrigin = 'anonymous' // Enable CORS for cross-origin audio
         audioRef.current = audio
         
-        audio.play().catch((error) => {
-          console.error('Error playing preview:', error)
+        console.log('[Preview Debug] handleTrackClick - Audio element created, attempting to play...')
+        audio.play().then(() => {
+          console.log('[Preview Debug] handleTrackClick - Audio play() succeeded')
+        }).catch((error) => {
+          console.error('[Preview Debug] handleTrackClick - Error playing preview:', error)
+          console.error('[Preview Debug] handleTrackClick - Error details:', {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+            audioUrl,
+            previewUrl,
+            trackName: track.name
+          })
           setPlayingTrackId(null)
           audioRef.current = null
           // If preview fails to play, open Spotify
@@ -720,11 +750,31 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
         // When audio ends, reset playing state
         audio.addEventListener('ended', () => {
+          console.log('[Preview Debug] handleTrackClick - Audio ended')
           setPlayingTrackId(null)
           audioRef.current = null
         })
+        
+        // Add error event listener for more details
+        audio.addEventListener('error', (e) => {
+          console.error('[Preview Debug] handleTrackClick - Audio error event:', {
+            error: e,
+            errorCode: audio.error?.code,
+            errorMessage: audio.error?.message,
+            networkState: audio.networkState,
+            readyState: audio.readyState,
+            src: audio.src,
+            previewUrl,
+            trackName: track.name
+          })
+        })
       } catch (error) {
-        console.error('Error loading audio:', error)
+        console.error('[Preview Debug] handleTrackClick - Error loading audio:', error)
+        console.error('[Preview Debug] handleTrackClick - Error details:', {
+          error,
+          previewUrl,
+          trackName: track.name
+        })
         setPlayingTrackId(null)
         // If preview fails to load, open Spotify
         if (track.external_urls?.spotify) {
@@ -733,6 +783,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       }
     } else {
       // No preview available from DB, open Spotify
+      console.log('[Preview Debug] handleTrackClick - No preview URL available for track:', track.name)
       if (track.external_urls?.spotify) {
         window.open(track.external_urls.spotify, '_blank', 'noopener,noreferrer')
       }
@@ -779,6 +830,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
     // If we have a preview URL from DB, play it
     if (previewUrl) {
+      console.log('[Preview Debug] handleTrackTitleClick - Playing preview for track:', track.name, 'URL:', previewUrl)
+      
       // Stop any currently playing audio
       if (audioRef.current) {
         audioRef.current.pause()
@@ -787,6 +840,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
       // If clicking the same track that's playing, stop it
       if (playingTrackId === track.id) {
+        console.log('[Preview Debug] handleTrackTitleClick - Stopping already playing track')
         setPlayingTrackId(null)
         if (audioRef.current) {
           audioRef.current.pause()
@@ -800,14 +854,28 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       
       try {
         // Load audio with caching and CORS handling
+        console.log('[Preview Debug] handleTrackTitleClick - Loading audio with cache...')
         const audioUrl = await loadAudioWithCache(previewUrl)
+        console.log('[Preview Debug] handleTrackTitleClick - Audio URL loaded:', audioUrl)
+        
         const audio = new Audio(audioUrl)
         audio.volume = 0.5
         audio.crossOrigin = 'anonymous' // Enable CORS for cross-origin audio
         audioRef.current = audio
         
-        audio.play().catch((error) => {
-          console.error('Error playing preview:', error)
+        console.log('[Preview Debug] handleTrackTitleClick - Audio element created, attempting to play...')
+        audio.play().then(() => {
+          console.log('[Preview Debug] handleTrackTitleClick - Audio play() succeeded')
+        }).catch((error) => {
+          console.error('[Preview Debug] handleTrackTitleClick - Error playing preview:', error)
+          console.error('[Preview Debug] handleTrackTitleClick - Error details:', {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+            audioUrl,
+            previewUrl,
+            trackName: track.name
+          })
           setPlayingTrackId(null)
           audioRef.current = null
           // If preview fails to play, open Spotify
@@ -818,11 +886,31 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
         // When audio ends, reset playing state
         audio.addEventListener('ended', () => {
+          console.log('[Preview Debug] handleTrackTitleClick - Audio ended')
           setPlayingTrackId(null)
           audioRef.current = null
         })
+        
+        // Add error event listener for more details
+        audio.addEventListener('error', (e) => {
+          console.error('[Preview Debug] handleTrackTitleClick - Audio error event:', {
+            error: e,
+            errorCode: audio.error?.code,
+            errorMessage: audio.error?.message,
+            networkState: audio.networkState,
+            readyState: audio.readyState,
+            src: audio.src,
+            previewUrl,
+            trackName: track.name
+          })
+        })
       } catch (error) {
-        console.error('Error loading audio:', error)
+        console.error('[Preview Debug] handleTrackTitleClick - Error loading audio:', error)
+        console.error('[Preview Debug] handleTrackTitleClick - Error details:', {
+          error,
+          previewUrl,
+          trackName: track.name
+        })
         setPlayingTrackId(null)
         // If preview fails to load, open Spotify
         if (track.external_urls?.spotify) {
@@ -831,6 +919,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       }
     } else {
       // No preview available from DB, open Spotify
+      console.log('[Preview Debug] handleTrackTitleClick - No preview URL available for track:', track.name)
       if (track.external_urls?.spotify) {
         window.open(track.external_urls.spotify, '_blank', 'noopener,noreferrer')
       }
