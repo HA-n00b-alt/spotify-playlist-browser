@@ -1,8 +1,5 @@
-import { neon, neonConfig } from '@neondatabase/serverless'
+import { neon } from '@neondatabase/serverless'
 import { Pool } from 'pg'
-
-// Configure Neon to use fetch (required for Edge runtime)
-neonConfig.fetchConnectionCache = true
 
 // Get database URLs from environment
 const DATABASE_URL = process.env.DATABASE_URL

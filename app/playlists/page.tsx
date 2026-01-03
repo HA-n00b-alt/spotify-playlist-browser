@@ -40,7 +40,16 @@ export default async function PlaylistsPage() {
   try {
     playlists = await getPlaylists() as Playlist[]
   } catch (e) {
-    error = e instanceof Error ? e.message : 'An error occurred'
+    if (e instanceof Error) {
+      // Handle rate limiting (429) specifically
+      if (e.message.includes('Rate limit') || e.message.includes('429')) {
+        error = 'Spotify API rate limit exceeded. Please wait a moment and refresh the page.'
+      } else {
+        error = e.message
+      }
+    } else {
+      error = 'An error occurred'
+    }
   }
 
   if (error === 'Unauthorized') {

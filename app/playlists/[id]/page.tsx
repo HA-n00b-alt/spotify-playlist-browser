@@ -861,11 +861,13 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           const tracksLoading = loadingBpms.size
           
           // Tracks that were NOT in DB but have been processed in this session (have a result, not loading)
+          // X = number of tracks from "to search" that have been processed
           const tracksProcessedFromSearch = tracks.filter(t => 
             !tracksInDb.has(t.id) && trackBpms[t.id] !== undefined && !loadingBpms.has(t.id)
           ).length
           
-          // Remaining tracks to search (tracks not in DB that haven't been processed yet)
+          // Y = total songs minus in DB (tracksToSearch)
+          // Z = Y - X (remaining to search)
           const tracksRemainingToSearch = tracksToSearch - tracksProcessedFromSearch
           
           // Tracks with BPM value (not null)
