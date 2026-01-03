@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 import './globals.css'
 import PageViewTracker from './components/PageViewTracker'
 
@@ -41,6 +42,7 @@ export default function RootLayout({
       <body className="flex flex-col min-h-screen">
         <PageViewTracker />
         {children}
+        <SpeedInsights />
       </body>
     </html>
   )
