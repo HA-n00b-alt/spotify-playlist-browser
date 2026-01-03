@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers'
+import { query } from './db'
 
 interface SpotifyError {
   error: {
@@ -233,20 +234,29 @@ async function makeSpotifyRequest<T>(
     url: response.url,
   })
 
-  // Handle rate limiting (429) - redirect to rate-limit page immediately
-  // Client-side rate-limit page will handle retries to avoid Vercel timeout
+  // Handle rate limiting (429) - wait for Retry-After before retrying
   if (response.status === 429) {
     const retryAfter = response.headers.get('Retry-After')
     const retryAfterSeconds = retryAfter ? parseInt(retryAfter, 10) : 0
     
-    console.warn('[Spotify API DEBUG] Rate limit hit (429). Redirecting to rate-limit page:', {
+    console.warn('[Spotify API DEBUG] Rate limit hit (429). Waiting before retry:', {
       endpoint,
       retryAfter: retryAfterSeconds,
       retryCount,
     })
     
-    // Throw immediately to trigger redirect to rate-limit page
-    // Include retryAfter in error message for rate-limit page
+    // If we haven't exceeded max retries, wait and retry
+    if (retryCount < maxRetries && retryAfterSeconds > 0) {
+      const waitTime = retryAfterSeconds * 1000 // Convert to milliseconds
+      console.log(`[Spotify API DEBUG] Waiting ${retryAfterSeconds} seconds before retry...`)
+      await new Promise(resolve => setTimeout(resolve, waitTime))
+      
+      // Retry the request after waiting
+      console.log('[Spotify API DEBUG] Retrying request after rate limit wait')
+      return makeSpotifyRequest<T>(endpoint, options, retryCount + 1)
+    }
+    
+    // If we've exceeded retries or no Retry-After header, throw error
     throw new Error(`Rate limit exceeded. retryAfter: ${retryAfterSeconds}`)
   }
 
@@ -403,29 +413,156 @@ export async function getPlaylists(): Promise<any[]> {
   return playlistsWithFollowers
 }
 
-export async function getPlaylist(playlistId: string): Promise<any> {
-  return await makeSpotifyRequest<any>(`/playlists/${playlistId}`)
+interface PlaylistCacheRecord {
+  id: number
+  playlist_id: string
+  snapshot_id: string
+  playlist_data: any
+  tracks_data: any
+  cached_at: Date
+  updated_at: Date
 }
 
-export async function getTrack(trackId: string): Promise<any> {
-  return await makeSpotifyRequest<any>(`/tracks/${trackId}`)
+/**
+ * Check if playlist is cached and matches current snapshot_id
+ */
+async function getCachedPlaylist(playlistId: string): Promise<{
+  playlist: any
+  tracks: any[]
+  snapshotId: string
+} | null> {
+  try {
+    const results = await query<PlaylistCacheRecord>(
+      `SELECT playlist_id, snapshot_id, playlist_data, tracks_data 
+       FROM playlist_cache 
+       WHERE playlist_id = $1`,
+      [playlistId]
+    )
+    
+    if (results.length > 0) {
+      const cached = results[0]
+      return {
+        playlist: cached.playlist_data,
+        tracks: cached.tracks_data,
+        snapshotId: cached.snapshot_id,
+      }
+    }
+    return null
+  } catch (error) {
+    console.error('[Spotify Cache] Error fetching cached playlist:', error)
+    return null
+  }
 }
 
-export async function getPlaylistTracks(playlistId: string): Promise<any[]> {
-  // Use pagination helper to fetch all tracks
+/**
+ * Store playlist in cache
+ */
+async function cachePlaylist(
+  playlistId: string,
+  snapshotId: string,
+  playlistData: any,
+  tracksData: any[]
+): Promise<void> {
+  try {
+    await query(
+      `INSERT INTO playlist_cache (playlist_id, snapshot_id, playlist_data, tracks_data, updated_at)
+       VALUES ($1, $2, $3::jsonb, $4::jsonb, NOW())
+       ON CONFLICT (playlist_id) DO UPDATE SET
+         snapshot_id = EXCLUDED.snapshot_id,
+         playlist_data = EXCLUDED.playlist_data,
+         tracks_data = EXCLUDED.tracks_data,
+         updated_at = NOW()`,
+      [playlistId, snapshotId, JSON.stringify(playlistData), JSON.stringify(tracksData)]
+    )
+    console.log(`[Spotify Cache] Cached playlist ${playlistId} with snapshot ${snapshotId}`)
+  } catch (error) {
+    console.error('[Spotify Cache] Error caching playlist:', error)
+    // Don't throw - caching is optional
+  }
+}
+
+export async function getPlaylist(playlistId: string, useCache = true): Promise<any> {
+  // Check cache first if enabled
+  if (useCache) {
+    const cached = await getCachedPlaylist(playlistId)
+    if (cached) {
+      // Verify snapshot_id is still current by making a minimal API call
+      try {
+        // Create a temporary request function that doesn't use cache for verification
+        const currentPlaylist = await makeSpotifyRequest<any>(`/playlists/${playlistId}?fields=snapshot_id`)
+        if (currentPlaylist.snapshot_id === cached.snapshotId) {
+          console.log(`[Spotify Cache] Using cached playlist ${playlistId} (snapshot matches)`)
+          return cached.playlist
+        } else {
+          console.log(`[Spotify Cache] Playlist ${playlistId} snapshot changed, fetching fresh data`)
+        }
+      } catch (error) {
+        // If API call fails, use cached data as fallback
+        console.warn(`[Spotify Cache] Failed to verify snapshot, using cached data:`, error)
+        return cached.playlist
+      }
+    }
+  }
+  
+  // Fetch fresh data from API
+  const playlist = await makeSpotifyRequest<any>(`/playlists/${playlistId}`)
+  
+  // Cache the result if we have a snapshot_id (only if useCache is true)
+  if (playlist.snapshot_id && useCache) {
+    // Fetch tracks separately to cache them too (don't use cache when fetching for caching)
+    const tracks = await getPlaylistTracksInternal(playlistId)
+    await cachePlaylist(playlistId, playlist.snapshot_id, playlist, tracks)
+  }
+  
+  return playlist
+}
+
+/**
+ * Internal function to fetch tracks without cache check (used when caching)
+ */
+async function getPlaylistTracksInternal(playlistId: string): Promise<any[]> {
   const allItems = await paginateSpotify<{
     added_at: string
     track: any
   }>(`/playlists/${playlistId}/tracks?limit=50`)
 
-  // Map items to include added_at with track data
   const tracksWithMetadata = allItems
-    .filter((item) => item.track) // Filter out null tracks
+    .filter((item) => item.track)
     .map((item) => ({
       ...item.track,
       added_at: item.added_at,
     }))
 
   return tracksWithMetadata
+}
+
+export async function getTrack(trackId: string): Promise<any> {
+  return await makeSpotifyRequest<any>(`/tracks/${trackId}`)
+}
+
+export async function getPlaylistTracks(playlistId: string, useCache = true): Promise<any[]> {
+  // Check cache first if enabled
+  if (useCache) {
+    const cached = await getCachedPlaylist(playlistId)
+    if (cached) {
+      // Verify snapshot_id is still current
+      try {
+        const currentPlaylist = await makeSpotifyRequest<any>(`/playlists/${playlistId}?fields=snapshot_id`)
+        if (currentPlaylist.snapshot_id === cached.snapshotId) {
+          console.log(`[Spotify Cache] Using cached tracks for playlist ${playlistId}`)
+          return cached.tracks
+        } else {
+          console.log(`[Spotify Cache] Playlist ${playlistId} snapshot changed, fetching fresh tracks`)
+        }
+      } catch (error) {
+        // If API call fails, use cached data as fallback
+        console.warn(`[Spotify Cache] Failed to verify snapshot, using cached tracks:`, error)
+        return cached.tracks
+      }
+    }
+  }
+  
+  // Fetch fresh tracks
+  return await getPlaylistTracksInternal(playlistId)
 }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import type { MouseEvent } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -74,6 +74,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [showBpmDebug, setShowBpmDebug] = useState(false)
   const [bpmDebugInfo, setBpmDebugInfo] = useState<Record<string, any>>({})
   const [bpmDetails, setBpmDetails] = useState<Record<string, { source?: string; error?: string; upc?: string }>>({})
+  const [previewUrls, setPreviewUrls] = useState<Record<string, string | null>>({}) // Store successful preview URLs from DB
   const [showBpmModal, setShowBpmModal] = useState(false)
   const [selectedBpmTrack, setSelectedBpmTrack] = useState<Track | null>(null)
   const [bpmProcessingStartTime, setBpmProcessingStartTime] = useState<number | null>(null)
@@ -95,6 +96,21 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [includeHalfDoubleBpm, setIncludeHalfDoubleBpm] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
   const [showBpmInfo, setShowBpmInfo] = useState(false)
+  const [playingTrackId, setPlayingTrackId] = useState<string | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const [isCached, setIsCached] = useState(false)
+  const [cachedAt, setCachedAt] = useState<Date | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current = null
+      }
+    }
+  }, [])
 
   useEffect(() => {
     async function fetchPlaylistInfo() {
@@ -103,6 +119,18 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         if (res.ok) {
           const playlist = await res.json()
           setPlaylistInfo(playlist)
+          
+          // Check if data is cached
+          const cached = res.headers.get('X-Cached') === 'true'
+          setIsCached(cached)
+          if (cached) {
+            const cachedAtStr = res.headers.get('X-Cached-At')
+            if (cachedAtStr) {
+              setCachedAt(new Date(cachedAtStr))
+            }
+          } else {
+            setCachedAt(null)
+          }
         }
       } catch (e) {
         console.error('Error fetching playlist info:', e)
@@ -138,6 +166,16 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         }
         const data = await res.json()
         setTracks(data)
+        
+        // Check if tracks are cached (may differ from playlist cache)
+        const cached = res.headers.get('X-Cached') === 'true'
+        if (cached) {
+          setIsCached(true)
+          const cachedAtStr = res.headers.get('X-Cached-At')
+          if (cachedAtStr) {
+            setCachedAt(new Date(cachedAtStr))
+          }
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'An error occurred')
       } finally {
@@ -147,6 +185,34 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
     fetchTracks()
   }, [params.id])
+  
+  // Function to refresh playlist data
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    try {
+      // Fetch both playlist and tracks with refresh=true
+      const [playlistRes, tracksRes] = await Promise.all([
+        fetch(`/api/playlists/${params.id}?refresh=true`),
+        fetch(`/api/playlists/${params.id}/tracks?refresh=true`),
+      ])
+      
+      if (playlistRes.ok) {
+        const playlist = await playlistRes.json()
+        setPlaylistInfo(playlist)
+        setIsCached(playlistRes.headers.get('X-Cached') === 'true')
+      }
+      
+      if (tracksRes.ok) {
+        const tracks = await tracksRes.json()
+        setTracks(tracks)
+        setIsCached(tracksRes.headers.get('X-Cached') === 'true')
+      }
+    } catch (e) {
+      console.error('Error refreshing playlist:', e)
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
 
   // Fetch country code on mount
   useEffect(() => {
@@ -260,10 +326,15 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
         const newBpms: Record<string, number | null> = {}
         const newDetails: Record<string, { source?: string; error?: string; upc?: string }> = {}
+        const newPreviewUrls: Record<string, string | null> = {}
 
         for (const [trackId, result] of Object.entries(data.results || {})) {
           const r = result as any
           newBpms[trackId] = r.bpm
+          // Store successful preview URL from DB
+          if (r.successfulUrl) {
+            newPreviewUrls[trackId] = r.successfulUrl
+          }
           // Always store details if available (source, error, upc, urls)
           if (r.source || r.error || r.upc || r.urlsTried || r.successfulUrl) {
             newDetails[trackId] = {
@@ -287,6 +358,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
         setTrackBpms(newBpms)
         setBpmDetails(newDetails)
+        setPreviewUrls(prev => ({ ...prev, ...newPreviewUrls }))
 
         // Track which tracks are in DB: if spotify_track_id exists in track_bpm_cache table
         // The batch API returns results with source/error/bpmRaw for tracks in DB
@@ -357,6 +429,13 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 ...prev,
                 [track.id]: data.bpm,
               }))
+              // Store successful preview URL from DB
+              if (data.successfulUrl) {
+                setPreviewUrls(prev => ({
+                  ...prev,
+                  [track.id]: data.successfulUrl,
+                }))
+              }
               setBpmDetails(prev => ({
                 ...prev,
                 [track.id]: {
@@ -422,11 +501,91 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   }
 
   /**
-   * Handle track row click - open Spotify track in web player
+   * Handle track row click - play preview if available from DB, otherwise trigger search
+   * Only uses preview URLs from DB (iTunes/Deezer), never Spotify's preview_url
    */
-  const handleTrackClick = (track: Track) => {
-    if (track.external_urls?.spotify) {
-      window.open(track.external_urls.spotify, '_blank', 'noopener,noreferrer')
+  const handleTrackClick = async (track: Track, event?: MouseEvent) => {
+    // If clicking on a link or button, don't handle the row click
+    if (event?.target instanceof HTMLElement) {
+      if (event.target.closest('a') || event.target.closest('button')) {
+        return
+      }
+    }
+
+    // Get preview URL from DB only
+    let previewUrl = previewUrls[track.id] || null
+
+    // If no preview URL available in DB, try to fetch from BPM API (which will search and update DB)
+    if (!previewUrl && !loadingBpms.has(track.id)) {
+      try {
+        setLoadingBpms(prev => new Set(prev).add(track.id))
+        const res = await fetch(`/api/bpm?spotifyTrackId=${track.id}&country=${countryCode}`)
+        if (res.ok) {
+          const data = await res.json()
+          // Store the successful URL if found
+          if (data.successfulUrl) {
+            previewUrl = data.successfulUrl
+            setPreviewUrls(prev => ({
+              ...prev,
+              [track.id]: data.successfulUrl,
+            }))
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching preview URL:', error)
+      } finally {
+        setLoadingBpms(prev => {
+          const next = new Set(prev)
+          next.delete(track.id)
+          return next
+        })
+      }
+    }
+
+    // If we have a preview URL from DB, play it
+    if (previewUrl) {
+      // Stop any currently playing audio
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.currentTime = 0
+      }
+
+      // If clicking the same track that's playing, stop it
+      if (playingTrackId === track.id) {
+        setPlayingTrackId(null)
+        if (audioRef.current) {
+          audioRef.current.pause()
+          audioRef.current.currentTime = 0
+        }
+        return
+      }
+
+      // Play the preview
+      setPlayingTrackId(track.id)
+      const audio = new Audio(previewUrl)
+      audio.volume = 0.5
+      audioRef.current = audio
+      
+      audio.play().catch((error) => {
+        console.error('Error playing preview:', error)
+        setPlayingTrackId(null)
+        audioRef.current = null
+        // If preview fails to play, open Spotify
+        if (track.external_urls?.spotify) {
+          window.open(track.external_urls.spotify, '_blank', 'noopener,noreferrer')
+        }
+      })
+
+      // When audio ends, reset playing state
+      audio.addEventListener('ended', () => {
+        setPlayingTrackId(null)
+        audioRef.current = null
+      })
+    } else {
+      // No preview available from DB, open Spotify
+      if (track.external_urls?.spotify) {
+        window.open(track.external_urls.spotify, '_blank', 'noopener,noreferrer')
+      }
     }
   }
 
@@ -763,6 +922,42 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         )}
 
         
+        {/* Cached Data Message */}
+        {isCached && cachedAt && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              <span className="text-sm text-blue-800">
+                Using cached data from {cachedAt.toLocaleString()}
+              </span>
+            </div>
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-1.5 px-4 rounded transition-colors flex items-center gap-2"
+            >
+              {isRefreshing ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Refreshing...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Refresh
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
         {playlistInfo && (
           <div className="mb-6 bg-white rounded-lg border border-gray-200 shadow-sm p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
@@ -1041,12 +1236,22 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           {sortedTracks.map((track, index) => (
             <div
               key={track.id}
-              className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 cursor-pointer hover:bg-gray-50 transition-colors"
-              onClick={() => handleTrackClick(track)}
+              className={`bg-white rounded-lg border shadow-sm p-4 cursor-pointer transition-colors ${
+                playingTrackId === track.id
+                  ? 'border-green-500 bg-green-50'
+                  : 'border-gray-200 hover:bg-gray-50'
+              }`}
+              onClick={(e) => handleTrackClick(track, e)}
             >
               <div className="flex gap-3">
-                <div className="text-gray-500 text-sm font-medium w-6 flex-shrink-0 pt-1">
-                  {index + 1}
+                <div className="text-gray-500 text-sm font-medium w-6 flex-shrink-0 pt-1 flex items-center justify-center">
+                  {playingTrackId === track.id ? (
+                    <svg className="w-4 h-4 text-green-600 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  ) : (
+                    index + 1
+                  )}
                 </div>
                 {track.album.images && track.album.images[0] ? (
                   <Image
@@ -1251,11 +1456,23 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   sortedTracks.map((track, index) => (
                     <tr 
                       key={track.id} 
-                      className="hover:bg-gray-50 transition-colors cursor-pointer"
-                      onClick={() => handleTrackClick(track)}
+                      className={`transition-colors cursor-pointer ${
+                        playingTrackId === track.id
+                          ? 'bg-green-50 hover:bg-green-100'
+                          : 'hover:bg-gray-50'
+                      }`}
+                      onClick={(e) => handleTrackClick(track, e)}
                     >
                       <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-500 text-xs sm:text-sm">
-                        {index + 1}
+                        <div className="flex items-center justify-center">
+                          {playingTrackId === track.id ? (
+                            <svg className="w-4 h-4 text-green-600 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                            </svg>
+                          ) : (
+                            index + 1
+                          )}
+                        </div>
                       </td>
                       <td className="px-3 lg:px-4 py-2 lg:py-3">
                         {track.album.images && track.album.images[0] ? (
@@ -1585,6 +1802,13 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       const res = await fetch(`/api/bpm?spotifyTrackId=${selectedBpmTrack.id}&country=${countryCode}`)
                       if (res.ok) {
                         const data = await res.json()
+                        // Store successful preview URL from DB
+                        if (data.successfulUrl) {
+                          setPreviewUrls(prev => ({
+                            ...prev,
+                            [selectedBpmTrack.id]: data.successfulUrl,
+                          }))
+                        }
                         // Mark track as in DB (now it has an entry, whether BPM or N/A)
                         setTracksInDb(prev => new Set(prev).add(selectedBpmTrack.id))
                         if (data.bpm != null) {
