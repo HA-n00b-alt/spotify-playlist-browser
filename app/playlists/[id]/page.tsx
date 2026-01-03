@@ -1391,7 +1391,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             <div className="mb-4 sm:mb-6 text-sm text-gray-600 space-y-1">
               {shouldShowProgress ? (
                 <div>
-                  BPM information processing ongoing ({tracksRemainingToSearch} remaining){' '}
+                  BPM information processing ongoing ({tracksToSearch} remaining){' '}
                   <button
                     onClick={() => setShowBpmMoreInfo(true)}
                     className="text-blue-600 hover:text-blue-700 hover:underline"
