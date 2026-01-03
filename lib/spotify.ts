@@ -233,35 +233,21 @@ async function makeSpotifyRequest<T>(
     url: response.url,
   })
 
-  // Handle rate limiting (429) with retry logic
+  // Handle rate limiting (429) - redirect to rate-limit page immediately
+  // Client-side rate-limit page will handle retries to avoid Vercel timeout
   if (response.status === 429) {
     const retryAfter = response.headers.get('Retry-After')
     const retryAfterSeconds = retryAfter ? parseInt(retryAfter, 10) : 0
     
-    if (retryCount >= maxRetries) {
-      console.error('[Spotify API DEBUG] Rate limit exceeded: Maximum retries reached', {
-        endpoint,
-        retryCount,
-        maxRetries,
-        retryAfter: retryAfterSeconds,
-      })
-      // Include retryAfter in error message for rate-limit page
-      throw new Error(`Rate limit exceeded: Maximum retries reached. retryAfter: ${retryAfterSeconds}`)
-    }
-
-    const waitTime = retryAfterSeconds > 0 ? retryAfterSeconds * 1000 : 1000 * (retryCount + 1)
-    
-    console.warn('[Spotify API DEBUG] Rate limit hit (429). Retrying:', {
+    console.warn('[Spotify API DEBUG] Rate limit hit (429). Redirecting to rate-limit page:', {
       endpoint,
       retryAfter: retryAfterSeconds,
-      waitTime,
-      attempt: retryCount + 1,
-      maxRetries,
+      retryCount,
     })
-    await new Promise((resolve) => setTimeout(resolve, waitTime))
     
-    // Retry the request
-    return makeSpotifyRequest<T>(endpoint, options, retryCount + 1)
+    // Throw immediately to trigger redirect to rate-limit page
+    // Include retryAfter in error message for rate-limit page
+    throw new Error(`Rate limit exceeded. retryAfter: ${retryAfterSeconds}`)
   }
 
   // Handle token expiration (401) with retry logic
