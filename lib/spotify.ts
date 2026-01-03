@@ -292,35 +292,83 @@ async function makeSpotifyRequest<T>(
   if (response.status === 403) {
     let errorMessage = 'Insufficient permissions. Please ensure the app has access to your playlists.'
     let errorBody: any = null
+    let responseText = ''
+    
     try {
-      errorBody = await response.json()
-      // TEMPORARY DEBUG: Log full error response
-      console.error('[Spotify API DEBUG] 403 Forbidden - Full Error Response:', JSON.stringify(errorBody, null, 2))
-      if (errorBody.error?.message && errorBody.error.message !== 'Forbidden') {
-        errorMessage = errorBody.error.message
+      // Try to get response as text first to see what we're dealing with
+      responseText = await response.clone().text()
+      // TEMPORARY DEBUG: Log raw response
+      console.error('[Spotify API DEBUG] 403 Forbidden - Raw Response Text:', responseText.substring(0, 500))
+      
+      // Try to parse as JSON
+      try {
+        errorBody = JSON.parse(responseText)
+        // TEMPORARY DEBUG: Log parsed JSON error response
+        console.error('[Spotify API DEBUG] 403 Forbidden - Parsed JSON Response:', JSON.stringify(errorBody, null, 2))
+        if (errorBody.error?.message && errorBody.error.message !== 'Forbidden') {
+          errorMessage = errorBody.error.message
+        }
+      } catch (jsonError) {
+        // Not JSON, try to extract meaningful message from HTML/text
+        console.error('[Spotify API DEBUG] 403 Forbidden - Response is not JSON, trying to extract message from text')
+        
+        // Try to find error message in HTML/text response
+        const htmlMatch = responseText.match(/<title[^>]*>([^<]+)<\/title>/i) || 
+                         responseText.match(/<h1[^>]*>([^<]+)<\/h1>/i) ||
+                         responseText.match(/<p[^>]*>([^<]+)<\/p>/i)
+        
+        if (htmlMatch && htmlMatch[1]) {
+          errorMessage = htmlMatch[1].trim()
+        } else if (responseText.length > 0 && responseText.length < 200) {
+          // If it's short text (not HTML), use it directly
+          errorMessage = responseText.trim()
+        }
       }
     } catch (e) {
-      // If JSON parsing fails, use default message
-      console.error('[Spotify API DEBUG] 403 Forbidden - Failed to parse error response:', e)
+      // If text parsing fails, use default message
+      console.error('[Spotify API DEBUG] 403 Forbidden - Failed to read response:', e)
     }
+    
     console.error('[Spotify API] 403 Forbidden:', errorMessage)
     throw new Error(`Forbidden: ${errorMessage}`)
   }
 
   if (!response.ok) {
     let errorBody: any = null
+    let responseText = ''
+    
     try {
-      errorBody = await response.json()
-      // TEMPORARY DEBUG: Log full error response
-      console.error('[Spotify API DEBUG] Error Response:', {
-        status: response.status,
-        statusText: response.statusText,
-        body: JSON.stringify(errorBody, null, 2),
-      })
+      // Try to get response as text first
+      responseText = await response.clone().text()
+      // TEMPORARY DEBUG: Log raw response
+      console.error('[Spotify API DEBUG] Error Response - Raw Text:', responseText.substring(0, 500))
+      
+      // Try to parse as JSON
+      try {
+        errorBody = JSON.parse(responseText)
+        // TEMPORARY DEBUG: Log parsed JSON error response
+        console.error('[Spotify API DEBUG] Error Response - Parsed JSON:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: JSON.stringify(errorBody, null, 2),
+        })
+      } catch (jsonError) {
+        // Not JSON, create error object from text
+        console.error('[Spotify API DEBUG] Error Response - Not JSON, using text as message')
+        errorBody = { 
+          error: { 
+            status: response.status, 
+            message: responseText.length > 0 && responseText.length < 200 
+              ? responseText.trim() 
+              : response.statusText 
+          } 
+        }
+      }
     } catch (e) {
       errorBody = { error: { status: response.status, message: response.statusText } }
-      console.error('[Spotify API DEBUG] Error - Failed to parse error response:', e)
+      console.error('[Spotify API DEBUG] Error - Failed to read response:', e)
     }
+    
     throw new Error(
       errorBody.error?.message || `Spotify API error: ${response.status} ${response.statusText}`
     )

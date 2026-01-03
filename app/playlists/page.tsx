@@ -95,7 +95,10 @@ export default async function PlaylistsPage() {
   }
 
   if (error) {
-    const isForbidden = error.includes('Forbidden') || error.includes('403')
+    // Check if error is a 403/Forbidden error (case insensitive)
+    const isForbidden = error.toLowerCase().includes('forbidden') || error.includes('403')
+    
+    console.log('[Playlists Page] Error page rendering:', { error, isForbidden })
     
     return (
       <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
@@ -135,31 +138,15 @@ export default async function PlaylistsPage() {
               <p className="text-gray-700 mb-6 text-base sm:text-lg">{error}</p>
               
               {isForbidden ? (
-                <div className="space-y-4">
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-                    <p className="text-sm text-yellow-800">
-                      <strong>What to do:</strong> If you recently revoked app permissions in Spotify, you&apos;ll need to re-authorize. 
-                      You can also log out and start fresh.
-                    </p>
-                  </div>
-                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                    <form action="/api/auth/reauthorize" method="POST" className="inline">
-                      <button
-                        type="submit"
-                        className="bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-full transition-colors w-full sm:w-auto"
-                      >
-                        Re-authorize with Spotify
-                      </button>
-                    </form>
-                    <form action="/api/auth/logout" method="POST" className="inline">
-                      <button
-                        type="submit"
-                        className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 px-6 rounded-full transition-colors w-full sm:w-auto"
-                      >
-                        Logout & Start Over
-                      </button>
-                    </form>
-                  </div>
+                <div className="flex flex-col items-center gap-4">
+                  <form action="/api/auth/logout" method="POST" className="inline">
+                    <button
+                      type="submit"
+                      className="bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-full transition-colors"
+                    >
+                      Reauthorize
+                    </button>
+                  </form>
                 </div>
               ) : (
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
