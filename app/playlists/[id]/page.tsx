@@ -7,6 +7,8 @@ import Image from 'next/image'
 import UserMenu from '../../components/UserMenu'
 import { ErrorBoundary } from '../../components/ErrorBoundary'
 import { TrackTableSkeleton, SkeletonLoader } from '../../components/SkeletonLoader'
+import { usePlaylist, useRefreshPlaylist } from '../../hooks/usePlaylist'
+import { usePlaylistTracks, useRefreshPlaylistTracks } from '../../hooks/usePlaylistTracks'
 import type { 
   SpotifyTrack, 
   SpotifyPlaylistInfo, 
@@ -33,10 +35,24 @@ interface PlaylistTracksPageProps {
 }
 
 export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) {
-  const [tracks, setTracks] = useState<Track[]>([])
-  const [playlistInfo, setPlaylistInfo] = useState<PlaylistInfo | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  // Use React Query for playlist and tracks data
+  const { 
+    data: playlistInfo, 
+    isLoading: isLoadingPlaylist, 
+    error: playlistError 
+  } = usePlaylist(params.id)
+  
+  const { 
+    data: tracks = [], 
+    isLoading: isLoadingTracks, 
+    error: tracksError 
+  } = usePlaylistTracks(params.id)
+  
+  const refreshPlaylist = useRefreshPlaylist(params.id)
+  const refreshTracks = useRefreshPlaylistTracks(params.id)
+  
+  const loading = isLoadingPlaylist || isLoadingTracks
+  const error = playlistError?.message || tracksError?.message || null
   const [trackBpms, setTrackBpms] = useState<Record<string, number | null>>({})
   const [loadingBpms, setLoadingBpms] = useState<Set<string>>(new Set())
   const [showBpmDebug, setShowBpmDebug] = useState(false)
@@ -66,9 +82,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [showBpmInfo, setShowBpmInfo] = useState(false)
   const [playingTrackId, setPlayingTrackId] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const authErrorHandledRef = useRef(false) // Prevent infinite loops on auth errors
   const audioCache = useRef<Map<string, string>>(new Map()) // Cache audio blobs by URL
-  const [isCached, setIsCached] = useState(false)
-  const [cachedAt, setCachedAt] = useState<Date | null>(null)
+  
+  // Get cache info from React Query data
+  const isCached = playlistInfo?.is_cached ?? false
+  const cachedAt = playlistInfo?.cached_at ?? null
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [showCacheModal, setShowCacheModal] = useState(false)
   const [refreshDone, setRefreshDone] = useState(false)
@@ -131,31 +150,22 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     }
   }, [contextMenu])
 
+  // Handle auth errors and redirect
   useEffect(() => {
-    async function fetchPlaylistInfo() {
-      try {
-        const res = await fetch(`/api/playlists/${params.id}`)
-        if (res.ok) {
-          const playlist = await res.json()
-          setPlaylistInfo(playlist)
-          
-          // Check if data is cached
-          const cached = res.headers.get('X-Cached') === 'true'
-          setIsCached(cached)
-          if (cached) {
-            const cachedAtStr = res.headers.get('X-Cached-At')
-            if (cachedAtStr) {
-              setCachedAt(new Date(cachedAtStr))
-            }
-          } else {
-            setCachedAt(null)
-          }
-        }
-      } catch (e) {
-        console.error('Error fetching playlist info:', e)
-      }
+    if (authErrorHandledRef.current) {
+      return
     }
 
+    if (error && (error.includes('Unauthorized') || error.includes('No access token') || error.includes('Please log in'))) {
+      authErrorHandledRef.current = true
+      setTimeout(() => {
+        window.location.href = '/api/auth/login'
+      }, 1000)
+    }
+  }, [error])
+
+  // Check admin status
+  useEffect(() => {
     async function checkAdmin() {
       try {
         const res = await fetch('/api/auth/is-admin')
@@ -168,90 +178,24 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       }
     }
 
-    fetchPlaylistInfo()
     checkAdmin()
-  }, [params.id])
-
-  useEffect(() => {
-    async function fetchTracks() {
-      try {
-        const res = await fetch(`/api/playlists/${params.id}/tracks`)
-        if (!res.ok) {
-          if (res.status === 401) {
-            setError('Unauthorized - Please log in')
-            return
-          }
-          throw new Error('Failed to fetch tracks')
-        }
-        const data = await res.json()
-        setTracks(data)
-        
-        // Check if tracks are cached (may differ from playlist cache)
-        const cached = res.headers.get('X-Cached') === 'true'
-        if (cached) {
-          setIsCached(true)
-          const cachedAtStr = res.headers.get('X-Cached-At')
-          if (cachedAtStr) {
-            setCachedAt(new Date(cachedAtStr))
-          }
-        }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'An error occurred')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchTracks()
-  }, [params.id])
+  }, [])
   
   // Function to refresh playlist data
   const handleRefresh = async () => {
     setIsRefreshing(true)
     setRefreshDone(false)
     try {
-      // Fetch both playlist and tracks with refresh=true
-      const [playlistRes, tracksRes] = await Promise.all([
-        fetch(`/api/playlists/${params.id}?refresh=true`),
-        fetch(`/api/playlists/${params.id}/tracks?refresh=true`),
+      // Refresh both playlist and tracks using React Query
+      await Promise.all([
+        refreshPlaylist(),
+        refreshTracks(),
       ])
-      
-      if (playlistRes.ok) {
-        const playlist = await playlistRes.json()
-        setPlaylistInfo(playlist)
-        const wasCached = playlistRes.headers.get('X-Cached') === 'true'
-        setIsCached(wasCached)
-        if (wasCached) {
-          const cachedAtStr = playlistRes.headers.get('X-Cached-At')
-          if (cachedAtStr) {
-            setCachedAt(new Date(cachedAtStr))
-          }
-        } else {
-          setCachedAt(null)
-        }
-      }
-      
-      if (tracksRes.ok) {
-        const tracks = await tracksRes.json()
-        setTracks(tracks)
-        const wasCached = tracksRes.headers.get('X-Cached') === 'true'
-        setIsCached(wasCached)
-        if (wasCached) {
-          const cachedAtStr = tracksRes.headers.get('X-Cached-At')
-          if (cachedAtStr) {
-            setCachedAt(new Date(cachedAtStr))
-          }
-        } else {
-          setCachedAt(null)
-        }
-      }
-      
-      setRefreshDone(true)
     } catch (e) {
-      console.error('Error refreshing playlist:', e)
-      setRefreshDone(true)
+      console.error('Error refreshing data:', e)
     } finally {
       setIsRefreshing(false)
+      setRefreshDone(true)
     }
   }
   

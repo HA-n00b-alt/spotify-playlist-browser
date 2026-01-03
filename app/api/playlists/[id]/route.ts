@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getPlaylist } from '@/lib/spotify'
 import { query } from '@/lib/db'
+import { AuthenticationError } from '@/lib/errors'
 
 interface PlaylistCacheRecord {
   snapshot_id: string
@@ -69,7 +70,8 @@ export async function GET(
     
     return response
   } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
+    // Handle authentication errors
+    if (error instanceof AuthenticationError || (error instanceof Error && (error.message.includes('Unauthorized') || error.message.includes('No access token') || error.message.includes('Please log in')))) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
