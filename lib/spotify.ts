@@ -75,14 +75,27 @@ async function paginateSpotify<T>(
 
 async function getAccessToken(): Promise<string | null> {
   const cookieStore = await cookies()
-  return cookieStore.get('access_token')?.value || null
+  const token = cookieStore.get('access_token')?.value || null
+  // TEMPORARY DEBUG
+  console.log('[Spotify API DEBUG] getAccessToken:', {
+    hasToken: !!token,
+    tokenPrefix: token ? `${token.substring(0, 20)}...` : 'none',
+  })
+  return token
 }
 
 async function refreshAccessToken(): Promise<string | null> {
   const cookieStore = await cookies()
   const refreshToken = cookieStore.get('refresh_token')?.value
 
+  // TEMPORARY DEBUG
+  console.log('[Spotify API DEBUG] refreshAccessToken:', {
+    hasRefreshToken: !!refreshToken,
+    refreshTokenPrefix: refreshToken ? `${refreshToken.substring(0, 20)}...` : 'none',
+  })
+
   if (!refreshToken) {
+    console.warn('[Spotify API DEBUG] refreshAccessToken: No refresh token available')
     return null
   }
 
@@ -90,10 +103,14 @@ async function refreshAccessToken(): Promise<string | null> {
   const clientSecret = process.env.SPOTIFY_CLIENT_SECRET
 
   if (!clientId || !clientSecret) {
+    console.error('[Spotify API DEBUG] refreshAccessToken: Missing client credentials')
     return null
   }
 
   try {
+    // TEMPORARY DEBUG
+    console.log('[Spotify API DEBUG] refreshAccessToken: Attempting token refresh')
+    
     const response = await fetch('https://accounts.spotify.com/api/token', {
       method: 'POST',
       headers: {
@@ -106,12 +123,29 @@ async function refreshAccessToken(): Promise<string | null> {
       }),
     })
 
+    // TEMPORARY DEBUG
+    console.log('[Spotify API DEBUG] refreshAccessToken Response:', {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+    })
+
     if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unable to read error')
+      console.error('[Spotify API DEBUG] refreshAccessToken Failed:', errorText)
       return null
     }
 
     const data = await response.json()
-    const { access_token, expires_in } = data
+    const { access_token, expires_in, refresh_token: newRefreshToken } = data
+
+    // TEMPORARY DEBUG
+    console.log('[Spotify API DEBUG] refreshAccessToken Success:', {
+      hasAccessToken: !!access_token,
+      expiresIn: expires_in,
+      hasNewRefreshToken: !!newRefreshToken,
+      accessTokenPrefix: access_token ? `${access_token.substring(0, 20)}...` : 'none',
+    })
 
     // Update the access token cookie
     const cookieStore = await cookies()
@@ -123,8 +157,20 @@ async function refreshAccessToken(): Promise<string | null> {
       path: '/',
     })
 
+    // Update refresh token if a new one was provided
+    if (newRefreshToken) {
+      cookieStore.set('refresh_token', newRefreshToken, {
+        maxAge: 60 * 60 * 24 * 365, // 1 year
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+      })
+    }
+
     return access_token
-  } catch {
+  } catch (error) {
+    console.error('[Spotify API DEBUG] refreshAccessToken Exception:', error)
     return null
   }
 }
@@ -149,6 +195,17 @@ async function makeSpotifyRequest<T>(
     ? endpoint 
     : `https://api.spotify.com/v1${endpoint}`
   
+  // TEMPORARY DEBUG: Log request details
+  const requestMethod = options.method || 'GET'
+  console.log('[Spotify API DEBUG] Request:', {
+    method: requestMethod,
+    endpoint,
+    url,
+    retryCount,
+    hasToken: !!accessToken,
+    tokenPrefix: accessToken ? `${accessToken.substring(0, 20)}...` : 'none',
+  })
+  
   const makeRequest = async (token: string): Promise<Response> => {
     return fetch(url, {
       ...options,
@@ -161,17 +218,42 @@ async function makeSpotifyRequest<T>(
   }
 
   let response = await makeRequest(accessToken)
+  
+  // TEMPORARY DEBUG: Log response details
+  const responseHeaders: Record<string, string> = {}
+  response.headers.forEach((value, key) => {
+    responseHeaders[key] = value
+  })
+  
+  console.log('[Spotify API DEBUG] Response:', {
+    status: response.status,
+    statusText: response.statusText,
+    ok: response.ok,
+    headers: responseHeaders,
+    url: response.url,
+  })
 
   // Handle rate limiting (429) with retry logic
   if (response.status === 429) {
     if (retryCount >= maxRetries) {
+      console.error('[Spotify API DEBUG] Rate limit exceeded: Maximum retries reached', {
+        endpoint,
+        retryCount,
+        maxRetries,
+      })
       throw new Error('Rate limit exceeded: Maximum retries reached')
     }
 
     const retryAfter = response.headers.get('Retry-After')
     const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : 1000 * (retryCount + 1)
     
-    console.warn(`Rate limit hit (429). Retrying after ${waitTime}ms (attempt ${retryCount + 1}/${maxRetries})`)
+    console.warn('[Spotify API DEBUG] Rate limit hit (429). Retrying:', {
+      endpoint,
+      retryAfter,
+      waitTime,
+      attempt: retryCount + 1,
+      maxRetries,
+    })
     await new Promise((resolve) => setTimeout(resolve, waitTime))
     
     // Retry the request
@@ -181,40 +263,78 @@ async function makeSpotifyRequest<T>(
   // Handle token expiration (401) with retry logic
   if (response.status === 401) {
     if (retryCount >= maxRetries) {
+      console.error('[Spotify API DEBUG] Token refresh failed: Maximum retries reached', {
+        endpoint,
+        retryCount,
+        maxRetries,
+      })
       throw new Error('Unauthorized: Token refresh failed after maximum retries')
     }
 
-    console.warn(`Token expired (401). Refreshing token (attempt ${retryCount + 1}/${maxRetries})`)
+    console.warn('[Spotify API DEBUG] Token expired (401). Refreshing token:', {
+      endpoint,
+      attempt: retryCount + 1,
+      maxRetries,
+    })
     accessToken = await refreshAccessToken()
     
     if (!accessToken) {
+      console.error('[Spotify API DEBUG] Token refresh failed - no access token returned')
       throw new Error('Unauthorized: Failed to refresh access token')
     }
     
+    console.log('[Spotify API DEBUG] Token refreshed successfully, retrying request')
     // Retry the request with new token
     return makeSpotifyRequest<T>(endpoint, options, retryCount + 1)
   }
 
   // Handle forbidden (403) - insufficient permissions or scopes
   if (response.status === 403) {
-    const error: SpotifyError = await response.json().catch(() => ({
-      error: { status: 403, message: 'Forbidden' },
-    }))
-    throw new Error(
-      `Forbidden: ${error.error?.message || 'Insufficient permissions. Please ensure the app has access to your playlists.'}`
-    )
+    let errorMessage = 'Insufficient permissions. Please ensure the app has access to your playlists.'
+    let errorBody: any = null
+    try {
+      errorBody = await response.json()
+      // TEMPORARY DEBUG: Log full error response
+      console.error('[Spotify API DEBUG] 403 Forbidden - Full Error Response:', JSON.stringify(errorBody, null, 2))
+      if (errorBody.error?.message && errorBody.error.message !== 'Forbidden') {
+        errorMessage = errorBody.error.message
+      }
+    } catch (e) {
+      // If JSON parsing fails, use default message
+      console.error('[Spotify API DEBUG] 403 Forbidden - Failed to parse error response:', e)
+    }
+    console.error('[Spotify API] 403 Forbidden:', errorMessage)
+    throw new Error(`Forbidden: ${errorMessage}`)
   }
 
   if (!response.ok) {
-    const error: SpotifyError = await response.json().catch(() => ({
-      error: { status: response.status, message: response.statusText },
-    }))
+    let errorBody: any = null
+    try {
+      errorBody = await response.json()
+      // TEMPORARY DEBUG: Log full error response
+      console.error('[Spotify API DEBUG] Error Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: JSON.stringify(errorBody, null, 2),
+      })
+    } catch (e) {
+      errorBody = { error: { status: response.status, message: response.statusText } }
+      console.error('[Spotify API DEBUG] Error - Failed to parse error response:', e)
+    }
     throw new Error(
-      error.error?.message || `Spotify API error: ${response.status} ${response.statusText}`
+      errorBody.error?.message || `Spotify API error: ${response.status} ${response.statusText}`
     )
   }
 
-  return response.json()
+  // TEMPORARY DEBUG: Log successful response (first 500 chars to avoid huge logs)
+  const responseData = await response.json()
+  const responsePreview = JSON.stringify(responseData, null, 2).substring(0, 500)
+  console.log('[Spotify API DEBUG] Success Response Preview:', {
+    length: JSON.stringify(responseData).length,
+    preview: responsePreview + (JSON.stringify(responseData).length > 500 ? '...' : ''),
+  })
+  
+  return responseData as T
 }
 
 export async function getPlaylists(): Promise<any[]> {

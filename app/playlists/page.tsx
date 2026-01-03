@@ -42,9 +42,15 @@ export default async function PlaylistsPage() {
     playlists = await getPlaylists() as Playlist[]
   } catch (e) {
     if (e instanceof Error) {
+      console.error('[Playlists Page] Error fetching playlists:', e.message)
       // Handle forbidden (403) specifically
       if (e.message.includes('Forbidden') || e.message.includes('403')) {
-        error = 'Access forbidden. Please ensure the Spotify app has permission to access your playlists. You may need to re-authorize the app.'
+        // Extract the actual error message if available, otherwise use default
+        const match = e.message.match(/Forbidden:\s*(.+)/)
+        const forbiddenMessage = match && match[1] && match[1] !== 'Forbidden' 
+          ? match[1] 
+          : 'Please ensure the Spotify app has permission to access your playlists. You may need to re-authorize the app.'
+        error = `Access forbidden. ${forbiddenMessage}`
       } else if (e.message.includes('Rate limit') || e.message.includes('429')) {
         // Handle rate limiting (429) specifically
         error = 'Spotify API rate limit exceeded. Please wait a moment and refresh the page.'
@@ -129,21 +135,31 @@ export default async function PlaylistsPage() {
               <p className="text-gray-700 mb-6 text-base sm:text-lg">{error}</p>
               
               {isForbidden ? (
-                <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                  <form action="/api/auth/reauthorize" method="POST" className="inline">
-                    <button
-                      type="submit"
-                      className="bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-full transition-colors w-full sm:w-auto"
-                    >
-                      Re-authorize with Spotify
-                    </button>
-                  </form>
-                  <Link
-                    href="/"
-                    className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 px-6 rounded-full transition-colors inline-block text-center"
-                  >
-                    Go to Home
-                  </Link>
+                <div className="space-y-4">
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                    <p className="text-sm text-yellow-800">
+                      <strong>What to do:</strong> If you recently revoked app permissions in Spotify, you&apos;ll need to re-authorize. 
+                      You can also log out and start fresh.
+                    </p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                    <form action="/api/auth/reauthorize" method="POST" className="inline">
+                      <button
+                        type="submit"
+                        className="bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-full transition-colors w-full sm:w-auto"
+                      >
+                        Re-authorize with Spotify
+                      </button>
+                    </form>
+                    <form action="/api/auth/logout" method="POST" className="inline">
+                      <button
+                        type="submit"
+                        className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 px-6 rounded-full transition-colors w-full sm:w-auto"
+                      >
+                        Logout & Start Over
+                      </button>
+                    </form>
+                  </div>
                 </div>
               ) : (
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
