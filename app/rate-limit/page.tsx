@@ -27,6 +27,7 @@ export default function RateLimitPage() {
       // Start first retry
       startRetry()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [retryCount, isRetrying])
 
   const startRetry = () => {

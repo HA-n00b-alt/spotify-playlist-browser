@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { getPlaylists } from '@/lib/spotify'
 import { isAdminUser } from '@/lib/analytics'
 import PlaylistsTable from './PlaylistsTable'
