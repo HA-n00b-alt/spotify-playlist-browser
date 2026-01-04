@@ -22,6 +22,8 @@ interface BpmResult {
   key?: string
   scale?: string
   keyConfidence?: number
+  bpmConfidence?: number
+  sourceUrlHost?: string
 }
 
 interface CacheRecord {
@@ -41,6 +43,7 @@ interface CacheRecord {
   key?: string | null
   scale?: string | null
   key_confidence?: number | null
+  bpm_confidence?: number | null
 }
 
 // In-flight computation locks to prevent duplicate work
@@ -407,7 +410,7 @@ async function getIdentityToken(serviceUrl: string): Promise<string> {
 /**
  * Call external BPM service to compute BPM from preview URL
  */
-async function computeBpmFromService(previewUrl: string): Promise<{ bpm: number; bpmRaw: number; confidence?: number; key?: string; scale?: string; keyConfidence?: number }> {
+async function computeBpmFromService(previewUrl: string): Promise<{ bpm: number; bpmRaw: number; bpmConfidence?: number; key?: string; scale?: string; keyConfidence?: number; sourceUrlHost?: string }> {
   const serviceUrl = process.env.BPM_SERVICE_URL || 'https://bpm-service-340051416180.europe-west3.run.app'
   
   console.log(`[BPM Module] Calling external BPM service at: ${serviceUrl}`)
@@ -449,7 +452,7 @@ async function computeBpmFromService(previewUrl: string): Promise<{ bpm: number;
     const data = await response.json() as {
       bpm: number
       bpm_raw: number
-      confidence?: number
+      bpm_confidence?: number
       key?: string
       scale?: string
       key_confidence?: number
@@ -459,7 +462,7 @@ async function computeBpmFromService(previewUrl: string): Promise<{ bpm: number;
     console.log(`[BPM Module] BPM service response:`, {
       bpm: data.bpm,
       bpm_raw: data.bpm_raw,
-      confidence: data.confidence,
+      bpm_confidence: data.bpm_confidence,
       key: data.key,
       scale: data.scale,
       key_confidence: data.key_confidence,
@@ -469,10 +472,11 @@ async function computeBpmFromService(previewUrl: string): Promise<{ bpm: number;
     return {
       bpm: data.bpm,
       bpmRaw: data.bpm_raw,
-      confidence: data.confidence,
+      bpmConfidence: data.bpm_confidence,
       key: data.key,
       scale: data.scale,
       keyConfidence: data.key_confidence,
+      sourceUrlHost: data.source_url_host,
     }
   } catch (error) {
     clearTimeout(timeoutId)
@@ -501,8 +505,9 @@ async function storeInCache(params: {
   key?: string | null
   scale?: string | null
   keyConfidence?: number | null
+  bpmConfidence?: number | null
 }): Promise<void> {
-  const { spotifyTrackId, isrc, artist, title, bpm, bpmRaw, source, error, urlsTried, successfulUrl, isrcMismatch = false, key, scale, keyConfidence } = params
+  const { spotifyTrackId, isrc, artist, title, bpm, bpmRaw, source, error, urlsTried, successfulUrl, isrcMismatch = false, key, scale, keyConfidence, bpmConfidence } = params
   
   // Check if record exists
   const existing = await query<CacheRecord>(
@@ -530,16 +535,17 @@ async function storeInCache(params: {
            key = COALESCE($11, key),
            scale = COALESCE($12, scale),
            key_confidence = COALESCE($13, key_confidence),
+           bpm_confidence = COALESCE($14, bpm_confidence),
            updated_at = NOW()
-       WHERE spotify_track_id = $14`,
-      [isrc, artist, title, bpm, bpmRaw, source, error, urlsTriedJson, successfulUrl, isrcMismatch, key, scale, keyConfidence, spotifyTrackId]
+       WHERE spotify_track_id = $15`,
+      [isrc, artist, title, bpm, bpmRaw, source, error, urlsTriedJson, successfulUrl, isrcMismatch, key, scale, keyConfidence, bpmConfidence, spotifyTrackId]
     )
   } else {
     // Insert new record
     await query(
       `INSERT INTO track_bpm_cache 
-       (spotify_track_id, isrc, artist, title, bpm, bpm_raw, source, error, urls_tried, successful_url, isrc_mismatch, key, scale, key_confidence, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13, $14, NOW())
+       (spotify_track_id, isrc, artist, title, bpm, bpm_raw, source, error, urls_tried, successful_url, isrc_mismatch, key, scale, key_confidence, bpm_confidence, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13, $14, $15, NOW())
        ON CONFLICT (spotify_track_id) DO UPDATE SET
          isrc = COALESCE(EXCLUDED.isrc, track_bpm_cache.isrc),
          artist = EXCLUDED.artist,
@@ -554,8 +560,9 @@ async function storeInCache(params: {
          key = COALESCE(EXCLUDED.key, track_bpm_cache.key),
          scale = COALESCE(EXCLUDED.scale, track_bpm_cache.scale),
          key_confidence = COALESCE(EXCLUDED.key_confidence, track_bpm_cache.key_confidence),
+         bpm_confidence = COALESCE(EXCLUDED.bpm_confidence, track_bpm_cache.bpm_confidence),
          updated_at = NOW()`,
-      [spotifyTrackId, isrc, artist, title, bpm, bpmRaw, source, error, urlsTriedJson, successfulUrl, isrcMismatch, key, scale, keyConfidence]
+      [spotifyTrackId, isrc, artist, title, bpm, bpmRaw, source, error, urlsTriedJson, successfulUrl, isrcMismatch, key, scale, keyConfidence, bpmConfidence]
     )
   }
 }
@@ -637,7 +644,7 @@ export async function getBpmForSpotifyTrack(
             
             if (previewResult.url) {
               console.log(`[BPM Module] Preview URL resolved: ${previewResult.source}, fetching key/scale...`)
-              const { key, scale, keyConfidence } = await computeBpmFromService(previewResult.url)
+              const { key, scale, keyConfidence, bpmConfidence, sourceUrlHost } = await computeBpmFromService(previewResult.url)
               console.log(`[BPM Module] Key/scale fetched: key=${key}, scale=${scale}, confidence=${keyConfidence}`)
               
               // Update cache with key/scale and potentially new successful_url
@@ -656,6 +663,7 @@ export async function getBpmForSpotifyTrack(
                 key: key || null,
                 scale: scale || null,
                 keyConfidence: keyConfidence || null,
+                bpmConfidence: bpmConfidence || null,
               })
               
               return {
@@ -667,6 +675,8 @@ export async function getBpmForSpotifyTrack(
                 key: key || undefined,
                 scale: scale || undefined,
                 keyConfidence: keyConfidence || undefined,
+                bpmConfidence: bpmConfidence || undefined,
+                sourceUrlHost: sourceUrlHost || undefined,
               }
             } else {
               console.warn(`[BPM Module] Could not resolve preview URL for key/scale backfill`)
@@ -686,6 +696,7 @@ export async function getBpmForSpotifyTrack(
           key: cached.key || undefined,
           scale: cached.scale || undefined,
           keyConfidence: cached.key_confidence || undefined,
+          bpmConfidence: cached.bpm_confidence || undefined,
         }
       }
       // If cached but bpm is null, return the error if available
@@ -764,8 +775,8 @@ export async function getBpmForSpotifyTrack(
       // 4. Call external BPM service (only if we have a preview URL)
       console.log(`[BPM Module] Step 4: Calling external BPM service...`)
       try {
-        const { bpm, bpmRaw, key, scale, keyConfidence } = await computeBpmFromService(previewResult.url)
-        console.log(`[BPM Module] BPM computed by external service:`, { bpm, bpmRaw, key, scale, keyConfidence })
+        const { bpm, bpmRaw, key, scale, keyConfidence, bpmConfidence, sourceUrlHost } = await computeBpmFromService(previewResult.url)
+        console.log(`[BPM Module] BPM computed by external service:`, { bpm, bpmRaw, key, scale, keyConfidence, bpmConfidence, sourceUrlHost })
         
         // 5. Store in cache
         console.log(`[BPM Module] Step 5: Storing in cache...`)
@@ -784,6 +795,7 @@ export async function getBpmForSpotifyTrack(
           key: key || null,
           scale: scale || null,
           keyConfidence: keyConfidence || null,
+          bpmConfidence: bpmConfidence || null,
         })
         console.log(`[BPM Module] Successfully cached BPM for ${spotifyTrackId}`)
         
@@ -796,6 +808,8 @@ export async function getBpmForSpotifyTrack(
           key,
           scale,
           keyConfidence,
+          bpmConfidence,
+          sourceUrlHost,
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'

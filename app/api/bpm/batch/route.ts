@@ -19,6 +19,7 @@ interface CacheRecord {
   key?: string | null
   scale?: string | null
   key_confidence?: number | null
+  bpm_confidence?: number | null
 }
 
 // Cache TTL: 90 days
@@ -52,7 +53,7 @@ export async function POST(request: Request) {
 
     // Query cache for all tracks at once
     const cacheResults = await query<CacheRecord>(
-      `SELECT spotify_track_id, isrc, bpm, bpm_raw, source, error, updated_at, urls_tried, successful_url, isrc_mismatch, key, scale, key_confidence
+      `SELECT spotify_track_id, isrc, bpm, bpm_raw, source, error, updated_at, urls_tried, successful_url, isrc_mismatch, key, scale, key_confidence, bpm_confidence
        FROM track_bpm_cache 
        WHERE spotify_track_id = ANY($1)`,
       [limitedTrackIds]
@@ -89,6 +90,7 @@ export async function POST(request: Request) {
       key?: string
       scale?: string
       keyConfidence?: number
+      bpmConfidence?: number
     }> = {}
 
     // Helper to parse urls_tried from JSONB
@@ -118,6 +120,7 @@ export async function POST(request: Request) {
           key: cached.key || undefined,
           scale: cached.scale || undefined,
           keyConfidence: cached.key_confidence || undefined,
+          bpmConfidence: cached.bpm_confidence || undefined,
         }
       } else if (errorRecord) {
         // Has error record - return error info even if expired
@@ -132,6 +135,7 @@ export async function POST(request: Request) {
           key: errorRecord.key || undefined,
           scale: errorRecord.scale || undefined,
           keyConfidence: errorRecord.key_confidence || undefined,
+          bpmConfidence: errorRecord.bpm_confidence || undefined,
         }
       } else if (allCached) {
         // Cached but expired - return basic info
@@ -145,6 +149,7 @@ export async function POST(request: Request) {
           key: allCached.key || undefined,
           scale: allCached.scale || undefined,
           keyConfidence: allCached.key_confidence || undefined,
+          bpmConfidence: allCached.bpm_confidence || undefined,
         }
       } else {
         // Return null to indicate not cached (frontend can fetch individually if needed)

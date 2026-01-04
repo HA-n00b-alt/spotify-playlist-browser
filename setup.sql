@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS track_bpm_cache (
   key TEXT, -- Musical key detected by BPM service (e.g., C, D, E)
   scale TEXT, -- Musical scale detected by BPM service (e.g., major, minor)
   key_confidence NUMERIC(5, 2), -- Confidence score for key detection (0-1)
+  bpm_confidence NUMERIC(5, 2), -- Confidence score for BPM detection (0-1)
   CONSTRAINT unique_spotify_track UNIQUE (spotify_track_id)
 );
 
@@ -38,6 +39,7 @@ COMMENT ON COLUMN track_bpm_cache.isrc_mismatch IS 'True when ISRC from iTunes/D
 COMMENT ON COLUMN track_bpm_cache.key IS 'Musical key detected by BPM service (e.g., C, D, E)';
 COMMENT ON COLUMN track_bpm_cache.scale IS 'Musical scale detected by BPM service (e.g., major, minor)';
 COMMENT ON COLUMN track_bpm_cache.key_confidence IS 'Confidence score for key detection (0-1)';
+COMMENT ON COLUMN track_bpm_cache.bpm_confidence IS 'Confidence score for BPM detection (0-1)';
 
 -- ============================================================================
 -- Analytics Tables
