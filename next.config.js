@@ -17,6 +17,17 @@ const nextConfig = {
       },
     ],
   },
+  webpack: (config, { isServer }) => {
+    // Sentry webpack configuration
+    if (!isServer) {
+      config.optimization = {
+        ...config.optimization,
+        // Automatically tree-shake Sentry logger statements to reduce bundle size
+        removeDebugLogging: true,
+      }
+    }
+    return config
+  },
 }
 
 module.exports = withSentryConfig(
@@ -47,9 +58,6 @@ module.exports = withSentryConfig(
 
     // Hides source maps from generated client bundles
     hideSourceMaps: true,
-
-    // Automatically tree-shake Sentry logger statements to reduce bundle size
-    disableLogger: true,
 
     // Enables automatic instrumentation of Vercel Cron Monitors.
     // See the following for more information:
