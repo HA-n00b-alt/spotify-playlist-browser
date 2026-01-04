@@ -64,8 +64,8 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
   const [playlists, setPlaylists] = useState<Playlist[]>(initialPlaylists)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [lastVisitTimestamp, setLastVisitTimestamp] = useState<number | null>(null)
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+  const [draggedPlaylistId, setDraggedPlaylistId] = useState<string | null>(null)
+  const [dragOverPlaylistId, setDragOverPlaylistId] = useState<string | null>(null)
   
   const STORAGE_KEY_LAST_VISIT = 'playlist_last_visit'
 
@@ -168,25 +168,35 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
     }
   }
 
-  // Drag and drop handlers
-  const handleDragStart = (index: number) => {
-    setDraggedIndex(index)
+  // Drag and drop handlers - use playlist IDs instead of indices
+  const handleDragStart = (playlistId: string) => {
+    setDraggedPlaylistId(playlistId)
   }
 
-  const handleDragOver = (e: React.DragEvent, index: number) => {
+  const handleDragOver = (e: React.DragEvent, playlistId: string) => {
     e.preventDefault()
-    setDragOverIndex(index)
+    setDragOverPlaylistId(playlistId)
   }
 
   const handleDragLeave = () => {
-    setDragOverIndex(null)
+    setDragOverPlaylistId(null)
   }
 
-  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+  const handleDrop = (e: React.DragEvent, dropPlaylistId: string) => {
     e.preventDefault()
-    if (draggedIndex === null || draggedIndex === dropIndex) {
-      setDraggedIndex(null)
-      setDragOverIndex(null)
+    if (!draggedPlaylistId || draggedPlaylistId === dropPlaylistId) {
+      setDraggedPlaylistId(null)
+      setDragOverPlaylistId(null)
+      return
+    }
+
+    // Find indices in the original playlists array
+    const draggedIndex = playlists.findIndex(p => p.id === draggedPlaylistId)
+    const dropIndex = playlists.findIndex(p => p.id === dropPlaylistId)
+
+    if (draggedIndex === -1 || dropIndex === -1) {
+      setDraggedPlaylistId(null)
+      setDragOverPlaylistId(null)
       return
     }
 
@@ -197,13 +207,13 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
     
     setPlaylists(newPlaylists)
     saveOrder(newPlaylists)
-    setDraggedIndex(null)
-    setDragOverIndex(null)
+    setDraggedPlaylistId(null)
+    setDragOverPlaylistId(null)
   }
 
   const handleDragEnd = () => {
-    setDraggedIndex(null)
-    setDragOverIndex(null)
+    setDraggedPlaylistId(null)
+    setDragOverPlaylistId(null)
   }
 
   const handleSort = (field: SortField) => {
@@ -340,10 +350,10 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
             <div
               key={playlist.id}
               draggable
-              onDragStart={() => handleDragStart(index)}
-              onDragOver={(e) => handleDragOver(e, index)}
+              onDragStart={() => handleDragStart(playlist.id)}
+              onDragOver={(e) => handleDragOver(e, playlist.id)}
               onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, index)}
+              onDrop={(e) => handleDrop(e, playlist.id)}
               onDragEnd={handleDragEnd}
               className={`rounded-lg border shadow-sm p-4 hover:shadow-md transition-shadow ${
                 isNew ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'
@@ -504,20 +514,20 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {sortedPlaylists.map((playlist, index) => {
+              {sortedPlaylists.map((playlist) => {
                 const isNew = isNewPlaylist(playlist)
                 const isCached = playlist.is_cached ?? false
-                const isDragging = draggedIndex === index
-                const isDragOver = dragOverIndex === index
+                const isDragging = draggedPlaylistId === playlist.id
+                const isDragOver = dragOverPlaylistId === playlist.id
                 
                 return (
                   <tr
                     key={playlist.id}
                     draggable
-                    onDragStart={() => handleDragStart(index)}
-                    onDragOver={(e) => handleDragOver(e, index)}
+                    onDragStart={() => handleDragStart(playlist.id)}
+                    onDragOver={(e) => handleDragOver(e, playlist.id)}
                     onDragLeave={handleDragLeave}
-                    onDrop={(e) => handleDrop(e, index)}
+                    onDrop={(e) => handleDrop(e, playlist.id)}
                     onDragEnd={handleDragEnd}
                     className={`transition-colors ${
                       isDragging ? 'opacity-50' : ''
