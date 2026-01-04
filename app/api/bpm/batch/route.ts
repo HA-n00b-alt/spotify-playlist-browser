@@ -22,10 +22,11 @@ const CACHE_TTL_DAYS = 90
 
 export async function POST(request: Request) {
   const userId = await getCurrentUserId()
+  let trackIds: string[] | undefined
   
   try {
     const body = await request.json()
-    const { trackIds } = body
+    trackIds = body.trackIds
 
     if (!Array.isArray(trackIds) || trackIds.length === 0) {
       trackApiRequest(userId, '/api/bpm/batch', 'POST', 400).catch(() => {})
