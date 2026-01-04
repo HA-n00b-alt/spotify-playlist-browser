@@ -69,11 +69,13 @@ export async function POST(request: Request) {
       const ageDays = (now - new Date(record.updated_at).getTime()) / (1000 * 60 * 60 * 24)
       cacheMap.set(record.spotify_track_id, record)
       // Only include valid cached results (not expired and not errors) for valid cache
-      if (record.bpm !== null && ageDays < CACHE_TTL_DAYS) {
+      // Exclude records with ISRC mismatches as they are treated as errors
+      if (record.bpm !== null && ageDays < CACHE_TTL_DAYS && !record.isrc_mismatch) {
         validCacheMap.set(record.spotify_track_id, record)
       }
       // Also track records with errors (for showing error messages)
-      if (record.error || record.source === 'computed_failed') {
+      // ISRC mismatches are treated as errors
+      if (record.error || record.source === 'computed_failed' || record.isrc_mismatch) {
         errorCacheMap.set(record.spotify_track_id, record)
       }
     }
@@ -124,11 +126,16 @@ export async function POST(request: Request) {
         }
       } else if (errorRecord) {
         // Has error record - return error info even if expired
+        // If ISRC mismatch, ensure error message is set
+        let errorMessage = errorRecord.error
+        if (errorRecord.isrc_mismatch && !errorMessage) {
+          errorMessage = 'ISRC mismatch: Found preview URL but ISRC does not match Spotify track (wrong audio file)'
+        }
         results[trackId] = {
           bpm: errorRecord.bpm,
           source: errorRecord.source,
           bpmRaw: errorRecord.bpm_raw || undefined,
-          error: errorRecord.error || undefined,
+          error: errorMessage || undefined,
           urlsTried: parseUrlsTried(errorRecord.urls_tried),
           successfulUrl: errorRecord.successful_url || undefined,
           cached: false, // Not valid cache, will need recalculation
@@ -138,11 +145,17 @@ export async function POST(request: Request) {
           bpmConfidence: errorRecord.bpm_confidence || undefined,
         }
       } else if (allCached) {
-        // Cached but expired - return basic info
+        // Cached but expired or has ISRC mismatch - return basic info
+        // If ISRC mismatch, ensure error message is set
+        let errorMessage = allCached.error
+        if (allCached.isrc_mismatch && !errorMessage) {
+          errorMessage = 'ISRC mismatch: Found preview URL but ISRC does not match Spotify track (wrong audio file)'
+        }
         results[trackId] = {
-          bpm: allCached.bpm,
+          bpm: allCached.isrc_mismatch ? null : allCached.bpm, // Treat ISRC mismatch as null BPM
           source: allCached.source,
           bpmRaw: allCached.bpm_raw || undefined,
+          error: errorMessage || undefined,
           urlsTried: parseUrlsTried(allCached.urls_tried),
           successfulUrl: allCached.successful_url || undefined,
           cached: false, // Not valid cache, will need recalculation

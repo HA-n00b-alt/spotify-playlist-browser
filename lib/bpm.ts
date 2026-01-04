@@ -95,19 +95,20 @@ async function checkCache(
       `SELECT * FROM track_bpm_cache WHERE isrc = $1 LIMIT 1`,
       [isrc]
     )
-    console.log(`[BPM Module] ISRC cache query result: ${isrcResults.length} records`)
-    if (isrcResults.length > 0) {
-      const record = isrcResults[0]
-      const ageDays = (Date.now() - new Date(record.updated_at).getTime()) / (1000 * 60 * 60 * 24)
-      console.log(`[BPM Module] ISRC cache record age: ${ageDays.toFixed(2)} days, BPM: ${record.bpm}, valid: ${record.bpm !== null && ageDays < CACHE_TTL_DAYS}`)
-      // Return valid BPM records, or records with null BPM (for error info)
-      if (record.bpm !== null && ageDays < CACHE_TTL_DAYS) {
-        return record
-      } else if (record.bpm === null) {
-        // Return null BPM records to get error information
-        return record
+      console.log(`[BPM Module] ISRC cache query result: ${isrcResults.length} records`)
+      if (isrcResults.length > 0) {
+        const record = isrcResults[0]
+        const ageDays = (Date.now() - new Date(record.updated_at).getTime()) / (1000 * 60 * 60 * 24)
+        console.log(`[BPM Module] ISRC cache record age: ${ageDays.toFixed(2)} days, BPM: ${record.bpm}, ISRC mismatch: ${record.isrc_mismatch}, valid: ${record.bpm !== null && ageDays < CACHE_TTL_DAYS && !record.isrc_mismatch}`)
+        // Return valid BPM records (not expired and no ISRC mismatch), or records with null BPM (for error info)
+        // ISRC mismatches are treated as errors, so exclude them from valid cache
+        if (record.bpm !== null && ageDays < CACHE_TTL_DAYS && !record.isrc_mismatch) {
+          return record
+        } else if (record.bpm === null || record.isrc_mismatch) {
+          // Return null BPM records or ISRC mismatch records to get error information
+          return record
+        }
       }
-    }
   }
   
   // Fallback to spotify_track_id
@@ -119,12 +120,13 @@ async function checkCache(
   if (trackResults.length > 0) {
     const record = trackResults[0]
     const ageDays = (Date.now() - new Date(record.updated_at).getTime()) / (1000 * 60 * 60 * 24)
-    console.log(`[BPM Module] Track ID cache record age: ${ageDays.toFixed(2)} days, BPM: ${record.bpm}, valid: ${record.bpm !== null && ageDays < CACHE_TTL_DAYS}`)
-    // Return valid BPM records, or records with null BPM (for error info)
-    if (record.bpm !== null && ageDays < CACHE_TTL_DAYS) {
+    console.log(`[BPM Module] Track ID cache record age: ${ageDays.toFixed(2)} days, BPM: ${record.bpm}, ISRC mismatch: ${record.isrc_mismatch}, valid: ${record.bpm !== null && ageDays < CACHE_TTL_DAYS && !record.isrc_mismatch}`)
+    // Return valid BPM records (not expired and no ISRC mismatch), or records with null BPM (for error info)
+    // ISRC mismatches are treated as errors, so exclude them from valid cache
+    if (record.bpm !== null && ageDays < CACHE_TTL_DAYS && !record.isrc_mismatch) {
       return record
-    } else if (record.bpm === null) {
-      // Return null BPM records to get error information
+    } else if (record.bpm === null || record.isrc_mismatch) {
+      // Return null BPM records or ISRC mismatch records to get error information
       return record
     }
   }
@@ -271,7 +273,7 @@ async function resolvePreviewUrl(params: {
             (r.kind === 'song' || r.wrapperType === 'track') && r.previewUrl
           )
           
-          if (tracks.length > 0) {
+            if (tracks.length > 0) {
             let selectedTrack = tracks[0]
             let isrcMismatch = false
             
@@ -283,8 +285,16 @@ async function resolvePreviewUrl(params: {
                 selectedTrack = matchingTrack
                 isrcMismatch = false
               } else {
-                console.log(`[BPM Module] No iTunes track with matching ISRC, using first result`)
+                console.log(`[BPM Module] No iTunes track with matching ISRC - treating as error`)
                 isrcMismatch = true
+                // Don't return the URL if ISRC doesn't match - treat as error
+                return { 
+                  url: null, 
+                  source: 'computed_failed', 
+                  urlsTried,
+                  successfulUrl: null,
+                  isrcMismatch: true
+                }
               }
             }
             
@@ -343,8 +353,16 @@ async function resolvePreviewUrl(params: {
                 selectedTrack = matchingTrack
                 isrcMismatch = false
               } else {
-                console.log(`[BPM Module] No Deezer track with matching ISRC, using first result`)
+                console.log(`[BPM Module] No Deezer track with matching ISRC - treating as error`)
                 isrcMismatch = true
+                // Don't return the URL if ISRC doesn't match - treat as error
+                return { 
+                  url: null, 
+                  source: 'computed_failed', 
+                  urlsTried,
+                  successfulUrl: null,
+                  isrcMismatch: true
+                }
               }
             }
             
@@ -687,6 +705,17 @@ export async function getBpmForSpotifyTrack(
           }
         }
         
+        // If cached record has ISRC mismatch, treat as error
+        if (cached.isrc_mismatch) {
+          return {
+            bpm: null,
+            source: cached.source,
+            error: cached.error || 'ISRC mismatch: Found preview URL but ISRC does not match Spotify track (wrong audio file)',
+            urlsTried,
+            successfulUrl: cached.successful_url || undefined,
+          }
+        }
+        
         return {
           bpm: cached.bpm,
           source: cached.source,
@@ -739,6 +768,19 @@ export async function getBpmForSpotifyTrack(
       if (!previewResult.url) {
         // No preview available - cache failure
         console.log(`[BPM Module] No preview URL found. Caching failure.`)
+        
+        // Generate descriptive error message based on source and ISRC mismatch
+        let errorMessage = 'No preview URL found'
+        if (previewResult.isrcMismatch) {
+          errorMessage = 'ISRC mismatch: Found preview URL but ISRC does not match Spotify track (wrong audio file)'
+        } else if (previewResult.source === 'computed_failed') {
+          errorMessage = 'No preview audio available from any source (iTunes, Deezer)'
+        } else if (previewResult.source === 'itunes_search') {
+          errorMessage = 'No preview available on iTunes/Apple Music'
+        } else if (previewResult.source === 'deezer_isrc' || previewResult.source === 'deezer_search') {
+          errorMessage = 'No preview available on Deezer'
+        }
+        
         await storeInCache({
           spotifyTrackId,
           isrc: identifiers.isrc,
@@ -747,21 +789,11 @@ export async function getBpmForSpotifyTrack(
           bpm: null,
           bpmRaw: null,
           source: previewResult.source,
-          error: 'No preview URL found',
+          error: errorMessage,
           urlsTried: previewResult.urlsTried,
           successfulUrl: previewResult.successfulUrl,
           isrcMismatch: previewResult.isrcMismatch || false,
         })
-        
-        // Generate descriptive error message based on source
-        let errorMessage = 'No preview URL found'
-        if (previewResult.source === 'computed_failed') {
-          errorMessage = 'No preview audio available from any source (iTunes, Deezer)'
-        } else if (previewResult.source === 'itunes_search') {
-          errorMessage = 'No preview available on iTunes/Apple Music'
-        } else if (previewResult.source === 'deezer_isrc' || previewResult.source === 'deezer_search') {
-          errorMessage = 'No preview available on Deezer'
-        }
         
         return {
           bpm: null,
