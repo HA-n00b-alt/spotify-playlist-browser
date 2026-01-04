@@ -98,6 +98,9 @@ export interface BpmResult {
   successfulUrl?: string | null
   error?: string
   cached?: boolean
+  key?: string
+  scale?: string
+  keyConfidence?: number
 }
 
 export interface BpmDetails {

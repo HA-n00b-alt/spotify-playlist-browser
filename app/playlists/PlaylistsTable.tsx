@@ -332,28 +332,28 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                       <span className="text-gray-400 italic">No description</span>
                     )}
                   </div>
-                  <div className="flex flex-nowrap items-center text-xs text-gray-500">
-                    <span className="truncate min-w-0 flex-shrink" title={playlist.owner.display_name}>
+                  <div className="flex flex-nowrap items-center text-xs text-gray-500 overflow-hidden">
+                    <span className="truncate max-w-[60px] flex-shrink-0" title={playlist.owner.display_name}>
                       {playlist.owner.external_urls?.spotify ? (
                         <a
                           href={playlist.owner.external_urls.spotify}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-green-600 hover:text-green-700"
+                          className="text-green-600 hover:text-green-700 block truncate"
                           onClick={(e) => e.stopPropagation()}
                         >
                           {playlist.owner.display_name}
                         </a>
                       ) : (
-                        playlist.owner.display_name
+                        <span className="block truncate">{playlist.owner.display_name}</span>
                       )}
                     </span>
                     <span className="flex-shrink-0 mx-1">•</span>
-                    <span className="flex-1 text-center">{playlist.tracks.total} tracks</span>
+                    <span className="flex-shrink-0 text-center whitespace-nowrap">{playlist.tracks.total} tracks</span>
                     {playlist.followers?.total !== undefined && (
                       <>
                         <span className="flex-shrink-0 mx-1">•</span>
-                        <span className="flex-1 text-center">{formatFollowers(playlist.followers.total)} followers</span>
+                        <span className="flex-shrink-0 text-center whitespace-nowrap">{formatFollowers(playlist.followers.total)} followers</span>
                       </>
                     )}
                   </div>

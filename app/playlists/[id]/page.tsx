@@ -56,6 +56,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const loading = isLoadingPlaylist || isLoadingTracks
   const error = playlistError?.message || tracksError?.message || null
   const [trackBpms, setTrackBpms] = useState<Record<string, number | null>>({})
+  const [trackKeys, setTrackKeys] = useState<Record<string, string | null>>({})
+  const [trackScales, setTrackScales] = useState<Record<string, string | null>>({})
   const [loadingBpms, setLoadingBpms] = useState<Set<string>>(new Set())
   const [showBpmDebug, setShowBpmDebug] = useState(false)
   const [bpmDebugInfo, setBpmDebugInfo] = useState<Record<string, any>>({})
@@ -467,6 +469,19 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 ...prev,
                 [track.id]: data.bpm,
               }))
+              // Store key and scale if available
+              if (data.key !== undefined) {
+                setTrackKeys(prev => ({
+                  ...prev,
+                  [track.id]: data.key || null,
+                }))
+              }
+              if (data.scale !== undefined) {
+                setTrackScales(prev => ({
+                  ...prev,
+                  [track.id]: data.scale || null,
+                }))
+              }
               // Store successful preview URL from DB
               if (data.successfulUrl) {
                 setPreviewUrls(prev => ({
@@ -1343,6 +1358,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               href: '/playlists',
               text: '← Back to Playlists'
             }}
+            center
           />
           <div className="flex items-center justify-center min-h-[60vh]">
             <div className="text-center">
@@ -1985,30 +2001,21 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none hidden md:table-cell"
+                    className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none hidden md:table-cell max-w-[120px]"
                     onClick={() => handleSort('artists')}
                   >
                     <div className="flex items-center">
-                      Artists
+                      Artist
                       <SortIcon field="artists" />
                     </div>
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none hidden lg:table-cell"
+                    className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none hidden lg:table-cell max-w-[150px]"
                     onClick={() => handleSort('album')}
                   >
                     <div className="flex items-center">
                       Album
                       <SortIcon field="album" />
-                    </div>
-                  </th>
-                  <th
-                    className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
-                    onClick={() => handleSort('release_date')}
-                  >
-                    <div className="flex items-center">
-                      Year
-                      <SortIcon field="release_date" />
                     </div>
                   </th>
                   <th
@@ -2021,21 +2028,27 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none hidden lg:table-cell"
-                    onClick={() => handleSort('added_at')}
-                  >
-                    <div className="flex items-center">
-                      Added At
-                      <SortIcon field="added_at" />
-                    </div>
-                  </th>
-                  <th
                     className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none hidden md:table-cell"
                     onClick={() => handleSort('tempo')}
                   >
                     <div className="flex items-center">
                       BPM
                       <SortIcon field="tempo" />
+                    </div>
+                  </th>
+                  <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 hidden md:table-cell">
+                    Key
+                  </th>
+                  <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 hidden md:table-cell">
+                    Scale
+                  </th>
+                  <th
+                    className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => handleSort('release_date')}
+                  >
+                    <div className="flex items-center">
+                      Year
+                      <SortIcon field="release_date" />
                     </div>
                   </th>
                   <th
@@ -2047,12 +2060,21 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       <SortIcon field="popularity" />
                     </div>
                   </th>
+                  <th
+                    className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none hidden lg:table-cell"
+                    onClick={() => handleSort('added_at')}
+                  >
+                    <div className="flex items-center">
+                      Added At
+                      <SortIcon field="added_at" />
+                    </div>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {sortedTracks.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={12} className="px-4 py-8 text-center text-gray-500">
                       {(searchQuery || yearFrom || yearTo || bpmFrom || bpmTo) ? 'No tracks match your filters' : 'No tracks found'}
                     </td>
                   </tr>
@@ -2119,7 +2141,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           )}
                         </div>
                       </td>
-                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-700 text-xs sm:text-sm hidden md:table-cell">
+                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-700 text-xs sm:text-sm hidden md:table-cell max-w-[120px] truncate" title={track.artists.map(a => a.name).join(', ')}>
                         {track.artists.map((artist, index) => (
                           <span key={artist.id || index}>
                             {artist.external_urls?.spotify ? (
@@ -2138,7 +2160,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           </span>
                         ))}
                       </td>
-                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-700 text-xs sm:text-sm hidden lg:table-cell">
+                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-700 text-xs sm:text-sm hidden lg:table-cell max-w-[150px] truncate" title={track.album.name}>
                         {track.album.external_urls?.spotify ? (
                           <a
                             href={track.album.external_urls.spotify}
@@ -2152,14 +2174,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           <span>{track.album.name}</span>
                         )}
                       </td>
-                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm">
-                        {getYearString(track.album.release_date)}
-                      </td>
                       <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden md:table-cell">
                         {formatDuration(track.duration_ms)}
-                      </td>
-                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden lg:table-cell">
-                        {track.added_at ? formatDate(track.added_at) : 'N/A'}
                       </td>
                                   <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden md:table-cell" onClick={(e) => e.stopPropagation()}>
                                     {loadingBpms.has(track.id) ? (
@@ -2202,10 +2218,22 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                             </button>
                                           )}
                                   </td>
+                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden md:table-cell">
+                        {trackKeys[track.id] || '-'}
+                      </td>
+                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden md:table-cell">
+                        {trackScales[track.id] || '-'}
+                      </td>
+                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm">
+                        {getYearString(track.album.release_date)}
+                      </td>
                       <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm text-right hidden lg:table-cell">
                         {track.popularity != null ? track.popularity : (
                           <span className="text-gray-400">N/A</span>
                         )}
+                      </td>
+                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden lg:table-cell">
+                        {track.added_at ? formatDate(track.added_at) : 'N/A'}
                       </td>
                     </tr>
                   ))

@@ -18,6 +18,9 @@ interface BpmResult {
   error?: string
   urlsTried?: string[]
   successfulUrl?: string | null
+  key?: string
+  scale?: string
+  keyConfidence?: number
 }
 
 interface CacheRecord {
@@ -440,7 +443,7 @@ async function getIdentityToken(serviceUrl: string): Promise<string> {
 /**
  * Call external BPM service to compute BPM from preview URL
  */
-async function computeBpmFromService(previewUrl: string): Promise<{ bpm: number; bpmRaw: number; confidence?: number }> {
+async function computeBpmFromService(previewUrl: string): Promise<{ bpm: number; bpmRaw: number; confidence?: number; key?: string; scale?: string; keyConfidence?: number }> {
   const serviceUrl = process.env.BPM_SERVICE_URL || 'https://bpm-service-340051416180.europe-west3.run.app'
   
   console.log(`[BPM Module] Calling external BPM service at: ${serviceUrl}`)
@@ -503,8 +506,9 @@ async function computeBpmFromService(previewUrl: string): Promise<{ bpm: number;
       bpm: data.bpm,
       bpmRaw: data.bpm_raw,
       confidence: data.confidence,
-      // Note: key, scale, key_confidence are parsed but not yet used
-      // They will be added to the response later
+      key: data.key,
+      scale: data.scale,
+      keyConfidence: data.key_confidence,
     }
   } catch (error) {
     clearTimeout(timeoutId)
@@ -719,8 +723,8 @@ export async function getBpmForSpotifyTrack(
       // 4. Call external BPM service (only if we have a preview URL)
       console.log(`[BPM Module] Step 4: Calling external BPM service...`)
       try {
-        const { bpm, bpmRaw } = await computeBpmFromService(previewResult.url)
-        console.log(`[BPM Module] BPM computed by external service:`, { bpm, bpmRaw })
+        const { bpm, bpmRaw, key, scale, keyConfidence } = await computeBpmFromService(previewResult.url)
+        console.log(`[BPM Module] BPM computed by external service:`, { bpm, bpmRaw, key, scale, keyConfidence })
         
         // 5. Store in cache
         console.log(`[BPM Module] Step 5: Storing in cache...`)
@@ -745,6 +749,9 @@ export async function getBpmForSpotifyTrack(
           bpmRaw,
           urlsTried: previewResult.urlsTried,
           successfulUrl: previewResult.successfulUrl,
+          key,
+          scale,
+          keyConfidence,
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'

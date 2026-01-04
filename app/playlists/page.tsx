@@ -73,7 +73,7 @@ export default async function PlaylistsPage() {
     return (
       <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
         <div className="max-w-7xl mx-auto flex-1 w-full">
-          <PageHeader subtitle="Search and sort your playlists with ease" />
+          <PageHeader subtitle="Search and sort your playlists with ease" center />
           <div className="flex items-center justify-center min-h-[60vh]">
             <div className="text-center">
               <h1 className="text-2xl font-bold mb-4">Please log in</h1>
@@ -114,7 +114,7 @@ export default async function PlaylistsPage() {
     return (
       <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
         <div className="max-w-7xl mx-auto flex-1 w-full">
-          <PageHeader subtitle="Search and sort your playlists with ease" />
+          <PageHeader subtitle="Search and sort your playlists with ease" center />
           
           <div className="flex items-center justify-center min-h-[60vh]">
             <div className="text-center max-w-md px-4">

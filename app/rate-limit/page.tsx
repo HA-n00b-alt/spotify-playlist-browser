@@ -117,7 +117,7 @@ function RateLimitContent() {
   return (
     <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
       <div className="max-w-7xl mx-auto flex-1 w-full">
-        <PageHeader subtitle="Search and sort your playlists with ease" />
+        <PageHeader subtitle="Search and sort your playlists with ease" center />
         
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center max-w-md w-full">
@@ -204,7 +204,7 @@ export default function RateLimitPage() {
     <Suspense fallback={
       <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
         <div className="max-w-7xl mx-auto flex-1 w-full">
-          <PageHeader subtitle="Search and sort your playlists with ease" />
+          <PageHeader subtitle="Search and sort your playlists with ease" center />
           <div className="flex items-center justify-center min-h-[60vh]">
             <div className="text-center">
               <div className="mb-6">
