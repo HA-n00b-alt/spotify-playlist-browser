@@ -104,26 +104,29 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
   // Cleanup audio on unmount and clear cache on page unload
   useEffect(() => {
+    // Capture audioRef and audioCache at effect time for cleanup
+    const audioElement = audioRef.current
+    const cache = audioCache.current
+    
     const handleBeforeUnload = () => {
       // Clear all blob URLs from cache
-      const cache = audioCache.current
-      cache.forEach((blobUrl) => {
+      const currentCache = audioCache.current
+      currentCache.forEach((blobUrl) => {
         if (blobUrl.startsWith('blob:')) {
           URL.revokeObjectURL(blobUrl)
         }
       })
-      cache.clear()
+      currentCache.clear()
     }
     
     window.addEventListener('beforeunload', handleBeforeUnload)
     
     return () => {
-      if (audioRef.current) {
-        audioRef.current.pause()
+      if (audioElement) {
+        audioElement.pause()
         audioRef.current = null
       }
-      // Cleanup blob URLs - capture current cache reference
-      const cache = audioCache.current
+      // Cleanup blob URLs - use captured cache reference
       cache.forEach((blobUrl) => {
         if (blobUrl.startsWith('blob:')) {
           URL.revokeObjectURL(blobUrl)

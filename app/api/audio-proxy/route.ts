@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { logError, logInfo } from '@/lib/logger'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
