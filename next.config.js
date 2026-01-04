@@ -17,17 +17,6 @@ const nextConfig = {
       },
     ],
   },
-  webpack: (config, { isServer }) => {
-    // Sentry webpack configuration
-    if (!isServer) {
-      config.optimization = {
-        ...config.optimization,
-        // Automatically tree-shake Sentry logger statements to reduce bundle size
-        removeDebugLogging: true,
-      }
-    }
-    return config
-  },
 }
 
 module.exports = withSentryConfig(
