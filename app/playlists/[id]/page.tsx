@@ -574,12 +574,17 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
     setRecalculating(true)
     try {
+      // Pass track IDs directly to avoid Spotify API call (much faster)
+      const trackIds = tracks.map(t => t.id)
       const res = await fetch('/api/bpm/recalculate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ playlistId: params.id }),
+        body: JSON.stringify({ 
+          playlistId: params.id,
+          trackIds: trackIds.length > 0 ? trackIds : undefined,
+        }),
       })
 
       if (res.ok) {
