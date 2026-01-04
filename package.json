@@ -8,6 +8,11 @@
     "start": "next start",
     "lint": "next lint"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@sentry/cli"
+    ]
+  },
   "dependencies": {
     "@neondatabase/serverless": "^0.9.0",
     "@sentry/nextjs": "^10.32.1",
