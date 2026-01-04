@@ -33,6 +33,7 @@ interface Playlist {
   uri: string
   is_cached?: boolean
   cached_at?: string | null
+  display_order?: number | null
 }
 
 interface PlaylistsTableProps {
@@ -66,14 +67,12 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
   
-  const STORAGE_KEY_ORDER = 'playlist_order'
   const STORAGE_KEY_LAST_VISIT = 'playlist_last_visit'
 
-  // Load saved order and last visit timestamp from localStorage
+  // Load last visit timestamp from localStorage and apply order from API
   useEffect(() => {
     if (typeof window === 'undefined') return
     
-    const savedOrder = localStorage.getItem(STORAGE_KEY_ORDER)
     const savedLastVisit = localStorage.getItem(STORAGE_KEY_LAST_VISIT)
     
     if (savedLastVisit) {
@@ -85,36 +84,28 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
       setLastVisitTimestamp(now)
     }
     
-    if (savedOrder) {
-      try {
-        const order: string[] = JSON.parse(savedOrder)
-        // Reorder playlists based on saved order
-        const orderedPlaylists = [...initialPlaylists].sort((a, b) => {
-          const aIndex = order.indexOf(a.id)
-          const bIndex = order.indexOf(b.id)
-          // If both are in saved order, use that order
-          if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex
-          // If only one is in saved order, prioritize it
-          if (aIndex !== -1) return -1
-          if (bIndex !== -1) return 1
-          // If neither is in saved order, maintain original order
-          return 0
-        })
-        setPlaylists(orderedPlaylists)
-      } catch (error) {
-        console.error('Error parsing saved order:', error)
-        setPlaylists(initialPlaylists)
-      }
-    } else {
-      setPlaylists(initialPlaylists)
-    }
+    // Playlists from API are already sorted by display_order if available
+    setPlaylists(initialPlaylists)
   }, [initialPlaylists])
 
-  // Save order to localStorage
-  const saveOrder = (newOrder: Playlist[]) => {
-    if (typeof window === 'undefined') return
-    const order = newOrder.map(p => p.id)
-    localStorage.setItem(STORAGE_KEY_ORDER, JSON.stringify(order))
+  // Save order to database via API
+  const saveOrder = async (newOrder: Playlist[]) => {
+    try {
+      const playlistIds = newOrder.map(p => p.id)
+      const response = await fetch('/api/playlists/order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ playlistIds }),
+      })
+      
+      if (!response.ok) {
+        console.error('Failed to save playlist order')
+      }
+    } catch (error) {
+      console.error('Error saving playlist order:', error)
+    }
   }
 
   // Update last visit timestamp when playlists change

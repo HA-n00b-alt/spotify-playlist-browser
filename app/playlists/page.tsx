@@ -34,6 +34,7 @@ interface Playlist {
   uri: string
   is_cached?: boolean
   cached_at?: string | null
+  display_order?: number | null
 }
 
 export default async function PlaylistsPage() {
