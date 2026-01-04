@@ -176,9 +176,11 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', playlistId)
     // Make the drag image invisible (we'll use CSS instead)
-    const img = new Image()
-    img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs='
-    e.dataTransfer.setDragImage(img, 0, 0)
+    if (typeof window !== 'undefined') {
+      const img = new window.Image()
+      img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs='
+      e.dataTransfer.setDragImage(img, 0, 0)
+    }
   }
 
   const handleDragOver = (e: React.DragEvent, playlistId: string) => {
