@@ -591,10 +591,18 @@ export async function getBpmForSpotifyTrack(
   spotifyTrackId: string,
   request?: Request
 ): Promise<BpmResult> {
+  // Import logger dynamically to avoid circular dependencies
+  const { logError, logInfo } = await import('./logger')
+  
   // Validate track ID format
   if (!isValidSpotifyTrackId(spotifyTrackId)) {
     const errorMessage = `Invalid Spotify track ID format: ${spotifyTrackId}`
-    console.error(`[BPM Module] ${errorMessage}`)
+    const error = new Error(errorMessage)
+    logError(error, {
+      component: 'bpm.getBpmForSpotifyTrack',
+      spotifyTrackId,
+      errorType: 'ValidationError',
+    })
     return {
       bpm: null,
       source: 'computed_failed',
@@ -755,10 +763,15 @@ export async function getBpmForSpotifyTrack(
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-        console.error(`[BPM Module] Error during BPM computation:`, errorMessage)
-        if (error instanceof Error) {
-          console.error(`[BPM Module] Error stack:`, error.stack)
-        }
+        const { logError: logErrorUtil } = await import('./logger')
+        logErrorUtil(error, {
+          component: 'bpm.getBpmForSpotifyTrack',
+          spotifyTrackId,
+          action: 'compute_bpm',
+          source: previewResult.source,
+          hasPreviewUrl: !!previewResult.url,
+          errorType: 'BpmComputationError',
+        })
         
         // Cache the error (with short TTL - retry after 1 day)
         await storeInCache({

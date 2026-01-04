@@ -77,7 +77,13 @@ export async function GET(request: Request) {
     console.log('[Audio Proxy Debug] Content type:', contentType)
 
     // Return the audio with proper CORS headers
-    console.log('[Audio Proxy Debug] Returning audio data to client')
+    logInfo('Audio proxied successfully', {
+      component: 'api.audio-proxy',
+      audioUrl: audioUrl.substring(0, 100),
+      contentType,
+      contentLength: audioData.byteLength,
+    })
+    
     return new NextResponse(audioData, {
       headers: {
         'Content-Type': contentType,
@@ -87,12 +93,10 @@ export async function GET(request: Request) {
       },
     })
   } catch (error) {
-    console.error('[Audio Proxy Debug] Error proxying audio:', error)
-    console.error('[Audio Proxy Debug] Error details:', {
-      name: error instanceof Error ? error.name : 'Unknown',
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      audioUrl,
+    logError(error, {
+      component: 'api.audio-proxy',
+      audioUrl: audioUrl?.substring(0, 100),
+      errorType: 'AudioProxyError',
     })
     return NextResponse.json(
       { error: `Failed to proxy audio: ${error instanceof Error ? error.message : String(error)}` },

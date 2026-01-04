@@ -1,6 +1,7 @@
 'use client'
 
 import React, { Component, ErrorInfo, ReactNode } from 'react'
+import { logError } from '@/lib/logger'
 
 interface Props {
   children: ReactNode
@@ -23,25 +24,15 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Log error to console in development
-    if (process.env.NODE_ENV === 'development') {
-      console.error('ErrorBoundary caught an error:', error, errorInfo)
-    }
-
-    // Send to Sentry in production
-    if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_SENTRY_DSN) {
-      import('@sentry/nextjs').then((Sentry) => {
-        Sentry.captureException(error, {
-          contexts: {
-            react: {
-              componentStack: errorInfo.componentStack,
-            },
-          },
-        })
-      }).catch(() => {
-        // Sentry not available, ignore
-      })
-    }
+    // Log error with context and send to Sentry
+    logError(error, {
+      component: 'ErrorBoundary',
+      errorType: 'ReactErrorBoundary',
+      componentStack: errorInfo.componentStack,
+      errorInfo: {
+        componentStack: errorInfo.componentStack,
+      },
+    })
   }
 
   render() {

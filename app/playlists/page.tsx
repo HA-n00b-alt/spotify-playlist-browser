@@ -4,6 +4,7 @@ import { getPlaylistsWithMetadata } from '@/lib/playlists'
 import { isAdminUser } from '@/lib/analytics'
 import PlaylistsTable from './PlaylistsTable'
 import PageHeader from '../components/PageHeader'
+import { logError } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,9 +48,13 @@ export default async function PlaylistsPage() {
     playlists = await getPlaylistsWithMetadata() as Playlist[]
   } catch (e) {
     if (e instanceof Error) {
-      console.error('[Playlists Page] Error fetching playlists:', e.message)
       // Handle forbidden (403) specifically
       if (e.message.includes('Forbidden') || e.message.includes('403')) {
+        logError(e, {
+          component: 'playlists.page',
+          status: 403,
+          errorType: 'Forbidden',
+        })
         // Extract the actual error message if available, otherwise use default
         const match = e.message.match(/Forbidden:\s*(.+)/)
         const forbiddenMessage = match && match[1] && match[1] !== 'Forbidden' 
@@ -57,14 +62,31 @@ export default async function PlaylistsPage() {
           : 'Please ensure the Spotify app has permission to access your playlists. You may need to re-authorize the app.'
         error = `Access forbidden. ${forbiddenMessage}`
       } else if (e.message.includes('Rate limit') || e.message.includes('429')) {
+        logError(e, {
+          component: 'playlists.page',
+          status: 429,
+          errorType: 'RateLimit',
+        })
         // Handle rate limiting (429) - redirect to rate-limit page
         const retryAfterMatch = e.message.match(/retryAfter[:\s]+(\d+)/i)
         const retryAfter = retryAfterMatch ? retryAfterMatch[1] : '0'
         redirect(`/rate-limit?endpoint=/playlists&retryAfter=${retryAfter}`)
       } else {
+        logError(e, {
+          component: 'playlists.page',
+          status: 500,
+          errorType: 'Unknown',
+        })
         error = e.message
       }
     } else {
+      const unknownError = new Error('An error occurred')
+      logError(unknownError, {
+        component: 'playlists.page',
+        status: 500,
+        errorType: 'Unknown',
+        originalError: String(e),
+      })
       error = 'An error occurred'
     }
   }

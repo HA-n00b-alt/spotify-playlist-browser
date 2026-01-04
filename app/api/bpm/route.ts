@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getBpmForSpotifyTrack } from '@/lib/bpm'
 import { trackApiRequest, getCurrentUserId } from '@/lib/analytics'
+import { logError, logInfo } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,6 +12,12 @@ export async function GET(request: Request) {
   const userId = await getCurrentUserId()
 
   if (!spotifyTrackId) {
+    const error = new Error('spotifyTrackId parameter is required')
+    logError(error, {
+      component: 'api.bpm',
+      userId: userId || 'anonymous',
+      status: 400,
+    })
     trackApiRequest(userId, '/api/bpm', 'GET', 400).catch(() => {})
     return NextResponse.json(
       { error: 'spotifyTrackId parameter is required' },
@@ -19,7 +26,13 @@ export async function GET(request: Request) {
   }
 
   try {
-    console.log(`[BPM API] Fetching BPM for track: ${spotifyTrackId}, country: ${countryParam || 'auto'}`)
+    logInfo('Fetching BPM for track', {
+      component: 'api.bpm',
+      userId: userId || 'anonymous',
+      spotifyTrackId,
+      country: countryParam || 'auto',
+    })
+    
     // Create a modified request with country in header if provided
     let modifiedRequest = request
     
@@ -33,18 +46,28 @@ export async function GET(request: Request) {
         body: request.body,
         redirect: request.redirect,
       })
-      console.log(`[BPM API] Set x-country-override header to: ${countryParam}`)
     }
     
     const result = await getBpmForSpotifyTrack(spotifyTrackId, modifiedRequest)
-    console.log(`[BPM API] Result for ${spotifyTrackId}:`, JSON.stringify(result, null, 2))
+    
+    logInfo('BPM fetched successfully', {
+      component: 'api.bpm',
+      userId: userId || 'anonymous',
+      spotifyTrackId,
+      hasBpm: result.bpm !== null,
+      source: result.source,
+    })
+    
     trackApiRequest(userId, '/api/bpm', 'GET', 200).catch(() => {})
     return NextResponse.json(result)
   } catch (error) {
-    console.error(`[BPM API] Error fetching BPM for ${spotifyTrackId}:`, error)
-    if (error instanceof Error) {
-      console.error(`[BPM API] Error stack:`, error.stack)
-    }
+    logError(error, {
+      component: 'api.bpm',
+      userId: userId || 'anonymous',
+      spotifyTrackId,
+      country: countryParam || 'auto',
+      status: 500,
+    })
     const errorMessage = error instanceof Error ? error.message : 'Failed to fetch BPM'
     trackApiRequest(userId, '/api/bpm', 'GET', 500).catch(() => {})
     return NextResponse.json(

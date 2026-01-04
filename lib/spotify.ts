@@ -7,6 +7,7 @@ import {
   SpotifyAPIError,
   createErrorFromResponse 
 } from './errors'
+import { logError, logWarning, logInfo } from './logger'
 
 interface SpotifyError {
   error: {
@@ -67,13 +68,23 @@ async function paginateSpotify<T>(
         nextUrl = null
       }
     } catch (error) {
-      console.error(`Error fetching page ${pageCount + 1}:`, error)
+      logError(error, {
+        component: 'spotify.paginateSpotify',
+        initialUrl,
+        pageCount: pageCount + 1,
+        itemsCollected: allItems.length,
+      })
       // If we have some items, return them; otherwise throw
       if (allItems.length === 0) {
         throw error
       }
       // Break on error but return what we have
-      console.warn(`Returning ${allItems.length} items after error on page ${pageCount + 1}`)
+      logWarning(`Returning ${allItems.length} items after error on page ${pageCount + 1}`, {
+        component: 'spotify.paginateSpotify',
+        initialUrl,
+        pageCount: pageCount + 1,
+        itemsCollected: allItems.length,
+      })
       break
     }
   }
@@ -103,7 +114,9 @@ async function refreshAccessToken(): Promise<string | null> {
   })
 
   if (!refreshToken) {
-    console.warn('[Spotify API DEBUG] refreshAccessToken: No refresh token available')
+    logWarning('No refresh token available', {
+      component: 'spotify.refreshAccessToken',
+    })
     return null
   }
 
@@ -111,13 +124,22 @@ async function refreshAccessToken(): Promise<string | null> {
   const clientSecret = process.env.SPOTIFY_CLIENT_SECRET
 
   if (!clientId || !clientSecret) {
-    console.error('[Spotify API DEBUG] refreshAccessToken: Missing client credentials')
+    const error = new Error('Missing Spotify client credentials')
+    logError(error, {
+      component: 'spotify.refreshAccessToken',
+      env: {
+        hasClientId: !!clientId,
+        hasClientSecret: !!clientSecret,
+      },
+    })
     return null
   }
 
   try {
-    // TEMPORARY DEBUG
-    console.log('[Spotify API DEBUG] refreshAccessToken: Attempting token refresh')
+    logInfo('Attempting token refresh', {
+      component: 'spotify.refreshAccessToken',
+      hasRefreshToken: !!refreshToken,
+    })
     
     const response = await fetch('https://accounts.spotify.com/api/token', {
       method: 'POST',
@@ -131,8 +153,8 @@ async function refreshAccessToken(): Promise<string | null> {
       }),
     })
 
-    // TEMPORARY DEBUG
-    console.log('[Spotify API DEBUG] refreshAccessToken Response:', {
+    logInfo('Token refresh response received', {
+      component: 'spotify.refreshAccessToken',
       status: response.status,
       statusText: response.statusText,
       ok: response.ok,
@@ -140,19 +162,24 @@ async function refreshAccessToken(): Promise<string | null> {
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unable to read error')
-      console.error('[Spotify API DEBUG] refreshAccessToken Failed:', errorText)
+      const error = new Error(`Token refresh failed: ${response.status} ${response.statusText}`)
+      logError(error, {
+        component: 'spotify.refreshAccessToken',
+        status: response.status,
+        statusText: response.statusText,
+        errorText: errorText.substring(0, 500),
+      })
       return null
     }
 
     const data = await response.json()
     const { access_token, expires_in, refresh_token: newRefreshToken } = data
 
-    // TEMPORARY DEBUG
-    console.log('[Spotify API DEBUG] refreshAccessToken Success:', {
+    logInfo('Token refresh successful', {
+      component: 'spotify.refreshAccessToken',
       hasAccessToken: !!access_token,
       expiresIn: expires_in,
       hasNewRefreshToken: !!newRefreshToken,
-      accessTokenPrefix: access_token ? `${access_token.substring(0, 20)}...` : 'none',
     })
 
     // Update the access token cookie
@@ -178,7 +205,10 @@ async function refreshAccessToken(): Promise<string | null> {
 
     return access_token
   } catch (error) {
-    console.error('[Spotify API DEBUG] refreshAccessToken Exception:', error)
+    logError(error, {
+      component: 'spotify.refreshAccessToken',
+      errorType: 'Exception',
+    })
     return null
   }
 }
@@ -194,7 +224,14 @@ async function makeSpotifyRequest<T>(
   if (!accessToken) {
     accessToken = await refreshAccessToken()
     if (!accessToken) {
-      throw new AuthenticationError('No access token available. Please log in again.')
+      const error = new AuthenticationError('No access token available. Please log in again.')
+      logError(error, {
+        component: 'spotify.makeSpotifyRequest',
+        endpoint,
+        retryCount,
+        errorType: 'AuthenticationError',
+      })
+      throw error
     }
   }
 
@@ -246,42 +283,66 @@ async function makeSpotifyRequest<T>(
     const retryAfter = response.headers.get('Retry-After')
     const retryAfterSeconds = retryAfter ? parseInt(retryAfter, 10) : 0
     
-    console.warn('[Spotify API DEBUG] Rate limit hit (429). Waiting before retry:', {
+    logWarning('Rate limit hit (429)', {
+      component: 'spotify.makeSpotifyRequest',
       endpoint,
       retryAfter: retryAfterSeconds,
       retryCount,
+      maxRetries,
     })
     
     // If we haven't exceeded max retries, wait and retry
     if (retryCount < maxRetries && retryAfterSeconds > 0) {
       const waitTime = retryAfterSeconds * 1000 // Convert to milliseconds
-      console.log(`[Spotify API DEBUG] Waiting ${retryAfterSeconds} seconds before retry...`)
+      logInfo(`Waiting ${retryAfterSeconds} seconds before retry`, {
+        component: 'spotify.makeSpotifyRequest',
+        endpoint,
+        retryAfter: retryAfterSeconds,
+      })
       await new Promise(resolve => setTimeout(resolve, waitTime))
       
       // Retry the request after waiting
-      console.log('[Spotify API DEBUG] Retrying request after rate limit wait')
+      logInfo('Retrying request after rate limit wait', {
+        component: 'spotify.makeSpotifyRequest',
+        endpoint,
+        retryCount: retryCount + 1,
+      })
       return makeSpotifyRequest<T>(endpoint, options, retryCount + 1)
     }
     
     // If we've exceeded retries or no Retry-After header, throw error
-    throw new RateLimitError(
+    const error = new RateLimitError(
       'Rate limit exceeded. Please try again later.',
       retryAfterSeconds > 0 ? retryAfterSeconds : null
     )
+    logError(error, {
+      component: 'spotify.makeSpotifyRequest',
+      endpoint,
+      retryCount,
+      maxRetries,
+      retryAfter: retryAfterSeconds,
+      errorType: 'RateLimitError',
+    })
+    throw error
   }
 
   // Handle token expiration (401) with retry logic
   if (response.status === 401) {
     if (retryCount >= maxRetries) {
-      console.error('[Spotify API DEBUG] Token refresh failed: Maximum retries reached', {
+      const error = new AuthenticationError('Token refresh failed after maximum retries')
+      logError(error, {
+        component: 'spotify.makeSpotifyRequest',
         endpoint,
         retryCount,
         maxRetries,
+        status: 401,
+        errorType: 'AuthenticationError',
       })
-      throw new AuthenticationError('Token refresh failed after maximum retries')
+      throw error
     }
 
-    console.warn('[Spotify API DEBUG] Token expired (401). Refreshing token:', {
+    logWarning('Token expired (401). Refreshing token', {
+      component: 'spotify.makeSpotifyRequest',
       endpoint,
       attempt: retryCount + 1,
       maxRetries,
@@ -289,11 +350,22 @@ async function makeSpotifyRequest<T>(
     accessToken = await refreshAccessToken()
     
     if (!accessToken) {
-      console.error('[Spotify API DEBUG] Token refresh failed - no access token returned')
-      throw new AuthenticationError('Failed to refresh access token. Please log in again.')
+      const error = new AuthenticationError('Failed to refresh access token. Please log in again.')
+      logError(error, {
+        component: 'spotify.makeSpotifyRequest',
+        endpoint,
+        retryCount,
+        status: 401,
+        errorType: 'AuthenticationError',
+      })
+      throw error
     }
     
-    console.log('[Spotify API DEBUG] Token refreshed successfully, retrying request')
+    logInfo('Token refreshed successfully, retrying request', {
+      component: 'spotify.makeSpotifyRequest',
+      endpoint,
+      retryCount: retryCount + 1,
+    })
     // Retry the request with new token
     return makeSpotifyRequest<T>(endpoint, options, retryCount + 1)
   }
@@ -336,11 +408,24 @@ async function makeSpotifyRequest<T>(
       }
     } catch (e) {
       // If text parsing fails, use default message
-      console.error('[Spotify API DEBUG] 403 Forbidden - Failed to read response:', e)
+      logError(e, {
+        component: 'spotify.makeSpotifyRequest',
+        endpoint,
+        status: 403,
+        errorType: 'Forbidden',
+        action: 'parsing_error',
+      })
     }
     
-    console.error('[Spotify API] 403 Forbidden:', errorMessage)
-    throw new Error(`Forbidden: ${errorMessage}`)
+    const error = new Error(`Forbidden: ${errorMessage}`)
+    logError(error, {
+      component: 'spotify.makeSpotifyRequest',
+      endpoint,
+      status: 403,
+      errorType: 'Forbidden',
+      errorMessage,
+    })
+    throw error
   }
 
   if (!response.ok) {
@@ -376,12 +461,26 @@ async function makeSpotifyRequest<T>(
       }
     } catch (e) {
       errorBody = { error: { status: response.status, message: response.statusText } }
-      console.error('[Spotify API DEBUG] Error - Failed to read response:', e)
+      logError(e, {
+        component: 'spotify.makeSpotifyRequest',
+        endpoint,
+        status: response.status,
+        errorType: 'SpotifyAPIError',
+        action: 'reading_response',
+      })
     }
     
-    throw new Error(
-      errorBody.error?.message || `Spotify API error: ${response.status} ${response.statusText}`
-    )
+    const errorMessage = errorBody.error?.message || `Spotify API error: ${response.status} ${response.statusText}`
+    const error = new Error(errorMessage)
+    logError(error, {
+      component: 'spotify.makeSpotifyRequest',
+      endpoint,
+      status: response.status,
+      statusText: response.statusText,
+      errorType: 'SpotifyAPIError',
+      errorBody: errorBody.error,
+    })
+    throw error
   }
 
   // TEMPORARY DEBUG: Log successful response (first 500 chars to avoid huge logs)

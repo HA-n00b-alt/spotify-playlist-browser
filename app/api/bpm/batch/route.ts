@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { query } from '@/lib/db'
 import { trackApiRequest, getCurrentUserId } from '@/lib/analytics'
+import { logError, logInfo } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,7 +38,12 @@ export async function POST(request: Request) {
     // Limit batch size to prevent abuse
     const limitedTrackIds = trackIds.slice(0, 100)
     
-    console.log(`[BPM Batch API] Fetching BPM for ${limitedTrackIds.length} tracks`)
+    logInfo('Fetching BPM batch', {
+      component: 'api.bpm.batch',
+      userId: userId || 'anonymous',
+      trackCount: limitedTrackIds.length,
+      originalCount: trackIds.length,
+    })
 
     // Query cache for all tracks at once
     const cacheResults = await query<CacheRecord>(
@@ -136,12 +142,22 @@ export async function POST(request: Request) {
       }
     }
 
-    console.log(`[BPM Batch API] Found ${cacheMap.size} cached results out of ${limitedTrackIds.length} tracks`)
+    logInfo('BPM batch fetch completed', {
+      component: 'api.bpm.batch',
+      userId: userId || 'anonymous',
+      trackCount: limitedTrackIds.length,
+      cachedCount: cacheMap.size,
+    })
     trackApiRequest(userId, '/api/bpm/batch', 'POST', 200).catch(() => {})
     
     return NextResponse.json({ results })
   } catch (error) {
-    console.error(`[BPM Batch API] Error:`, error)
+    logError(error, {
+      component: 'api.bpm.batch',
+      userId: userId || 'anonymous',
+      trackCount: trackIds?.length || 0,
+      status: 500,
+    })
     const errorMessage = error instanceof Error ? error.message : 'Failed to fetch BPM batch'
     trackApiRequest(userId, '/api/bpm/batch', 'POST', 500).catch(() => {})
     return NextResponse.json(

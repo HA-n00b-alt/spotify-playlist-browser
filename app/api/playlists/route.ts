@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getPlaylistsWithMetadata } from '@/lib/playlists'
 import { trackApiRequest, getCurrentUserId } from '@/lib/analytics'
+import { logError, logInfo } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,13 +10,30 @@ export async function GET(request: Request) {
   let response: NextResponse
 
   try {
+    logInfo('Fetching playlists', {
+      component: 'api.playlists',
+      userId: userId || 'anonymous',
+    })
+    
     const playlists = await getPlaylistsWithMetadata()
     response = NextResponse.json(playlists)
+    
+    logInfo('Playlists fetched successfully', {
+      component: 'api.playlists',
+      userId: userId || 'anonymous',
+      count: Array.isArray(playlists) ? playlists.length : 0,
+    })
     
     // Track successful request
     trackApiRequest(userId, '/api/playlists', 'GET', 200).catch(() => {})
   } catch (error) {
     if (error instanceof Error && error.message === 'Unauthorized') {
+      logError(error, {
+        component: 'api.playlists',
+        userId: userId || 'anonymous',
+        status: 401,
+        errorType: 'Unauthorized',
+      })
       response = NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -26,7 +44,13 @@ export async function GET(request: Request) {
     
     // Handle forbidden (403)
     if (error instanceof Error && (error.message.includes('Forbidden') || error.message.includes('403'))) {
-      console.error('Forbidden error fetching playlists:', error)
+      logError(error, {
+        component: 'api.playlists',
+        userId: userId || 'anonymous',
+        status: 403,
+        errorType: 'Forbidden',
+        errorMessage: error.message,
+      })
       response = NextResponse.json(
         { error: error.message || 'Access forbidden. Please check your Spotify app permissions.' },
         { status: 403 }
@@ -37,7 +61,13 @@ export async function GET(request: Request) {
     
     // Handle rate limiting (429) - redirect to rate-limit page
     if (error instanceof Error && (error.message.includes('Rate limit') || error.message.includes('429'))) {
-      console.error('Rate limit error fetching playlists:', error)
+      logError(error, {
+        component: 'api.playlists',
+        userId: userId || 'anonymous',
+        status: 429,
+        errorType: 'RateLimit',
+        errorMessage: error.message,
+      })
       trackApiRequest(userId, '/api/playlists', 'GET', 429).catch(() => {})
       // Extract retryAfter from error message if available, or use 0
       const retryAfterMatch = error.message.match(/retryAfter[:\s]+(\d+)/i)
@@ -49,7 +79,12 @@ export async function GET(request: Request) {
       return NextResponse.redirect(rateLimitUrl)
     }
     
-    console.error('Error fetching playlists:', error)
+    logError(error, {
+      component: 'api.playlists',
+      userId: userId || 'anonymous',
+      status: 500,
+      errorType: 'Unknown',
+    })
     response = NextResponse.json(
       { error: 'Failed to fetch playlists' },
       { status: 500 }

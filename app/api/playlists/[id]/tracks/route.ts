@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getPlaylistTracks } from '@/lib/spotify'
 import { query } from '@/lib/db'
 import { AuthenticationError } from '@/lib/errors'
+import { logError, logInfo } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,7 +42,11 @@ export async function GET(
           }
         }
       } catch (error) {
-        console.error('Error checking cache:', error)
+        logError(error, {
+          component: 'api.playlists.id.tracks',
+          playlistId: params.id,
+          action: 'check_cache',
+        })
       }
     }
     
@@ -61,12 +66,23 @@ export async function GET(
   } catch (error) {
     // Handle authentication errors
     if (error instanceof AuthenticationError || (error instanceof Error && (error.message.includes('Unauthorized') || error.message.includes('No access token') || error.message.includes('Please log in')))) {
+      logError(error, {
+        component: 'api.playlists.id.tracks',
+        playlistId: params.id,
+        status: 401,
+        errorType: 'AuthenticationError',
+      })
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       )
     }
-    console.error('Error fetching tracks:', error)
+    logError(error, {
+      component: 'api.playlists.id.tracks',
+      playlistId: params.id,
+      status: 500,
+      errorType: 'Unknown',
+    })
     const errorMessage = error instanceof Error ? error.message : 'Failed to fetch tracks'
     return NextResponse.json(
       { error: errorMessage },
