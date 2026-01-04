@@ -73,6 +73,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [showBpmMoreInfo, setShowBpmMoreInfo] = useState(false)
   const [countryCode, setCountryCode] = useState<string>('us')
   const [tracksInDb, setTracksInDb] = useState<Set<string>>(new Set()) // Track IDs that are already in the DB
+  const [recalculating, setRecalculating] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
@@ -335,12 +336,21 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         console.log(`[BPM Client] Batch BPM data received:`, data)
 
         const newBpms: Record<string, number | null> = {}
+        const newKeys: Record<string, string | null> = {}
+        const newScales: Record<string, string | null> = {}
         const newDetails: Record<string, { source?: string; error?: string }> = {}
         const newPreviewUrls: Record<string, string | null> = {}
 
         for (const [trackId, result] of Object.entries(data.results || {})) {
           const r = result as any
           newBpms[trackId] = r.bpm
+          // Store key and scale if available
+          if (r.key !== undefined) {
+            newKeys[trackId] = r.key || null
+          }
+          if (r.scale !== undefined) {
+            newScales[trackId] = r.scale || null
+          }
           // Store successful preview URL from DB
           // For Deezer, prefer a URL from urlsTried if available (might be more recent/valid)
           if (r.successfulUrl) {
@@ -399,6 +409,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         }
 
         setTrackBpms(newBpms)
+        setTrackKeys(prev => ({ ...prev, ...newKeys }))
+        setTrackScales(prev => ({ ...prev, ...newScales }))
         setBpmDetails(newDetails)
         setPreviewUrls(prev => ({ ...prev, ...newPreviewUrls }))
 
@@ -551,6 +563,48 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       if (i + batchSize < tracksToFetch.length) {
         await new Promise(resolve => setTimeout(resolve, 200))
       }
+    }
+  }
+
+  // Function to recalculate all BPM/key/scale for tracks in the playlist
+  const handleRecalculateAll = async () => {
+    if (!confirm('This will clear the cache and force recalculation of BPM/key/scale for all tracks in this playlist. Continue?')) {
+      return
+    }
+
+    setRecalculating(true)
+    try {
+      const res = await fetch('/api/bpm/recalculate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ playlistId: params.id }),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        // Clear local state to force refetch
+        setTrackBpms({})
+        setTrackKeys({})
+        setTrackScales({})
+        setTracksInDb(new Set())
+        setBpmDebugInfo({})
+        setBpmDetails({})
+        // Trigger refetch of BPMs
+        if (tracks.length > 0) {
+          await fetchBpmsBatch(tracks)
+        }
+        alert(`Cache cleared for ${data.cleared} tracks. Recalculation started.`)
+      } else {
+        const errorData = await res.json().catch(() => ({}))
+        alert(`Failed to recalculate: ${errorData.error || 'Unknown error'}`)
+      }
+    } catch (error) {
+      console.error('[BPM Client] Error recalculating:', error)
+      alert('Failed to recalculate BPM/key/scale')
+    } finally {
+      setRecalculating(false)
     }
   }
 
@@ -1462,7 +1516,16 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
         {showBpmDebug && (
           <div className="mb-6 p-4 bg-gray-100 rounded-lg border border-gray-300 overflow-auto max-h-96 text-xs sm:text-sm">
-            <h3 className="font-bold mb-2 text-base sm:text-lg">BPM Debug Information</h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-bold text-base sm:text-lg">BPM Debug Information</h3>
+              <button
+                onClick={handleRecalculateAll}
+                disabled={recalculating}
+                className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white font-semibold py-1.5 px-4 rounded text-xs sm:text-sm transition-colors"
+              >
+                {recalculating ? 'Recalculating...' : 'Recalculate All BPM/Key/Scale'}
+              </button>
+            </div>
             <div className="space-y-2">
               {(() => {
                 const totalTracks = tracks.length
@@ -2040,9 +2103,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 hidden md:table-cell">
                     Key
                   </th>
-                  <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 hidden md:table-cell">
-                    Scale
-                  </th>
                   <th
                     className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
                     onClick={() => handleSort('release_date')}
@@ -2066,7 +2126,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     onClick={() => handleSort('added_at')}
                   >
                     <div className="flex items-center">
-                      Added At
+                      Added
                       <SortIcon field="added_at" />
                     </div>
                   </th>
@@ -2075,7 +2135,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               <tbody className="divide-y divide-gray-200">
                 {sortedTracks.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={11} className="px-4 py-8 text-center text-gray-500">
                       {(searchQuery || yearFrom || yearTo || bpmFrom || bpmTo) ? 'No tracks match your filters' : 'No tracks found'}
                     </td>
                   </tr>
@@ -2220,10 +2280,18 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                           )}
                                   </td>
                       <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden md:table-cell">
-                        {trackKeys[track.id] || '-'}
-                      </td>
-                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden md:table-cell">
-                        {trackScales[track.id] || '-'}
+                        {(() => {
+                          const key = trackKeys[track.id]
+                          const scale = trackScales[track.id]
+                          if (key && scale) {
+                            return `${key} ${scale}`
+                          } else if (key) {
+                            return key
+                          } else if (scale) {
+                            return scale
+                          }
+                          return '-'
+                        })()}
                       </td>
                       <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm">
                         {getYearString(track.album.release_date)}
