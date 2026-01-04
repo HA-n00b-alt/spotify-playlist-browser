@@ -32,6 +32,8 @@ interface Playlist {
   snapshot_id: string
   href: string
   uri: string
+  is_cached?: boolean
+  cached_at?: string | null
 }
 
 export default async function PlaylistsPage() {

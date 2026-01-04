@@ -74,6 +74,7 @@ export default async function Home({
           </div>
         </div>
       </div>
+      </div>
       
       <footer className="mt-auto py-6 sm:py-8 text-center text-xs sm:text-sm text-gray-500 border-t border-gray-200">
         Created by{' '}

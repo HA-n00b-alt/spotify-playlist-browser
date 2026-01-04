@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 
@@ -31,6 +31,8 @@ interface Playlist {
   snapshot_id: string
   href: string
   uri: string
+  is_cached?: boolean
+  cached_at?: string | null
 }
 
 interface PlaylistsTableProps {
@@ -54,10 +56,163 @@ function stripHtmlTags(text: string): string {
   return div.textContent || div.innerText || ''
 }
 
-export default function PlaylistsTable({ playlists }: PlaylistsTableProps) {
+export default function PlaylistsTable({ playlists: initialPlaylists }: PlaylistsTableProps) {
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
   const [searchQuery, setSearchQuery] = useState('')
+  const [playlists, setPlaylists] = useState<Playlist[]>(initialPlaylists)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [lastVisitTimestamp, setLastVisitTimestamp] = useState<number | null>(null)
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+  
+  const STORAGE_KEY_ORDER = 'playlist_order'
+  const STORAGE_KEY_LAST_VISIT = 'playlist_last_visit'
+
+  // Load saved order and last visit timestamp from localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    
+    const savedOrder = localStorage.getItem(STORAGE_KEY_ORDER)
+    const savedLastVisit = localStorage.getItem(STORAGE_KEY_LAST_VISIT)
+    
+    if (savedLastVisit) {
+      setLastVisitTimestamp(parseInt(savedLastVisit, 10))
+    } else {
+      // First visit - set current timestamp
+      const now = Date.now()
+      localStorage.setItem(STORAGE_KEY_LAST_VISIT, now.toString())
+      setLastVisitTimestamp(now)
+    }
+    
+    if (savedOrder) {
+      try {
+        const order: string[] = JSON.parse(savedOrder)
+        // Reorder playlists based on saved order
+        const orderedPlaylists = [...initialPlaylists].sort((a, b) => {
+          const aIndex = order.indexOf(a.id)
+          const bIndex = order.indexOf(b.id)
+          // If both are in saved order, use that order
+          if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex
+          // If only one is in saved order, prioritize it
+          if (aIndex !== -1) return -1
+          if (bIndex !== -1) return 1
+          // If neither is in saved order, maintain original order
+          return 0
+        })
+        setPlaylists(orderedPlaylists)
+      } catch (error) {
+        console.error('Error parsing saved order:', error)
+        setPlaylists(initialPlaylists)
+      }
+    } else {
+      setPlaylists(initialPlaylists)
+    }
+  }, [initialPlaylists])
+
+  // Save order to localStorage
+  const saveOrder = (newOrder: Playlist[]) => {
+    if (typeof window === 'undefined') return
+    const order = newOrder.map(p => p.id)
+    localStorage.setItem(STORAGE_KEY_ORDER, JSON.stringify(order))
+  }
+
+  // Update last visit timestamp when playlists change
+  useEffect(() => {
+    if (typeof window === 'undefined' || playlists.length === 0) return
+    
+    const now = Date.now()
+    localStorage.setItem(STORAGE_KEY_LAST_VISIT, now.toString())
+    setLastVisitTimestamp(now)
+  }, [playlists.length])
+
+  // Check if playlist is new (created after last visit)
+  const isNewPlaylist = (playlist: Playlist): boolean => {
+    if (!lastVisitTimestamp) return false
+    // We can't determine creation date from Spotify API, so we'll use cached_at as a proxy
+    // If it's cached and cached_at is after last visit, it's "new" to us
+    if (playlist.cached_at) {
+      const cachedAt = new Date(playlist.cached_at).getTime()
+      return cachedAt > lastVisitTimestamp
+    }
+    // If not cached, assume it's new if we haven't seen it before
+    // We'll track seen playlists in localStorage
+    const seenPlaylists = localStorage.getItem('playlist_seen_ids')
+    if (seenPlaylists) {
+      const seen: string[] = JSON.parse(seenPlaylists)
+      return !seen.includes(playlist.id)
+    }
+    return false
+  }
+
+  // Mark playlist as seen
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const seenPlaylists = localStorage.getItem('playlist_seen_ids')
+    const seen: string[] = seenPlaylists ? JSON.parse(seenPlaylists) : []
+    const newSeen = [...new Set([...seen, ...playlists.map(p => p.id)])]
+    localStorage.setItem('playlist_seen_ids', JSON.stringify(newSeen))
+  }, [playlists])
+
+  // Refresh playlists from Spotify
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    try {
+      const response = await fetch('/api/playlists?refresh=true')
+      if (response.ok) {
+        const refreshedPlaylists = await response.json()
+        setPlaylists(refreshedPlaylists)
+        // Update last visit timestamp
+        const now = Date.now()
+        localStorage.setItem(STORAGE_KEY_LAST_VISIT, now.toString())
+        setLastVisitTimestamp(now)
+      } else {
+        console.error('Failed to refresh playlists')
+      }
+    } catch (error) {
+      console.error('Error refreshing playlists:', error)
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
+  // Drag and drop handlers
+  const handleDragStart = (index: number) => {
+    setDraggedIndex(index)
+  }
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault()
+    setDragOverIndex(index)
+  }
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null)
+  }
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault()
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      setDraggedIndex(null)
+      setDragOverIndex(null)
+      return
+    }
+
+    const newPlaylists = [...playlists]
+    const draggedItem = newPlaylists[draggedIndex]
+    newPlaylists.splice(draggedIndex, 1)
+    newPlaylists.splice(dropIndex, 0, draggedItem)
+    
+    setPlaylists(newPlaylists)
+    saveOrder(newPlaylists)
+    setDraggedIndex(null)
+    setDragOverIndex(null)
+  }
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null)
+    setDragOverIndex(null)
+  }
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -138,76 +293,134 @@ export default function PlaylistsTable({ playlists }: PlaylistsTableProps) {
 
   return (
     <div>
-      <div className="mb-4 sm:mb-6">
+      <div className="mb-4 sm:mb-6 flex gap-3">
         <input
           type="text"
           placeholder="Search playlists..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full px-4 py-3 sm:py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-base sm:text-sm"
+          className="flex-1 px-4 py-3 sm:py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-base sm:text-sm"
         />
+        <button
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          className="px-4 py-2 bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white font-semibold rounded-lg transition-colors text-sm sm:text-base whitespace-nowrap"
+        >
+          {isRefreshing ? 'Refreshing...' : 'Refresh'}
+        </button>
       </div>
       
       {/* Mobile Card View */}
       <div className="block sm:hidden space-y-3">
-        {sortedPlaylists.map((playlist) => (
-          <Link
-            key={playlist.id}
-            href={`/playlists/${playlist.id}`}
-            className="block bg-white rounded-lg border border-gray-200 shadow-sm p-4 hover:shadow-md transition-shadow"
-          >
-            <div className="flex items-start gap-3">
-              {playlist.images[0] ? (
-                <Image
-                  src={playlist.images[0].url}
-                  alt={playlist.name}
-                  width={60}
-                  height={60}
-                  className="w-15 h-15 sm:w-12 sm:h-12 object-cover rounded flex-shrink-0"
-                />
-              ) : (
-                <div className="w-15 h-15 sm:w-12 sm:h-12 bg-gray-200 rounded flex-shrink-0 flex items-center justify-center">
-                  <span className="text-gray-400 text-xs">No image</span>
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-gray-900 mb-1 truncate">
-                  {playlist.name}
-                </div>
-                {playlist.description && (
-                  <div className="text-sm text-gray-600 mb-2 line-clamp-2">
-                    {stripHtmlTags(playlist.description)}
+        {sortedPlaylists.map((playlist, index) => {
+          const isNew = isNewPlaylist(playlist)
+          const isCached = playlist.is_cached ?? false
+          
+          return (
+            <div
+              key={playlist.id}
+              draggable
+              onDragStart={() => handleDragStart(index)}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, index)}
+              onDragEnd={handleDragEnd}
+              className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 hover:shadow-md transition-shadow"
+            >
+              <Link
+                href={`/playlists/${playlist.id}`}
+                className="flex items-start gap-3"
+              >
+                {playlist.images[0] ? (
+                  <Image
+                    src={playlist.images[0].url}
+                    alt={playlist.name}
+                    width={60}
+                    height={60}
+                    className="w-15 h-15 sm:w-12 sm:h-12 object-cover rounded flex-shrink-0"
+                  />
+                ) : (
+                  <div className="w-15 h-15 sm:w-12 sm:h-12 bg-gray-200 rounded flex-shrink-0 flex items-center justify-center">
+                    <span className="text-gray-400 text-xs">No image</span>
                   </div>
                 )}
-                <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-                  <span>
-                    {playlist.owner.external_urls?.spotify ? (
-                      <a
-                        href={playlist.owner.external_urls.spotify}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-green-600 hover:text-green-700"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {playlist.owner.display_name}
-                      </a>
-                    ) : (
-                      playlist.owner.display_name
-                    )}
-                  </span>
-                  <span>•</span>
-                  <span>{playlist.tracks.total} tracks</span>
-                  {playlist.followers?.total !== undefined && (
-                    <>
-                      <span>•</span>
-                      <span>{playlist.followers.total.toLocaleString()} followers</span>
-                    </>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="font-medium text-gray-900 truncate flex-1">
+                      {playlist.name}
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {isCached && (
+                        <span
+                          className="text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded"
+                          title="Cached"
+                        >
+                          C
+                        </span>
+                      )}
+                      {isNew && (
+                        <span
+                          className="text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded"
+                          title="New"
+                        >
+                          N
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {playlist.description && (
+                    <div className="text-sm text-gray-600 mb-2 line-clamp-2">
+                      {stripHtmlTags(playlist.description)}
+                    </div>
                   )}
+                  <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+                    <span>
+                      {playlist.owner.external_urls?.spotify ? (
+                        <a
+                          href={playlist.owner.external_urls.spotify}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-green-600 hover:text-green-700"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {playlist.owner.display_name}
+                        </a>
+                      ) : (
+                        playlist.owner.display_name
+                      )}
+                    </span>
+                    <span>•</span>
+                    <span>{playlist.tracks.total} tracks</span>
+                    {playlist.followers?.total !== undefined && (
+                      <>
+                        <span>•</span>
+                        <span>{playlist.followers.total.toLocaleString()} followers</span>
+                      </>
+                    )}
+                  </div>
                 </div>
+              </Link>
+              <div
+                className="cursor-move text-gray-400 hover:text-gray-600 mt-2"
+                title="Drag to reorder"
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 8h16M4 16h16"
+                  />
+                </svg>
               </div>
             </div>
-          </Link>
-        ))}
+          )
+        })}
       </div>
       
       {/* Desktop Table View */}
@@ -216,6 +429,7 @@ export default function PlaylistsTable({ playlists }: PlaylistsTableProps) {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
+                <th className="px-4 lg:px-6 py-3 w-8"></th>
                 <th
                   className="px-4 lg:px-6 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
                   onClick={() => handleSort('name')}
@@ -224,6 +438,9 @@ export default function PlaylistsTable({ playlists }: PlaylistsTableProps) {
                     Playlist
                     <SortIcon field="name" />
                   </div>
+                </th>
+                <th className="px-2 py-3 text-center text-xs sm:text-sm font-medium text-gray-700 w-16">
+                  Status
                 </th>
                 <th
                   className="px-4 lg:px-6 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-100 select-none hidden md:table-cell"
@@ -261,73 +478,149 @@ export default function PlaylistsTable({ playlists }: PlaylistsTableProps) {
                     <SortIcon field="followers" />
                   </div>
                 </th>
+                <th className="px-4 lg:px-6 py-3 w-8"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {sortedPlaylists.map((playlist) => (
-                <tr
-                  key={playlist.id}
-                  className="hover:bg-gray-50 transition-colors"
-                >
-                  <td className="px-4 lg:px-6 py-3">
-                    <Link
-                      href={`/playlists/${playlist.id}`}
-                      className="flex items-center gap-3 sm:gap-4 group"
-                    >
-                      {playlist.images[0] ? (
-                        <Image
-                          src={playlist.images[0].url}
-                          alt={playlist.name}
-                          width={50}
-                          height={50}
-                          className="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 rounded flex-shrink-0 flex items-center justify-center">
-                          <span className="text-gray-400 text-xs">No image</span>
-                        </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="font-medium text-gray-900 group-hover:text-green-600 transition-colors truncate text-sm sm:text-base">
-                          {playlist.name}
-                        </div>
-                      </div>
-                    </Link>
-                  </td>
-                  <td className="px-4 lg:px-6 py-3 hidden md:table-cell">
-                    <div className="text-gray-600 max-w-md truncate text-sm">
-                      {playlist.description ? (
-                        stripHtmlTags(playlist.description)
-                      ) : (
-                        <span className="text-gray-400 italic">No description</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 lg:px-6 py-3">
-                    {playlist.owner.external_urls?.spotify ? (
-                      <a
-                        href={playlist.owner.external_urls.spotify}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-green-600 hover:text-green-700 hover:underline text-sm sm:text-base"
-                        onClick={(e) => e.stopPropagation()}
+              {sortedPlaylists.map((playlist, index) => {
+                const isNew = isNewPlaylist(playlist)
+                const isCached = playlist.is_cached ?? false
+                const isDragging = draggedIndex === index
+                const isDragOver = dragOverIndex === index
+                
+                return (
+                  <tr
+                    key={playlist.id}
+                    draggable
+                    onDragStart={() => handleDragStart(index)}
+                    onDragOver={(e) => handleDragOver(e, index)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, index)}
+                    onDragEnd={handleDragEnd}
+                    className={`hover:bg-gray-50 transition-colors ${
+                      isDragging ? 'opacity-50' : ''
+                    } ${isDragOver ? 'bg-blue-50' : ''}`}
+                  >
+                    <td className="px-2 py-3">
+                      <div
+                        className="cursor-move text-gray-400 hover:text-gray-600"
+                        title="Drag to reorder"
                       >
-                        {playlist.owner.display_name}
-                      </a>
-                    ) : (
-                      <div className="text-gray-700 text-sm sm:text-base">{playlist.owner.display_name}</div>
-                    )}
-                  </td>
-                  <td className="px-4 lg:px-6 py-3 text-right">
-                    <div className="text-gray-700 text-sm sm:text-base">{playlist.tracks.total}</div>
-                  </td>
-                  <td className="px-4 lg:px-6 py-3 text-right hidden lg:table-cell">
-                    <div className="text-gray-700 text-sm sm:text-base">
-                      {playlist.followers?.total !== undefined ? playlist.followers.total.toLocaleString() : '-'}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                        <svg
+                          className="w-5 h-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4 8h16M4 16h16"
+                          />
+                        </svg>
+                      </div>
+                    </td>
+                    <td className="px-4 lg:px-6 py-3">
+                      <Link
+                        href={`/playlists/${playlist.id}`}
+                        className="flex items-center gap-3 sm:gap-4 group"
+                      >
+                        {playlist.images[0] ? (
+                          <Image
+                            src={playlist.images[0].url}
+                            alt={playlist.name}
+                            width={50}
+                            height={50}
+                            className="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 rounded flex-shrink-0 flex items-center justify-center">
+                            <span className="text-gray-400 text-xs">No image</span>
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium text-gray-900 group-hover:text-green-600 transition-colors truncate text-sm sm:text-base">
+                            {playlist.name}
+                          </div>
+                        </div>
+                      </Link>
+                    </td>
+                    <td className="px-2 py-3 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        {isCached && (
+                          <span
+                            className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded"
+                            title="Cached"
+                          >
+                            C
+                          </span>
+                        )}
+                        {isNew && (
+                          <span
+                            className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded"
+                            title="New"
+                          >
+                            N
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 lg:px-6 py-3 hidden md:table-cell">
+                      <div className="text-gray-600 max-w-md truncate text-sm">
+                        {playlist.description ? (
+                          stripHtmlTags(playlist.description)
+                        ) : (
+                          <span className="text-gray-400 italic">No description</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 lg:px-6 py-3">
+                      {playlist.owner.external_urls?.spotify ? (
+                        <a
+                          href={playlist.owner.external_urls.spotify}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-green-600 hover:text-green-700 hover:underline text-sm sm:text-base"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {playlist.owner.display_name}
+                        </a>
+                      ) : (
+                        <div className="text-gray-700 text-sm sm:text-base">{playlist.owner.display_name}</div>
+                      )}
+                    </td>
+                    <td className="px-4 lg:px-6 py-3 text-right">
+                      <div className="text-gray-700 text-sm sm:text-base">{playlist.tracks.total}</div>
+                    </td>
+                    <td className="px-4 lg:px-6 py-3 text-right hidden lg:table-cell">
+                      <div className="text-gray-700 text-sm sm:text-base">
+                        {playlist.followers?.total !== undefined ? playlist.followers.total.toLocaleString() : '-'}
+                      </div>
+                    </td>
+                    <td className="px-2 py-3">
+                      <div
+                        className="cursor-move text-gray-400 hover:text-gray-600"
+                        title="Drag to reorder"
+                      >
+                        <svg
+                          className="w-5 h-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4 8h16M4 16h16"
+                          />
+                        </svg>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

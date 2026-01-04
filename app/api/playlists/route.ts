@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server'
 import { getPlaylists } from '@/lib/spotify'
 import { trackApiRequest, getCurrentUserId } from '@/lib/analytics'
+import { query } from '@/lib/db'
+
+interface PlaylistCacheRecord {
+  playlist_id: string
+  snapshot_id: string
+  cached_at: Date
+}
 
 export async function GET(request: Request) {
   const userId = await getCurrentUserId()
@@ -8,7 +15,48 @@ export async function GET(request: Request) {
 
   try {
     const playlists = await getPlaylists()
-    response = NextResponse.json(playlists)
+    
+    // Check cache status for each playlist
+    if (playlists.length > 0) {
+      const playlistIds = playlists.map(p => p.id)
+      const placeholders = playlistIds.map((_, i) => `$${i + 1}`).join(',')
+      
+      try {
+        const cacheResults = await query<PlaylistCacheRecord>(
+          `SELECT playlist_id, snapshot_id, cached_at 
+           FROM playlist_cache 
+           WHERE playlist_id IN (${placeholders})`,
+          playlistIds
+        )
+        
+        // Create a map of cache status
+        const cacheMap = new Map<string, { snapshotId: string; cachedAt: Date }>()
+        for (const cached of cacheResults) {
+          cacheMap.set(cached.playlist_id, {
+            snapshotId: cached.snapshot_id,
+            cachedAt: cached.cached_at,
+          })
+        }
+        
+        // Add cache info to each playlist
+        const playlistsWithCache = playlists.map(playlist => {
+          const cacheInfo = cacheMap.get(playlist.id)
+          return {
+            ...playlist,
+            is_cached: cacheInfo ? cacheInfo.snapshotId === playlist.snapshot_id : false,
+            cached_at: cacheInfo?.cachedAt || null,
+          }
+        })
+        
+        response = NextResponse.json(playlistsWithCache)
+      } catch (cacheError) {
+        // If cache check fails, return playlists without cache info
+        console.error('Error checking cache status:', cacheError)
+        response = NextResponse.json(playlists)
+      }
+    } else {
+      response = NextResponse.json(playlists)
+    }
     
     // Track successful request
     trackApiRequest(userId, '/api/playlists', 'GET', 200).catch(() => {})
