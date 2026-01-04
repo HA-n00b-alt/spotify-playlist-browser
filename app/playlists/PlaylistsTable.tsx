@@ -56,6 +56,29 @@ function stripHtmlTags(text: string): string {
   return div.textContent || div.innerText || ''
 }
 
+function formatFollowers(count: number): string {
+  if (count >= 1000000) {
+    const millions = count / 1000000
+    // Format to Y.XXM format (e.g., 1.5M, 12.3M, 999.9M)
+    // For values >= 100M, round to whole number
+    if (millions >= 100) {
+      return Math.round(millions) + 'M'
+    }
+    // For values < 100M, show one decimal place, remove trailing zero
+    return millions.toFixed(1).replace(/\.0$/, '') + 'M'
+  } else if (count >= 1000) {
+    const thousands = count / 1000
+    // Format to Y.XXk format (e.g., 1.5k, 12.3k, 999.9k)
+    // For values >= 100k, round to whole number
+    if (thousands >= 100) {
+      return Math.round(thousands) + 'k'
+    }
+    // For values < 100k, show one decimal place, remove trailing zero
+    return thousands.toFixed(1).replace(/\.0$/, '') + 'k'
+  }
+  return count.toString()
+}
+
 export default function PlaylistsTable({ playlists: initialPlaylists }: PlaylistsTableProps) {
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
@@ -310,7 +333,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                     )}
                   </div>
                   <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-                    <span>
+                    <span className="truncate max-w-[80px]">
                       {playlist.owner.external_urls?.spotify ? (
                         <a
                           href={playlist.owner.external_urls.spotify}
@@ -318,11 +341,18 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                           rel="noopener noreferrer"
                           className="text-green-600 hover:text-green-700"
                           onClick={(e) => e.stopPropagation()}
+                          title={playlist.owner.display_name}
                         >
-                          {playlist.owner.display_name}
+                          {playlist.owner.display_name.length > 12 
+                            ? playlist.owner.display_name.substring(0, 12) + '...'
+                            : playlist.owner.display_name}
                         </a>
                       ) : (
-                        playlist.owner.display_name
+                        <span title={playlist.owner.display_name}>
+                          {playlist.owner.display_name.length > 12 
+                            ? playlist.owner.display_name.substring(0, 12) + '...'
+                            : playlist.owner.display_name}
+                        </span>
                       )}
                     </span>
                     <span>•</span>
@@ -330,7 +360,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                     {playlist.followers?.total !== undefined && (
                       <>
                         <span>•</span>
-                        <span>{playlist.followers.total.toLocaleString()} followers</span>
+                        <span>{formatFollowers(playlist.followers.total)} followers</span>
                       </>
                     )}
                   </div>
