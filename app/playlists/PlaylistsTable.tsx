@@ -33,7 +33,6 @@ interface Playlist {
   uri: string
   is_cached?: boolean
   cached_at?: string | null
-  display_order?: number | null
 }
 
 interface PlaylistsTableProps {
@@ -82,18 +81,9 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
       setLastVisitTimestamp(now)
     }
     
-    // Playlists from API are already sorted by display_order if available
+    // Playlists from API are in Spotify's order
     setPlaylists(initialPlaylists)
   }, [initialPlaylists])
-
-  // Update last visit timestamp when playlists change
-  useEffect(() => {
-    if (typeof window === 'undefined' || playlists.length === 0) return
-    
-    const now = Date.now()
-    localStorage.setItem(STORAGE_KEY_LAST_VISIT, now.toString())
-    setLastVisitTimestamp(now)
-  }, [playlists.length])
 
   // Check if playlist is new (created after last visit)
   const isNewPlaylist = useCallback((playlist: Playlist): boolean => {
@@ -132,10 +122,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
       if (response.ok) {
         const refreshedPlaylists = await response.json()
         setPlaylists(refreshedPlaylists)
-        // Update last visit timestamp
-        const now = Date.now()
-        localStorage.setItem(STORAGE_KEY_LAST_VISIT, now.toString())
-        setLastVisitTimestamp(now)
+        // Don't update lastVisitTimestamp on refresh - keep it to detect "new" playlists
       } else {
         console.error('Failed to refresh playlists')
       }
@@ -171,7 +158,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
   }, [playlists, searchQuery])
 
   const sortedPlaylists = useMemo(() => {
-    // If no sort field is selected, sort by: 1) new playlists first, 2) display_order, 3) original order
+    // If no sort field is selected, sort by: 1) new playlists first, 2) original order
     if (!sortField) {
       return [...filteredPlaylists].sort((a, b) => {
         const aIsNew = isNewPlaylist(a)
@@ -181,16 +168,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
         if (aIsNew && !bIsNew) return -1
         if (!aIsNew && bIsNew) return 1
         
-        // Then by display_order if available
-        const aOrder = a.display_order ?? null
-        const bOrder = b.display_order ?? null
-        if (aOrder !== null && bOrder !== null) {
-          return aOrder - bOrder
-        }
-        if (aOrder !== null) return -1
-        if (bOrder !== null) return 1
-        
-        // Maintain original order
+        // Maintain original order (Spotify's order)
         return 0
       })
     }
