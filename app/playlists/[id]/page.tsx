@@ -61,7 +61,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [loadingBpms, setLoadingBpms] = useState<Set<string>>(new Set())
   const [showBpmDebug, setShowBpmDebug] = useState(false)
   const [bpmDebugInfo, setBpmDebugInfo] = useState<Record<string, any>>({})
-  const [bpmDetails, setBpmDetails] = useState<Record<string, { source?: string; error?: string; upc?: string }>>({})
+  const [bpmDetails, setBpmDetails] = useState<Record<string, { source?: string; error?: string }>>({})
   const [previewUrls, setPreviewUrls] = useState<Record<string, string | null>>({}) // Store successful preview URLs from DB
   const [showBpmModal, setShowBpmModal] = useState(false)
   const [selectedBpmTrack, setSelectedBpmTrack] = useState<Track | null>(null)
@@ -335,7 +335,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         console.log(`[BPM Client] Batch BPM data received:`, data)
 
         const newBpms: Record<string, number | null> = {}
-        const newDetails: Record<string, { source?: string; error?: string; upc?: string }> = {}
+        const newDetails: Record<string, { source?: string; error?: string }> = {}
         const newPreviewUrls: Record<string, string | null> = {}
 
         for (const [trackId, result] of Object.entries(data.results || {})) {
@@ -378,12 +378,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               newPreviewUrls[trackId] = r.successfulUrl
             }
           }
-          // Always store details if available (source, error, upc, urls)
-          if (r.source || r.error || r.upc || r.urlsTried || r.successfulUrl) {
+          // Always store details if available (source, error, urls)
+          if (r.source || r.error || r.urlsTried || r.successfulUrl) {
             newDetails[trackId] = {
               source: r.source,
               error: r.error,
-              upc: r.upc,
             }
           }
           // Store debug info including URLs
@@ -497,7 +496,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 [track.id]: {
                   source: data.source,
                   error: data.error,
-                  upc: data.upc,
                 },
               }))
               setBpmDebugInfo(prev => ({
@@ -2467,7 +2465,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             [selectedBpmTrack.id]: {
                               source: data.source,
                               error: data.error,
-                              upc: data.upc,
                             },
                           }))
                           setRetryStatus({ loading: false, success: true })
@@ -2478,9 +2475,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             // Generate descriptive message based on source
                             if (data.source === 'computed_failed') {
                               errorMessage = 'No preview audio available from any source (iTunes, Deezer)'
-                            } else if (data.source === 'itunes_upc' || data.source === 'itunes_search') {
+                            } else if (data.source === 'itunes_search') {
                               errorMessage = 'No preview available on iTunes/Apple Music'
-                            } else if (data.source === 'deezer') {
+                            } else if (data.source === 'deezer_isrc' || data.source === 'deezer_search') {
                               errorMessage = 'No preview available on Deezer'
                             } else {
                               errorMessage = 'BPM calculation failed. No preview audio available.'
@@ -2498,7 +2495,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             [selectedBpmTrack.id]: {
                               source: data.source,
                               error: errorMessage,
-                              upc: data.upc,
                             },
                           }))
                           setRetryStatus({ loading: false, success: false, error: errorMessage })
