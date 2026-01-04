@@ -4,6 +4,8 @@ A modern Next.js web application that lets you browse, search, and sort your Spo
 
 **Live Site:** [https://searchmyplaylist.delman.it](https://searchmyplaylist.delman.it)
 
+**Technical Documentation:** See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed technical documentation on system architecture, error handling, API design, and more.
+
 ## Features
 
 ### Core Functionality
@@ -20,11 +22,15 @@ A modern Next.js web application that lets you browse, search, and sort your Spo
 - Search across all playlist fields
 - Clickable owner names linking to Spotify profiles
 - Mobile-friendly card view on small screens
+- Cache status indicators
+- "New" flag for playlists added since last visit
+- Refresh button to reload playlists from Spotify
 
 ### Track Page Features
-- Complete track metadata: name, artists, album, release year, duration, BPM, added date
+- Complete track metadata: name, artists, album, release year, duration, BPM, key, scale, added date
 - Album cover thumbnails
 - BPM detection with automatic processing indicator
+- Musical key and scale detection (e.g., C major, D minor)
 - Advanced filtering:
   - Year range (from/to)
   - BPM range (from/to)
@@ -35,7 +41,7 @@ A modern Next.js web application that lets you browse, search, and sort your Spo
   - Track names → Spotify track page (opens in web player)
   - Artist names → Spotify artist profiles
   - Album names → Spotify album pages
-- BPM details modal with source, ISRC, and error information
+- BPM details modal with source, ISRC, error information, key, scale, and confidence
 - Retry functionality for failed BPM calculations
 - Playlist header showing playlist info with "Open in Spotify" button
 - Mobile-optimized card view
@@ -46,8 +52,11 @@ A modern Next.js web application that lets you browse, search, and sort your Spo
 - Token refresh management
 - HTML entity decoding for clean text display
 - Error handling with user-friendly messages
-- BPM detection via external microservice
+- BPM detection via external microservice with ISRC-based cross-platform search (Deezer, iTunes)
+- Key and scale detection from audio analysis
 - Analytics tracking (admin-only)
+- Error tracking with Sentry
+- API response caching with React Query
 - Country-based preview audio search
 
 ## Tech Stack
@@ -56,17 +65,23 @@ A modern Next.js web application that lets you browse, search, and sort your Spo
 - **Language:** TypeScript
 - **Styling:** Tailwind CSS
 - **Authentication:** Spotify OAuth 2.0 with PKCE
-- **Database:** Neon Postgres (for BPM cache and analytics)
+- **Database:** Neon Postgres (for BPM cache, playlist cache, and analytics)
 - **BPM Service:** Google Cloud Run microservice
+- **Error Tracking:** Sentry
+- **Data Fetching:** React Query (TanStack Query)
 - **Deployment:** Vercel
 - **Image Optimization:** Next.js Image component
+- **Package Manager:** pnpm
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js 18+ and npm
+- Node.js 18+ and pnpm
 - A Spotify Developer account
+- A Neon Postgres database
+- A Google Cloud service account (for BPM service authentication)
+- A Sentry account (for error tracking)
 - (Optional) A Vercel account for deployment
 
 ### Installation
@@ -79,33 +94,56 @@ A modern Next.js web application that lets you browse, search, and sort your Spo
 
 2. **Install dependencies:**
    ```bash
-   npm install
+   pnpm install
    ```
 
 3. **Set up environment variables:**
    
    Create a `.env.local` file in the root directory:
    ```env
+   # Spotify OAuth
    SPOTIFY_CLIENT_ID=your_client_id_here
    SPOTIFY_CLIENT_SECRET=your_client_secret_here
    SPOTIFY_REDIRECT_URI=http://localhost:3000/api/auth/callback
    NEXT_PUBLIC_BASE_URL=http://localhost:3000
+   
+   # Database (Neon Postgres)
    DATABASE_URL=postgresql://user:password@host/database?sslmode=require
    DATABASE_URL_UNPOOLED=postgresql://user:password@host/database?sslmode=require
+   
+   # BPM Service
    BPM_SERVICE_URL=https://bpm-service-340051416180.europe-west3.run.app
-   GCP_SERVICE_ACCOUNT_KEY={"type":"service_account",...}
+   GCP_SERVICE_ACCOUNT_KEY={"type":"service_account","project_id":"...","private_key_id":"...","private_key":"...","client_email":"...","client_id":"...","auth_uri":"...","token_uri":"...","auth_provider_x509_cert_url":"...","client_x509_cert_url":"..."}
+   
+   # Sentry (Error Tracking)
+   NEXT_PUBLIC_SENTRY_DSN=https://your-sentry-dsn@sentry.io/project-id
+   SENTRY_ORG=your-sentry-org
+   SENTRY_PROJECT=spotify-playlist-browser
    ```
 
-4. **Configure Spotify App:**
+4. **Set up the database:**
+   
+   Run the setup script to create all required tables:
+   ```bash
+   psql $DATABASE_URL_UNPOOLED -f setup.sql
+   ```
+   
+   Or if you have the connection string set:
+   ```bash
+   export DATABASE_URL_UNPOOLED="postgresql://user:password@host/database?sslmode=require"
+   psql $DATABASE_URL_UNPOOLED -f setup.sql
+   ```
+
+5. **Configure Spotify App:**
    
    See the [Spotify Setup](#spotify-developer-dashboard-setup) section below for detailed instructions.
 
-5. **Run the development server:**
+6. **Run the development server:**
    ```bash
-   npm run dev
+   pnpm dev
    ```
 
-6. **Open your browser:**
+7. **Open your browser:**
    
    Navigate to [http://localhost:3000](http://localhost:3000)
 
@@ -141,179 +179,88 @@ A modern Next.js web application that lets you browse, search, and sort your Spo
 
 Add the credentials to your `.env.local` file (see [Installation](#installation) above).
 
-## Project Structure
+## Database Setup
 
-```
-spotify-playlist-browser/
-├── app/
-│   ├── api/
-│   │   ├── auth/
-│   │   │   ├── login/          # OAuth initiation
-│   │   │   ├── callback/        # OAuth callback handler
-│   │   │   ├── logout/          # Logout endpoint
-│   │   │   ├── status/          # Auth status check
-│   │   │   └── is-admin/        # Check if user is admin
-│   │   ├── playlists/
-│   │   │   ├── route.ts         # Get all playlists
-│   │   │   └── [id]/
-│   │   │       ├── route.ts     # Get playlist info
-│   │   │       └── tracks/
-│   │   │           └── route.ts # Get playlist tracks
-│   │   ├── bpm/
-│   │   │   ├── route.ts         # Get BPM for single track
-│   │   │   └── batch/
-│   │   │       └── route.ts     # Get BPM for multiple tracks
-│   │   ├── analytics/
-│   │   │   ├── track-pageview/  # Track pageview
-│   │   │   └── stats/           # Get usage statistics (admin)
-│   │   ├── country/
-│   │   │   └── route.ts         # Get country from IP/locale
-│   │   └── components/
-│   │       └── PageViewTracker.tsx # Client component for pageview tracking
-│   ├── playlists/
-│   │   ├── page.tsx             # Playlists list page
-│   │   └── [id]/
-│   │       └── page.tsx         # Tracks page with BPM
-│   ├── stats/
-│   │   ├── page.tsx             # Analytics dashboard (admin)
-│   │   └── StatsClient.tsx      # Stats display component
-│   ├── layout.tsx               # Root layout with footer
-│   ├── page.tsx                 # Home/login page
-│   └── globals.css              # Global styles
-├── lib/
-│   ├── spotify.ts               # Spotify API client library
-│   ├── bpm.ts                   # BPM detection module
-│   ├── db.ts                    # Database connection utility
-│   └── analytics.ts             # Analytics tracking utilities
-├── setup.sql                 # Database setup script (run once for fresh install)
-├── public/
-│   ├── favicon-16x16.png        # Favicon
-│   └── favicon-32x32.png        # Favicon
-└── package.json
+The application uses Neon Postgres for BPM caching, playlist caching, and analytics. 
+
+### Fresh Installation
+
+For a fresh installation, run the `setup.sql` script which creates all required tables:
+
+```bash
+psql $DATABASE_URL_UNPOOLED -f setup.sql
 ```
 
-## Pages & Routes
+This script creates the following tables:
+- `track_bpm_cache` - Stores BPM, key, scale, and related metadata for tracks
+- `playlist_cache` - Caches playlist data to reduce Spotify API calls
+- `analytics_users` - Tracks unique users and their statistics
+- `analytics_pageviews` - Tracks individual page views
+- `analytics_api_requests` - Tracks API endpoint requests
+- `playlist_order` - Stores custom playlist order (currently unused)
 
-### `/` - Home Page
-- Landing page with "Login with Spotify" button
-- Auto-redirects to `/playlists` if already authenticated
-- Displays error messages if authentication fails
-
-### `/playlists` - Playlists List
-- Displays all user playlists in a sortable table
-- Features: search, sorting, mobile card view
-- Click any playlist to view its tracks
-
-### `/playlists/[id]` - Tracks Page
-- Shows playlist header with info and "Open in Spotify" button
-- Displays all tracks in a sortable table
-- Features: search, advanced filters (year/BPM ranges), audio preview, mobile card view
-- Clickable links to Spotify (tracks, artists, albums)
-
-## API Routes
-
-### Authentication
-- `GET /api/auth/login` - Initiates OAuth flow
-- `GET /api/auth/callback` - Handles OAuth callback
-- `GET /api/auth/logout` - Clears authentication cookies
-- `GET /api/auth/status` - Checks authentication status
-
-### Playlists
-- `GET /api/playlists` - Returns all user playlists
-- `GET /api/playlists/[id]` - Returns playlist information
-- `GET /api/playlists/[id]/tracks` - Returns all tracks for a playlist
-
-### BPM
-- `GET /api/bpm?spotifyTrackId=...&country=...` - Get BPM for a single track
-- `POST /api/bpm/batch` - Get BPM for multiple tracks (batch endpoint)
-
-### Analytics (Admin Only)
-- `GET /api/analytics/stats` - Get usage statistics (users, requests, pageviews)
-- `POST /api/analytics/track-pageview` - Track a pageview
-- `GET /api/auth/is-admin` - Check if current user is admin
-
-### Country
-- `GET /api/country` - Get country code from IP address or browser locale
-
-## Authentication Flow
-
-The application uses Spotify OAuth 2.0 with PKCE (Proof Key for Code Exchange) for enhanced security:
-
-1. **User initiates login** → `/api/auth/login`
-   - Generates PKCE code verifier and challenge
-   - Stores code verifier in secure httpOnly cookie
-   - Redirects to Spotify authorization endpoint
-
-2. **User authorizes** → Spotify redirects to `/api/auth/callback`
-   - Extracts authorization code from query params
-   - Retrieves code verifier from cookie
-   - Exchanges code for access token using PKCE
-   - Stores access token and refresh token in secure httpOnly cookies
-   - Redirects to `/playlists`
-
-3. **Token refresh** (automatic)
-   - When access token expires or is invalid
-   - Uses refresh token to get new access token
-   - Updates access token cookie automatically
-
-### Security Features
-- All cookies are httpOnly (not accessible via JavaScript)
-- Cookies use `secure` flag in production (HTTPS only)
-- Cookies use `sameSite: 'lax'` to prevent CSRF attacks
-- PKCE flow prevents authorization code interception attacks
 
 ## Environment Variables
 
 ### Required Variables
 
 ```env
+# Spotify OAuth
 SPOTIFY_CLIENT_ID=your_spotify_client_id
 SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
 SPOTIFY_REDIRECT_URI=https://searchmyplaylist.delman.it/api/auth/callback
 NEXT_PUBLIC_BASE_URL=https://searchmyplaylist.delman.it
+
+# Database
 DATABASE_URL=postgresql://user:password@host/database?sslmode=require
 DATABASE_URL_UNPOOLED=postgresql://user:password@host/database?sslmode=require
+
+# BPM Service
 BPM_SERVICE_URL=https://bpm-service-340051416180.europe-west3.run.app
 GCP_SERVICE_ACCOUNT_KEY={"type":"service_account","project_id":"...","private_key_id":"...","private_key":"...","client_email":"...","client_id":"...","auth_uri":"...","token_uri":"...","auth_provider_x509_cert_url":"...","client_x509_cert_url":"..."}
+
+# Sentry (Error Tracking)
+NEXT_PUBLIC_SENTRY_DSN=https://your-sentry-dsn@sentry.io/project-id
+SENTRY_ORG=your-sentry-org
+SENTRY_PROJECT=spotify-playlist-browser
 ```
 
 ### Local Development
 
 ```env
+# Spotify OAuth
 SPOTIFY_CLIENT_ID=your_spotify_client_id
 SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
 SPOTIFY_REDIRECT_URI=http://localhost:3000/api/auth/callback
 NEXT_PUBLIC_BASE_URL=http://localhost:3000
+
+# Database
 DATABASE_URL=postgresql://user:password@host/database?sslmode=require
 DATABASE_URL_UNPOOLED=postgresql://user:password@host/database?sslmode=require
+
+# BPM Service
 BPM_SERVICE_URL=https://bpm-service-340051416180.europe-west3.run.app
 GCP_SERVICE_ACCOUNT_KEY={"type":"service_account","project_id":"...","private_key_id":"...","private_key":"...","client_email":"...","client_id":"...","auth_uri":"...","token_uri":"...","auth_provider_x509_cert_url":"...","client_x509_cert_url":"..."}
+
+# Sentry (Optional for local development)
+NEXT_PUBLIC_SENTRY_DSN=https://your-sentry-dsn@sentry.io/project-id
+SENTRY_ORG=your-sentry-org
+SENTRY_PROJECT=spotify-playlist-browser
 ```
 
-### Database Setup
+### Variable Descriptions
 
-The application uses Neon Postgres for BPM caching and analytics. You need to:
-
-1. **Create a Neon database** at [neon.tech](https://neon.tech)
-2. **Run the setup script** to create all required tables:
-   ```bash
-   psql $DATABASE_URL_UNPOOLED -f setup.sql
-   ```
-   Or if you have the connection string set:
-   ```bash
-   export DATABASE_URL_UNPOOLED="postgresql://user:password@host/database?sslmode=require"
-   psql $DATABASE_URL_UNPOOLED -f setup.sql
-   ```
-3. **Set `DATABASE_URL`** - Pooled connection (PgBouncer) for runtime
-4. **Set `DATABASE_URL_UNPOOLED`** - Direct connection (for running setup.sql)
-
-### BPM Service Configuration
-
-The application uses an external BPM detection service hosted on Google Cloud Run. You need to:
-
-1. **Get a service account key** from your Google Cloud project that has permission to invoke the Cloud Run service
-2. **Set `GCP_SERVICE_ACCOUNT_KEY`** to the full JSON content of the service account key file (as a single-line string)
-3. **Set `BPM_SERVICE_URL`** to the Cloud Run service URL (defaults to the provided URL if not set)
+- **SPOTIFY_CLIENT_ID** - Your Spotify app's Client ID from the Developer Dashboard
+- **SPOTIFY_CLIENT_SECRET** - Your Spotify app's Client Secret from the Developer Dashboard
+- **SPOTIFY_REDIRECT_URI** - The redirect URI configured in your Spotify app (must match exactly)
+- **NEXT_PUBLIC_BASE_URL** - Your application's base URL (used for OAuth redirects)
+- **DATABASE_URL** - Neon Postgres connection string (pooled connection via PgBouncer)
+- **DATABASE_URL_UNPOOLED** - Neon Postgres connection string (direct connection, used for running setup.sql)
+- **BPM_SERVICE_URL** - Google Cloud Run service URL for BPM detection (optional, defaults to provided URL)
+- **GCP_SERVICE_ACCOUNT_KEY** - Google Cloud service account key JSON (as single-line string) for authenticating with the BPM service
+- **NEXT_PUBLIC_SENTRY_DSN** - Sentry DSN for error tracking (public, used in client-side code)
+- **SENTRY_ORG** - Sentry organization slug (used during build for source map uploads)
+- **SENTRY_PROJECT** - Sentry project slug (used during build for source map uploads)
 
 **Note:** The `GCP_SERVICE_ACCOUNT_KEY` should be the complete JSON object as a single string. In Vercel, you can paste the entire JSON content directly into the environment variable field.
 
@@ -347,6 +294,156 @@ The application uses an external BPM detection service hosted on Google Cloud Ru
 - **Redirect URI must match exactly** - The redirect URI in Spotify dashboard must exactly match the one in your environment variables
 - **Use HTTPS in production** - Required for secure cookies
 - **Never expose Client Secret** - Keep it in environment variables only
+- **Sentry variables are required for production** - Source maps won't upload without `SENTRY_ORG` and `SENTRY_PROJECT`
+
+## Project Structure
+
+```
+spotify-playlist-browser/
+├── app/
+│   ├── api/
+│   │   ├── auth/
+│   │   │   ├── login/          # OAuth initiation
+│   │   │   ├── callback/        # OAuth callback handler
+│   │   │   ├── logout/          # Logout endpoint
+│   │   │   ├── status/          # Auth status check
+│   │   │   └── is-admin/        # Check if user is admin
+│   │   ├── playlists/
+│   │   │   ├── route.ts         # Get all playlists
+│   │   │   └── [id]/
+│   │   │       ├── route.ts     # Get playlist info
+│   │   │       └── tracks/
+│   │   │           └── route.ts # Get playlist tracks
+│   │   ├── bpm/
+│   │   │   ├── route.ts         # Get BPM for single track
+│   │   │   └── batch/
+│   │   │       └── route.ts     # Get BPM for multiple tracks
+│   │   ├── analytics/
+│   │   │   ├── track-pageview/  # Track pageview
+│   │   │   └── stats/           # Get usage statistics (admin)
+│   │   ├── country/
+│   │   │   └── route.ts         # Get country from IP/locale
+│   │   └── audio-proxy/
+│   │       └── route.ts         # Proxy audio preview URLs
+│   ├── playlists/
+│   │   ├── page.tsx             # Playlists list page
+│   │   ├── PlaylistsTable.tsx   # Playlists table component
+│   │   └── [id]/
+│   │       └── page.tsx         # Tracks page with BPM
+│   ├── stats/
+│   │   ├── page.tsx             # Analytics dashboard (admin)
+│   │   └── StatsClient.tsx      # Stats display component
+│   ├── rate-limit/
+│   │   └── page.tsx             # Rate limit error page
+│   ├── components/
+│   │   ├── ErrorBoundary.tsx    # React error boundary
+│   │   ├── PageHeader.tsx       # Page header component
+│   │   ├── PageViewTracker.tsx  # Client component for pageview tracking
+│   │   ├── SkeletonLoader.tsx   # Loading skeleton components
+│   │   └── UserMenu.tsx         # User menu component
+│   ├── hooks/
+│   │   ├── usePlaylist.ts       # React Query hook for playlists
+│   │   └── usePlaylistTracks.ts # React Query hook for tracks
+│   ├── providers/
+│   │   └── QueryProvider.tsx    # React Query provider
+│   ├── layout.tsx               # Root layout with footer
+│   ├── page.tsx                 # Home/login page
+│   ├── global-error.tsx         # Global error handler
+│   └── globals.css              # Global styles
+├── lib/
+│   ├── spotify.ts               # Spotify API client library
+│   ├── bpm.ts                   # BPM detection module
+│   ├── db.ts                    # Database connection utility
+│   ├── analytics.ts             # Analytics tracking utilities
+│   ├── errors.ts                # Custom error classes
+│   ├── logger.ts                # Centralized logging with Sentry
+│   ├── playlists.ts             # Playlist utilities
+│   ├── spotify-validation.ts    # Spotify ID validation
+│   └── types.ts                 # Shared type definitions
+├── setup.sql                    # Database setup script (run once for fresh install)
+├── instrument.ts                # Sentry instrumentation (server/edge)
+├── instrumentation-client.ts    # Sentry instrumentation (client)
+├── next.config.js               # Next.js configuration
+├── package.json                 # Dependencies and scripts
+└── public/
+    ├── favicon-16x16.png        # Favicon
+    ├── favicon-32x32.png        # Favicon
+    └── login_picture.png        # Login page image
+```
+
+## Pages & Routes
+
+### `/` - Home Page
+- Landing page with "Login with Spotify" button
+- Auto-redirects to `/playlists` if already authenticated
+- Displays error messages if authentication fails
+
+### `/playlists` - Playlists List
+- Displays all user playlists in a sortable table
+- Features: search, sorting, mobile card view
+- Click any playlist to view its tracks
+
+### `/playlists/[id]` - Tracks Page
+- Shows playlist header with info and "Open in Spotify" button
+- Displays all tracks in a sortable table
+- Features: search, advanced filters (year/BPM ranges), audio preview, mobile card view
+- Clickable links to Spotify (tracks, artists, albums)
+
+### `/stats` - Analytics Dashboard (Admin Only)
+- Displays usage statistics: users, pageviews, API requests
+- Accessible only to admin users
+
+## API Routes
+
+### Authentication
+- `GET /api/auth/login` - Initiates OAuth flow
+- `GET /api/auth/callback` - Handles OAuth callback
+- `GET /api/auth/logout` - Clears authentication cookies
+- `GET /api/auth/status` - Checks authentication status
+- `GET /api/auth/is-admin` - Checks if user is admin
+
+### Playlists
+- `GET /api/playlists` - Returns all user playlists
+- `GET /api/playlists/[id]` - Returns playlist information
+- `GET /api/playlists/[id]/tracks` - Returns all tracks for a playlist
+
+### BPM
+- `GET /api/bpm?spotifyTrackId=...&country=...` - Get BPM for a single track
+- `POST /api/bpm/batch` - Get BPM for multiple tracks (batch endpoint)
+
+### Analytics (Admin Only)
+- `GET /api/analytics/stats` - Get usage statistics (users, requests, pageviews)
+- `POST /api/analytics/track-pageview` - Track a pageview
+
+### Country
+- `GET /api/country` - Get country code from IP address or browser locale
+
+## Authentication Flow
+
+The application uses Spotify OAuth 2.0 with PKCE (Proof Key for Code Exchange) for enhanced security:
+
+1. **User initiates login** → `/api/auth/login`
+   - Generates PKCE code verifier and challenge
+   - Stores code verifier in secure httpOnly cookie
+   - Redirects to Spotify authorization endpoint
+
+2. **User authorizes** → Spotify redirects to `/api/auth/callback`
+   - Extracts authorization code from query params
+   - Retrieves code verifier from cookie
+   - Exchanges code for access token using PKCE
+   - Stores access token and refresh token in secure httpOnly cookies
+   - Redirects to `/playlists`
+
+3. **Token refresh** (automatic)
+   - When access token expires or is invalid
+   - Uses refresh token to get new access token
+   - Updates access token cookie automatically
+
+### Security Features
+- All cookies are httpOnly (not accessible via JavaScript)
+- Cookies use `secure` flag in production (HTTPS only)
+- Cookies use `sameSite: 'lax'` to prevent CSRF attacks
+- PKCE flow prevents authorization code interception attacks
 
 ## Spotify API Scopes
 
@@ -367,6 +464,7 @@ The application requests the following Spotify scopes:
 - Advanced filters:
   - **Year Range:** Filter tracks by release year (from/to/both)
   - **BPM Range:** Filter tracks by tempo (from/to/both)
+  - **Half/Double BPM:** Include tracks with half or double the BPM
 
 ### Sorting
 
@@ -378,10 +476,14 @@ The application requests the following Spotify scopes:
 
 - Automatic BPM calculation for all tracks in a playlist
 - Progress indicator shows processing status
-- BPM values are clickable to view detailed information (source, ISRC, error)
+- BPM values are clickable to view detailed information (source, ISRC, error, key, scale)
 - Retry functionality for failed calculations
 - Country selection for preview audio search (iTunes/Deezer)
-- Half/double BPM search option in advanced filters
+- ISRC-based cross-platform search for improved accuracy:
+  - Deezer ISRC lookup (first choice)
+  - iTunes search with ISRC matching
+  - Deezer search as fallback
+- Key and scale detection from audio analysis
 
 ### Mobile Optimization
 
@@ -393,7 +495,25 @@ The application requests the following Spotify scopes:
   - Card view on mobile with all track details
   - Table view on larger screens
   - Advanced filters panel optimized for mobile width
-  - "Link" column hidden on mobile (track title is clickable instead)
+
+## Development
+
+### Available Scripts
+
+```bash
+pnpm dev      # Start development server
+pnpm build    # Build for production
+pnpm start    # Start production server
+pnpm lint     # Run ESLint
+```
+
+### Code Structure
+
+- **Server Components:** Used for initial data fetching (playlists page)
+- **Client Components:** Used for interactive features (search, sorting, audio playback)
+- **API Routes:** Server-side endpoints for Spotify API calls
+- **Library Functions:** Reusable utilities in `lib/` directory
+- **React Query:** Client-side API response caching and state management
 
 ## Troubleshooting
 
@@ -426,23 +546,10 @@ The application requests the following Spotify scopes:
 - If a playlist has thousands of tracks, it may take a moment to load
 - The app will return partial results if an error occurs during pagination
 
-## Development
-
-### Available Scripts
-
-```bash
-npm run dev      # Start development server
-npm run build    # Build for production
-npm start        # Start production server
-npm run lint     # Run ESLint
-```
-
-### Code Structure
-
-- **Server Components:** Used for initial data fetching (playlists page)
-- **Client Components:** Used for interactive features (search, sorting, audio playback)
-- **API Routes:** Server-side endpoints for Spotify API calls
-- **Library Functions:** Reusable Spotify API client in `lib/spotify.ts`
+**Sentry source maps not uploading:**
+- Verify `SENTRY_ORG` and `SENTRY_PROJECT` environment variables are set
+- Check that your Sentry organization slug and project slug match exactly
+- Ensure you have the correct permissions in Sentry
 
 ## Contributing
 
@@ -456,7 +563,7 @@ See [LICENSE](LICENSE) file for details.
 
 - **Created by:** delman@delman.it
 - **Powered by:** [Spotify Web API](https://developer.spotify.com/documentation/web-api)
-- **Built with:** Next.js, React, TypeScript, Tailwind CSS
+- **Built with:** Next.js, React, TypeScript, Tailwind CSS, React Query, Sentry
 
 ## Support
 
