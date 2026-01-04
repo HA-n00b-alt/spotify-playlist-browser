@@ -483,7 +483,6 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                   </div>
                   </div>
                 </Link>
-              </div>
             </div>
           )
         })}

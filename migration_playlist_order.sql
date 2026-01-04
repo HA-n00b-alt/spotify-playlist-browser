@@ -27,3 +27,4 @@ COMMENT ON COLUMN playlist_order.playlist_id IS 'Spotify playlist ID';
 COMMENT ON COLUMN playlist_order.display_order IS 'Custom display order (lower numbers appear first)';
 
 
+
