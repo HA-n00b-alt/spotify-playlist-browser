@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { getPlaylists } from '@/lib/spotify'
+import { getPlaylistsWithMetadata } from '@/lib/playlists'
 import { isAdminUser } from '@/lib/analytics'
 import PlaylistsTable from './PlaylistsTable'
 import PageHeader from '../components/PageHeader'
@@ -45,7 +45,7 @@ export default async function PlaylistsPage() {
   const isAdmin = await isAdminUser()
 
   try {
-    playlists = await getPlaylists() as Playlist[]
+    playlists = await getPlaylistsWithMetadata() as Playlist[]
   } catch (e) {
     if (e instanceof Error) {
       console.error('[Playlists Page] Error fetching playlists:', e.message)
