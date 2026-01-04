@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 
@@ -118,7 +118,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
   }, [playlists.length])
 
   // Check if playlist is new (created after last visit)
-  const isNewPlaylist = (playlist: Playlist): boolean => {
+  const isNewPlaylist = useCallback((playlist: Playlist): boolean => {
     if (!lastVisitTimestamp) return false
     // We can't determine creation date from Spotify API, so we'll use cached_at as a proxy
     // If it's cached and cached_at is after last visit, it's "new" to us
@@ -128,13 +128,14 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
     }
     // If not cached, assume it's new if we haven't seen it before
     // We'll track seen playlists in localStorage
+    if (typeof window === 'undefined') return false
     const seenPlaylists = localStorage.getItem('playlist_seen_ids')
     if (seenPlaylists) {
       const seen: string[] = JSON.parse(seenPlaylists)
       return !seen.includes(playlist.id)
     }
     return false
-  }
+  }, [lastVisitTimestamp])
 
   // Mark playlist as seen
   useEffect(() => {
@@ -241,8 +242,8 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
         if (!aIsNew && bIsNew) return 1
         
         // Then by display_order if available
-        const aOrder = a.display_order
-        const bOrder = b.display_order
+        const aOrder = a.display_order ?? null
+        const bOrder = b.display_order ?? null
         if (aOrder !== null && bOrder !== null) {
           return aOrder - bOrder
         }
@@ -293,7 +294,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
       if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1
       return 0
     })
-  }, [filteredPlaylists, sortField, sortDirection])
+  }, [filteredPlaylists, sortField, sortDirection, isNewPlaylist])
 
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) {
