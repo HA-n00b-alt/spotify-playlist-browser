@@ -483,6 +483,9 @@ async function computeBpmFromService(previewUrl: string): Promise<{ bpm: number;
       bpm: number
       bpm_raw: number
       confidence?: number
+      key?: string
+      scale?: string
+      key_confidence?: number
       source_url_host?: string
     }
     
@@ -490,6 +493,9 @@ async function computeBpmFromService(previewUrl: string): Promise<{ bpm: number;
       bpm: data.bpm,
       bpm_raw: data.bpm_raw,
       confidence: data.confidence,
+      key: data.key,
+      scale: data.scale,
+      key_confidence: data.key_confidence,
       source: data.source_url_host,
     })
     
@@ -497,6 +503,8 @@ async function computeBpmFromService(previewUrl: string): Promise<{ bpm: number;
       bpm: data.bpm,
       bpmRaw: data.bpm_raw,
       confidence: data.confidence,
+      // Note: key, scale, key_confidence are parsed but not yet used
+      // They will be added to the response later
     }
   } catch (error) {
     clearTimeout(timeoutId)

@@ -76,22 +76,20 @@ export async function GET(request: Request) {
           }
         })
         
-        // Sort by saved order if available
-        if (orderMap.size > 0) {
-          playlistsWithCache = playlistsWithCache.sort((a, b) => {
-            const aOrder = a.display_order
-            const bOrder = b.display_order
-            // If both have orders, sort by order
-            if (aOrder !== null && bOrder !== null) {
-              return aOrder - bOrder
-            }
-            // If only one has order, prioritize it
-            if (aOrder !== null) return -1
-            if (bOrder !== null) return 1
-            // If neither has order, maintain original order
-            return 0
-          })
-        }
+        // Sort by saved order if available (always apply order, even if only some playlists have it)
+        playlistsWithCache = playlistsWithCache.sort((a, b) => {
+          const aOrder = a.display_order
+          const bOrder = b.display_order
+          // If both have orders, sort by order
+          if (aOrder !== null && bOrder !== null) {
+            return aOrder - bOrder
+          }
+          // If only one has order, prioritize it
+          if (aOrder !== null) return -1
+          if (bOrder !== null) return 1
+          // If neither has order, maintain original order
+          return 0
+        })
         
         response = NextResponse.json(playlistsWithCache)
       } catch (cacheError) {

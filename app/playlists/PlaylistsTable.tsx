@@ -230,9 +230,37 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
   }, [playlists, searchQuery])
 
   const sortedPlaylists = useMemo(() => {
-    if (!sortField) return filteredPlaylists
+    // If no sort field is selected, sort by: 1) new playlists first, 2) display_order, 3) original order
+    if (!sortField) {
+      return [...filteredPlaylists].sort((a, b) => {
+        const aIsNew = isNewPlaylist(a)
+        const bIsNew = isNewPlaylist(b)
+        
+        // New playlists first
+        if (aIsNew && !bIsNew) return -1
+        if (!aIsNew && bIsNew) return 1
+        
+        // Then by display_order if available
+        const aOrder = a.display_order
+        const bOrder = b.display_order
+        if (aOrder !== null && bOrder !== null) {
+          return aOrder - bOrder
+        }
+        if (aOrder !== null) return -1
+        if (bOrder !== null) return 1
+        
+        // Maintain original order
+        return 0
+      })
+    }
 
     return [...filteredPlaylists].sort((a, b) => {
+      // When sorting by a field, still prioritize new playlists first
+      const aIsNew = isNewPlaylist(a)
+      const bIsNew = isNewPlaylist(b)
+      if (aIsNew && !bIsNew) return -1
+      if (!aIsNew && bIsNew) return 1
+      
       let aValue: string | number
       let bValue: string | number
 
@@ -316,7 +344,9 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
               onDragLeave={handleDragLeave}
               onDrop={(e) => handleDrop(e, index)}
               onDragEnd={handleDragEnd}
-              className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 hover:shadow-md transition-shadow"
+              className={`rounded-lg border shadow-sm p-4 hover:shadow-md transition-shadow ${
+                isNew ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'
+              }`}
             >
               <Link
                 href={`/playlists/${playlist.id}`}
@@ -343,7 +373,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                     <div className="flex items-center gap-1 flex-shrink-0">
                       {isCached && (
                         <span
-                          className="text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded"
+                          className="text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-semibold"
                           title="Cached"
                         >
                           C
@@ -351,10 +381,10 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                       )}
                       {isNew && (
                         <span
-                          className="text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded"
+                          className="text-xs bg-green-600 text-white px-1.5 py-0.5 rounded font-semibold"
                           title="New"
                         >
-                          N
+                          New
                         </span>
                       )}
                     </div>
@@ -488,9 +518,11 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                     onDragLeave={handleDragLeave}
                     onDrop={(e) => handleDrop(e, index)}
                     onDragEnd={handleDragEnd}
-                    className={`hover:bg-gray-50 transition-colors ${
+                    className={`transition-colors ${
                       isDragging ? 'opacity-50' : ''
-                    } ${isDragOver ? 'bg-blue-50' : ''}`}
+                    } ${isDragOver ? 'bg-blue-50' : ''} ${
+                      isNew ? 'bg-green-50 hover:bg-green-100' : 'hover:bg-gray-50'
+                    }`}
                   >
                     <td className="px-2 py-3">
                       <div
@@ -584,7 +616,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                     <td className="px-4 lg:px-6 py-3 text-right">
                       <div className="text-gray-700 text-sm sm:text-base">{playlist.tracks.total}</div>
                     </td>
-                    <td className="px-4 lg:px-6 py-3 text-right hidden lg:table-cell">
+                    <td className="px-4 lg:px-6 py-3 text-right hidden lg:table-cell pr-6">
                       <div className="text-gray-700 text-sm sm:text-base">
                         {playlist.followers?.total !== undefined ? playlist.followers.total.toLocaleString() : '-'}
                       </div>
