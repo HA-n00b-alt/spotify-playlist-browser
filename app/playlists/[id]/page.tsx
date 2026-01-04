@@ -2374,14 +2374,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       </span>
                     </div>
                   )}
-                  {bpmDetails[selectedBpmTrack.id]?.upc && (
-                    <div>
-                      <span className="font-semibold text-gray-700">UPC: </span>
-                      <span className="text-gray-900 font-mono text-sm">
-                        {bpmDetails[selectedBpmTrack.id].upc}
-                      </span>
-                    </div>
-                  )}
                 </>
               ) : (
                 <>
