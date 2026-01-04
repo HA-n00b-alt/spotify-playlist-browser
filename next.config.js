@@ -17,6 +17,14 @@ const nextConfig = {
       },
     ],
   },
+  webpack: (config) => {
+    // Enables automatic instrumentation of Vercel Cron Monitors.
+    // See the following for more information:
+    // https://docs.sentry.io/product/crons/
+    // https://vercel.com/docs/cron-jobs
+    config.automaticVercelMonitors = true
+    return config
+  },
 }
 
 module.exports = withSentryConfig(
@@ -47,12 +55,6 @@ module.exports = withSentryConfig(
 
     // Hides source maps from generated client bundles
     hideSourceMaps: true,
-
-    // Enables automatic instrumentation of Vercel Cron Monitors.
-    // See the following for more information:
-    // https://docs.sentry.io/product/crons/
-    // https://vercel.com/docs/cron-jobs
-    automaticVercelMonitors: true,
   }
 )
 
