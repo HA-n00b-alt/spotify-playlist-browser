@@ -7,8 +7,8 @@
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS track_bpm_cache (
   id SERIAL PRIMARY KEY,
-  isrc VARCHAR(12) UNIQUE, -- Note: Stores UPC values (kept as isrc for backward compatibility)
   spotify_track_id VARCHAR(255) NOT NULL,
+  isrc VARCHAR(12), -- International Standard Recording Code from Spotify
   artist TEXT,
   title TEXT,
   bpm NUMERIC(5, 1),
@@ -18,18 +18,20 @@ CREATE TABLE IF NOT EXISTS track_bpm_cache (
   error TEXT,
   urls_tried JSONB, -- Array of URLs that were attempted to find preview audio
   successful_url TEXT, -- URL that successfully provided preview audio (null if all failed)
+  isrc_mismatch BOOLEAN DEFAULT FALSE, -- True when ISRC from search results doesn't match Spotify ISRC
   CONSTRAINT unique_spotify_track UNIQUE (spotify_track_id)
 );
 
 -- Indexes for faster lookups
-CREATE INDEX IF NOT EXISTS idx_track_bpm_cache_isrc ON track_bpm_cache(isrc) WHERE isrc IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_track_bpm_cache_spotify_id ON track_bpm_cache(spotify_track_id);
+CREATE INDEX IF NOT EXISTS idx_track_bpm_cache_isrc ON track_bpm_cache(isrc) WHERE isrc IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_track_bpm_cache_updated_at ON track_bpm_cache(updated_at);
 
-COMMENT ON TABLE track_bpm_cache IS 'Cache for BPM values computed from audio previews. Source can be: itunes_upc, itunes_search, deezer_upc, deezer, computed_failed';
-COMMENT ON COLUMN track_bpm_cache.isrc IS 'Stores UPC (Universal Product Code) values for album identification';
+COMMENT ON TABLE track_bpm_cache IS 'Cache for BPM values computed from audio previews. Source can be: deezer_isrc, itunes_search, deezer_search, computed_failed';
+COMMENT ON COLUMN track_bpm_cache.isrc IS 'International Standard Recording Code from Spotify, used for cross-platform track matching';
 COMMENT ON COLUMN track_bpm_cache.urls_tried IS 'Array of URLs that were attempted to find preview audio';
 COMMENT ON COLUMN track_bpm_cache.successful_url IS 'URL that successfully provided preview audio (null if all failed)';
+COMMENT ON COLUMN track_bpm_cache.isrc_mismatch IS 'True when ISRC from iTunes/Deezer search results does not match Spotify ISRC, may affect BPM accuracy';
 
 -- ============================================================================
 -- Analytics Tables

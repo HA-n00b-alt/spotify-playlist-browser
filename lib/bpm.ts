@@ -8,6 +8,7 @@ interface PreviewUrlResult {
   source: string
   urlsTried: string[] // URLs that were attempted
   successfulUrl: string | null // URL that succeeded (or null if all failed)
+  isrcMismatch?: boolean // True when ISRC from search results doesn't match Spotify ISRC
 }
 
 interface BpmResult {
@@ -25,8 +26,8 @@ interface BpmResult {
 
 interface CacheRecord {
   id: number
-  isrc: string | null // Note: DB column name is 'isrc' but we use it to store UPC
   spotify_track_id: string
+  isrc: string | null
   artist: string | null
   title: string | null
   bpm: number | null
@@ -36,6 +37,7 @@ interface CacheRecord {
   error: string | null
   urls_tried?: string[] | null
   successful_url?: string | null
+  isrc_mismatch: boolean
 }
 
 // In-flight computation locks to prevent duplicate work
@@ -48,7 +50,7 @@ const CACHE_TTL_DAYS = 90
  * Extract identifiers from Spotify track
  */
 async function extractSpotifyIdentifiers(spotifyTrackId: string): Promise<{
-  upc: string | null
+  isrc: string | null
   title: string
   artists: string
   spotifyPreviewUrl: string | null
@@ -57,14 +59,14 @@ async function extractSpotifyIdentifiers(spotifyTrackId: string): Promise<{
   const track = await getTrack(spotifyTrackId)
   console.log(`[BPM Module] Track data received:`, {
     name: track.name,
-    hasUPC: !!track.album?.external_ids?.upc,
-    upc: track.album?.external_ids?.upc,
+    hasISRC: !!track.external_ids?.isrc,
+    isrc: track.external_ids?.isrc,
     hasPreview: !!track.preview_url,
     artists: track.artists?.map((a: any) => a.name).join(', '),
   })
   
   return {
-    upc: track.album?.external_ids?.upc || null,
+    isrc: track.external_ids?.isrc || null,
     title: track.name,
     artists: track.artists.map((a: any) => a.name).join(' '),
     spotifyPreviewUrl: track.preview_url || null,
@@ -73,25 +75,25 @@ async function extractSpotifyIdentifiers(spotifyTrackId: string): Promise<{
 
 /**
  * Check cache for existing BPM data
+ * Tries ISRC first if available, then falls back to spotify_track_id
  */
 async function checkCache(
   spotifyTrackId: string,
-  upc: string | null
+  isrc: string | null
 ): Promise<CacheRecord | null> {
-  console.log(`[BPM Module] Checking cache for track: ${spotifyTrackId}, UPC: ${upc || 'none'}`)
+  console.log(`[BPM Module] Checking cache for track: ${spotifyTrackId}, ISRC: ${isrc || 'none'}`)
   
-  // Try UPC first if available (stored in isrc column for backward compatibility)
-  if (upc) {
-    const upcResults = await query<CacheRecord>(
+  // Try ISRC first if available (more accurate cross-platform matching)
+  if (isrc) {
+    const isrcResults = await query<CacheRecord>(
       `SELECT * FROM track_bpm_cache WHERE isrc = $1 LIMIT 1`,
-      [upc]
+      [isrc]
     )
-    console.log(`[BPM Module] UPC cache query result: ${upcResults.length} records`)
-    if (upcResults.length > 0) {
-      const record = upcResults[0]
-      // Check if cache is still valid
+    console.log(`[BPM Module] ISRC cache query result: ${isrcResults.length} records`)
+    if (isrcResults.length > 0) {
+      const record = isrcResults[0]
       const ageDays = (Date.now() - new Date(record.updated_at).getTime()) / (1000 * 60 * 60 * 24)
-      console.log(`[BPM Module] UPC cache record age: ${ageDays.toFixed(2)} days, BPM: ${record.bpm}, valid: ${record.bpm !== null && ageDays < CACHE_TTL_DAYS}`)
+      console.log(`[BPM Module] ISRC cache record age: ${ageDays.toFixed(2)} days, BPM: ${record.bpm}, valid: ${record.bpm !== null && ageDays < CACHE_TTL_DAYS}`)
       // Return valid BPM records, or records with null BPM (for error info)
       if (record.bpm !== null && ageDays < CACHE_TTL_DAYS) {
         return record
@@ -183,73 +185,66 @@ function getCountryCodeFromRequest(request?: Request): string {
 }
 
 /**
- * Resolve preview URL from multiple sources
+ * Resolve preview URL from multiple sources using ISRC
+ * Priority: 1. Deezer ISRC, 2. iTunes search with ISRC matching, 3. Deezer search
  * Stops at first successful source
  */
 async function resolvePreviewUrl(params: {
-  upc: string | null
+  isrc: string | null
   title: string
   artists: string
   countryCode?: string
 }): Promise<PreviewUrlResult> {
-  const { upc, title, artists, countryCode = 'us' } = params
+  const { isrc, title, artists, countryCode = 'us' } = params
   
-  console.log(`[BPM Module] Resolving preview URL for: "${title}" by "${artists}" (UPC: ${upc || 'none'}, Country: ${countryCode})`)
+  console.log(`[BPM Module] Resolving preview URL for: "${title}" by "${artists}" (ISRC: ${isrc || 'none'}, Country: ${countryCode})`)
   
   const urlsTried: string[] = []
-  const limit = 1 // Limit results to 1
   
-  // 1. Try iTunes UPC lookup
-  if (upc) {
+  // 1. Try Deezer ISRC lookup (most accurate)
+  if (isrc) {
     try {
-      console.log(`[BPM Module] Trying iTunes UPC lookup for: ${upc}`)
-      const itunesUpcUrl = `https://itunes.apple.com/lookup?upc=${encodeURIComponent(upc)}&entity=song&country=${countryCode}&limit=${limit}`
-      urlsTried.push(itunesUpcUrl)
+      console.log(`[BPM Module] Trying Deezer ISRC lookup for: ${isrc}`)
+      const deezerIsrcUrl = `https://api.deezer.com/track/isrc:${encodeURIComponent(isrc)}`
+      urlsTried.push(deezerIsrcUrl)
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 5000)
       
       try {
-        const response = await fetch(itunesUpcUrl, {
-          headers: { 'User-Agent': 'Mozilla/5.0' },
+        const response = await fetch(deezerIsrcUrl, {
           signal: controller.signal,
         })
         clearTimeout(timeoutId)
         
         if (response.ok) {
-          const data = await response.json() as any
-          console.log(`[BPM Module] iTunes UPC lookup result: ${data.resultCount} results`)
-          if (data.resultCount > 0 && data.results) {
-            // Filter to items where kind === "song" and previewUrl exists
-            const tracks = data.results.filter((r: any) => 
-              (r.kind === 'song' || r.wrapperType === 'track') && r.previewUrl
-            )
-            if (tracks.length > 0 && tracks[0].previewUrl) {
-              console.log(`[BPM Module] Found iTunes preview URL via UPC`)
-              return { 
-                url: tracks[0].previewUrl, 
-                source: 'itunes_upc', 
-                urlsTried,
-                successfulUrl: tracks[0].previewUrl
-              }
+          const trackData = await response.json() as any
+          if (trackData.id && trackData.preview) {
+            console.log(`[BPM Module] Found Deezer preview URL via ISRC`)
+            return { 
+              url: trackData.preview, 
+              source: 'deezer_isrc', 
+              urlsTried,
+              successfulUrl: trackData.preview,
+              isrcMismatch: false // ISRC lookup is always accurate
             }
           }
-        } else {
-          console.log(`[BPM Module] iTunes UPC lookup failed with status: ${response.status}`)
+        } else if (response.status !== 404) {
+          console.log(`[BPM Module] Deezer ISRC lookup failed with status: ${response.status}`)
         }
       } catch (error) {
         clearTimeout(timeoutId)
         throw error
       }
     } catch (error) {
-      console.warn(`[BPM Module] iTunes UPC lookup error:`, error)
+      console.warn(`[BPM Module] Deezer ISRC lookup error:`, error)
     }
   }
   
-  // 2. Try iTunes search by artist + title
+  // 2. Try iTunes search by artist + title, then match ISRC
   try {
     console.log(`[BPM Module] Trying iTunes search for: "${artists} ${title}"`)
     const searchTerm = `${artists} ${title}`
-    const itunesSearchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(searchTerm)}&media=music&entity=song&country=${countryCode}&limit=${limit}`
+    const itunesSearchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(searchTerm)}&media=music&entity=song&country=${countryCode}&limit=20`
     urlsTried.push(itunesSearchUrl)
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 5000)
@@ -269,13 +264,31 @@ async function resolvePreviewUrl(params: {
           const tracks = data.results.filter((r: any) => 
             (r.kind === 'song' || r.wrapperType === 'track') && r.previewUrl
           )
-          if (tracks.length > 0 && tracks[0].previewUrl) {
-            console.log(`[BPM Module] Found iTunes preview URL via search`)
+          
+          if (tracks.length > 0) {
+            let selectedTrack = tracks[0]
+            let isrcMismatch = false
+            
+            // If we have ISRC from Spotify, try to match it
+            if (isrc) {
+              const matchingTrack = tracks.find((t: any) => t.isrc === isrc)
+              if (matchingTrack) {
+                console.log(`[BPM Module] Found iTunes track with matching ISRC`)
+                selectedTrack = matchingTrack
+                isrcMismatch = false
+              } else {
+                console.log(`[BPM Module] No iTunes track with matching ISRC, using first result`)
+                isrcMismatch = true
+              }
+            }
+            
+            console.log(`[BPM Module] Found iTunes preview URL via search (ISRC mismatch: ${isrcMismatch})`)
             return { 
-              url: tracks[0].previewUrl, 
+              url: selectedTrack.previewUrl, 
               source: 'itunes_search', 
               urlsTried,
-              successfulUrl: tracks[0].previewUrl
+              successfulUrl: selectedTrack.previewUrl,
+              isrcMismatch
             }
           }
         }
@@ -290,81 +303,11 @@ async function resolvePreviewUrl(params: {
     console.warn(`[BPM Module] iTunes search error:`, error)
   }
   
-  // 3. Try Deezer UPC lookup (requires two API calls)
-  if (upc) {
-    try {
-      console.log(`[BPM Module] Trying Deezer UPC lookup for: ${upc}`)
-      // Step 1: Get album by UPC
-      const deezerAlbumUrl = `https://api.deezer.com/album/upc:${encodeURIComponent(upc)}`
-      urlsTried.push(deezerAlbumUrl)
-      const controller1 = new AbortController()
-      const timeoutId1 = setTimeout(() => controller1.abort(), 5000)
-      
-      try {
-        const albumResponse = await fetch(deezerAlbumUrl, {
-          signal: controller1.signal,
-        })
-        clearTimeout(timeoutId1)
-        
-        if (albumResponse.ok) {
-          const albumData = await albumResponse.json() as any
-          console.log(`[BPM Module] Deezer album lookup result:`, albumData.id ? 'found' : 'not found')
-          
-          if (albumData.id && albumData.tracklist) {
-            // Step 2: Get tracklist
-            const tracklistUrl = albumData.tracklist
-            urlsTried.push(tracklistUrl)
-            const controller2 = new AbortController()
-            const timeoutId2 = setTimeout(() => controller2.abort(), 5000)
-            
-            try {
-              const tracklistResponse = await fetch(tracklistUrl, {
-                signal: controller2.signal,
-              })
-              clearTimeout(timeoutId2)
-              
-              if (tracklistResponse.ok) {
-                const tracklistData = await tracklistResponse.json() as any
-                console.log(`[BPM Module] Deezer tracklist result: ${tracklistData.data?.length || 0} tracks`)
-                
-                if (tracklistData.data && Array.isArray(tracklistData.data)) {
-                  // Filter out items missing preview
-                  const tracksWithPreview = tracklistData.data.filter((t: any) => t.preview)
-                  if (tracksWithPreview.length > 0 && tracksWithPreview[0].preview) {
-                    console.log(`[BPM Module] Found Deezer preview URL via UPC`)
-                    return { 
-                      url: tracksWithPreview[0].preview, 
-                      source: 'deezer_upc', 
-                      urlsTried,
-                      successfulUrl: tracksWithPreview[0].preview
-                    }
-                  }
-                }
-              } else {
-                console.log(`[BPM Module] Deezer tracklist failed with status: ${tracklistResponse.status}`)
-              }
-            } catch (error) {
-              clearTimeout(timeoutId2)
-              throw error
-            }
-          }
-        } else {
-          console.log(`[BPM Module] Deezer album lookup failed with status: ${albumResponse.status}`)
-        }
-      } catch (error) {
-        clearTimeout(timeoutId1)
-        throw error
-      }
-    } catch (error) {
-      console.warn(`[BPM Module] Deezer UPC lookup error:`, error)
-    }
-  }
-  
-  // 4. Try Deezer search
+  // 3. Try Deezer search (fallback)
   try {
     console.log(`[BPM Module] Trying Deezer search for: "${artists} ${title}"`)
     const deezerQuery = `${artists} ${title}`
-    const deezerUrl = `https://api.deezer.com/search?q=${encodeURIComponent(deezerQuery)}&limit=${limit}`
+    const deezerUrl = `https://api.deezer.com/search?q=${encodeURIComponent(deezerQuery)}&limit=10`
     urlsTried.push(deezerUrl)
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 5000)
@@ -381,13 +324,31 @@ async function resolvePreviewUrl(params: {
         if (data.data && Array.isArray(data.data)) {
           // Filter out items missing preview
           const tracksWithPreview = data.data.filter((t: any) => t.preview)
-          if (tracksWithPreview.length > 0 && tracksWithPreview[0].preview) {
-            console.log(`[BPM Module] Found Deezer preview URL`)
+          
+          if (tracksWithPreview.length > 0) {
+            let selectedTrack = tracksWithPreview[0]
+            let isrcMismatch = false
+            
+            // If we have ISRC from Spotify, try to match it
+            if (isrc) {
+              const matchingTrack = tracksWithPreview.find((t: any) => t.isrc === isrc)
+              if (matchingTrack) {
+                console.log(`[BPM Module] Found Deezer track with matching ISRC`)
+                selectedTrack = matchingTrack
+                isrcMismatch = false
+              } else {
+                console.log(`[BPM Module] No Deezer track with matching ISRC, using first result`)
+                isrcMismatch = true
+              }
+            }
+            
+            console.log(`[BPM Module] Found Deezer preview URL (ISRC mismatch: ${isrcMismatch})`)
             return { 
-              url: tracksWithPreview[0].preview, 
-              source: 'deezer', 
+              url: selectedTrack.preview, 
+              source: 'deezer_search', 
               urlsTried,
-              successfulUrl: tracksWithPreview[0].preview
+              successfulUrl: selectedTrack.preview,
+              isrcMismatch
             }
           }
         }
@@ -404,7 +365,7 @@ async function resolvePreviewUrl(params: {
   
   // No preview URL found
   console.log(`[BPM Module] No preview URL found from any source`)
-  return { url: null, source: 'computed_failed', urlsTried, successfulUrl: null }
+  return { url: null, source: 'computed_failed', urlsTried, successfulUrl: null, isrcMismatch: false }
 }
 
 /**
@@ -524,7 +485,7 @@ async function computeBpmFromService(previewUrl: string): Promise<{ bpm: number;
  */
 async function storeInCache(params: {
   spotifyTrackId: string
-  upc: string | null
+  isrc: string | null
   artist: string
   title: string
   bpm: number | null
@@ -533,8 +494,9 @@ async function storeInCache(params: {
   error: string | null
   urlsTried?: string[]
   successfulUrl?: string | null
+  isrcMismatch?: boolean
 }): Promise<void> {
-  const { spotifyTrackId, upc, artist, title, bpm, bpmRaw, source, error, urlsTried, successfulUrl } = params
+  const { spotifyTrackId, isrc, artist, title, bpm, bpmRaw, source, error, urlsTried, successfulUrl, isrcMismatch = false } = params
   
   // Check if record exists
   const existing = await query<CacheRecord>(
@@ -549,7 +511,7 @@ async function storeInCache(params: {
     // Update existing record
     await query(
       `UPDATE track_bpm_cache 
-       SET isrc = COALESCE($1, isrc), 
+       SET isrc = COALESCE($1, isrc),
            artist = $2, 
            title = $3, 
            bpm = $4, 
@@ -558,16 +520,17 @@ async function storeInCache(params: {
            error = $7,
            urls_tried = COALESCE($8::jsonb, urls_tried),
            successful_url = COALESCE($9, successful_url),
+           isrc_mismatch = $10,
            updated_at = NOW()
-       WHERE spotify_track_id = $10`,
-      [upc, artist, title, bpm, bpmRaw, source, error, urlsTriedJson, successfulUrl, spotifyTrackId]
+       WHERE spotify_track_id = $11`,
+      [isrc, artist, title, bpm, bpmRaw, source, error, urlsTriedJson, successfulUrl, isrcMismatch, spotifyTrackId]
     )
   } else {
     // Insert new record
     await query(
       `INSERT INTO track_bpm_cache 
-       (isrc, spotify_track_id, artist, title, bpm, bpm_raw, source, error, urls_tried, successful_url, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, NOW())
+       (spotify_track_id, isrc, artist, title, bpm, bpm_raw, source, error, urls_tried, successful_url, isrc_mismatch, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, NOW())
        ON CONFLICT (spotify_track_id) DO UPDATE SET
          isrc = COALESCE(EXCLUDED.isrc, track_bpm_cache.isrc),
          artist = EXCLUDED.artist,
@@ -578,8 +541,9 @@ async function storeInCache(params: {
          error = EXCLUDED.error,
          urls_tried = COALESCE(EXCLUDED.urls_tried, track_bpm_cache.urls_tried),
          successful_url = COALESCE(EXCLUDED.successful_url, track_bpm_cache.successful_url),
+         isrc_mismatch = EXCLUDED.isrc_mismatch,
          updated_at = NOW()`,
-      [upc, spotifyTrackId, artist, title, bpm, bpmRaw, source, error, urlsTriedJson, successfulUrl]
+      [spotifyTrackId, isrc, artist, title, bpm, bpmRaw, source, error, urlsTriedJson, successfulUrl, isrcMismatch]
     )
   }
 }
@@ -625,7 +589,7 @@ export async function getBpmForSpotifyTrack(
       console.log(`[BPM Module] Step 1: Extracting identifiers from Spotify...`)
       const identifiers = await extractSpotifyIdentifiers(spotifyTrackId)
       console.log(`[BPM Module] Identifiers extracted:`, {
-        upc: identifiers.upc,
+        isrc: identifiers.isrc,
         title: identifiers.title,
         artists: identifiers.artists,
         hasSpotifyPreview: !!identifiers.spotifyPreviewUrl,
@@ -633,7 +597,7 @@ export async function getBpmForSpotifyTrack(
       
       // 2. Check cache
       console.log(`[BPM Module] Step 2: Checking cache...`)
-      const cached = await checkCache(spotifyTrackId, identifiers.upc)
+      const cached = await checkCache(spotifyTrackId, identifiers.isrc)
       if (cached && cached.bpm !== null) {
         console.log(`[BPM Module] Cache hit! Returning cached BPM: ${cached.bpm} (source: ${cached.source})`)
         // Parse urls_tried from JSONB if present
@@ -648,7 +612,6 @@ export async function getBpmForSpotifyTrack(
         return {
           bpm: cached.bpm,
           source: cached.source,
-          upc: cached.isrc || undefined, // Note: UPC stored in isrc column
           bpmRaw: cached.bpm_raw || undefined,
           urlsTried,
           successfulUrl: cached.successful_url || undefined,
@@ -669,7 +632,6 @@ export async function getBpmForSpotifyTrack(
         return {
           bpm: null,
           source: cached.source,
-          upc: cached.isrc || undefined, // Note: UPC stored in isrc column
           error: cached.error || undefined,
           urlsTried,
           successfulUrl: cached.successful_url || undefined,
@@ -681,7 +643,7 @@ export async function getBpmForSpotifyTrack(
       console.log(`[BPM Module] Step 3: Resolving preview URL...`)
       const countryCode = getCountryCodeFromRequest(request)
       const previewResult = await resolvePreviewUrl({
-        upc: identifiers.upc,
+        isrc: identifiers.isrc,
         title: identifiers.title,
         artists: identifiers.artists,
         countryCode,
@@ -697,7 +659,7 @@ export async function getBpmForSpotifyTrack(
         console.log(`[BPM Module] No preview URL found. Caching failure.`)
         await storeInCache({
           spotifyTrackId,
-          upc: identifiers.upc,
+          isrc: identifiers.isrc,
           artist: identifiers.artists,
           title: identifiers.title,
           bpm: null,
@@ -706,22 +668,22 @@ export async function getBpmForSpotifyTrack(
           error: 'No preview URL found',
           urlsTried: previewResult.urlsTried,
           successfulUrl: previewResult.successfulUrl,
+          isrcMismatch: previewResult.isrcMismatch || false,
         })
         
         // Generate descriptive error message based on source
         let errorMessage = 'No preview URL found'
         if (previewResult.source === 'computed_failed') {
           errorMessage = 'No preview audio available from any source (iTunes, Deezer)'
-        } else if (previewResult.source === 'itunes_upc' || previewResult.source === 'itunes_search') {
+        } else if (previewResult.source === 'itunes_search') {
           errorMessage = 'No preview available on iTunes/Apple Music'
-        } else if (previewResult.source === 'deezer_upc' || previewResult.source === 'deezer') {
+        } else if (previewResult.source === 'deezer_isrc' || previewResult.source === 'deezer_search') {
           errorMessage = 'No preview available on Deezer'
         }
         
         return {
           bpm: null,
           source: previewResult.source,
-          upc: identifiers.upc || undefined,
           error: errorMessage,
           urlsTried: previewResult.urlsTried,
           successfulUrl: previewResult.successfulUrl,
@@ -738,7 +700,7 @@ export async function getBpmForSpotifyTrack(
         console.log(`[BPM Module] Step 5: Storing in cache...`)
         await storeInCache({
           spotifyTrackId,
-          upc: identifiers.upc,
+          isrc: identifiers.isrc,
           artist: identifiers.artists,
           title: identifiers.title,
           bpm,
@@ -747,13 +709,13 @@ export async function getBpmForSpotifyTrack(
           error: null,
           urlsTried: previewResult.urlsTried,
           successfulUrl: previewResult.successfulUrl,
+          isrcMismatch: previewResult.isrcMismatch || false,
         })
         console.log(`[BPM Module] Successfully cached BPM for ${spotifyTrackId}`)
         
         return {
           bpm,
           source: previewResult.source,
-          upc: identifiers.upc || undefined,
           bpmRaw,
           urlsTried: previewResult.urlsTried,
           successfulUrl: previewResult.successfulUrl,
@@ -776,7 +738,7 @@ export async function getBpmForSpotifyTrack(
         // Cache the error (with short TTL - retry after 1 day)
         await storeInCache({
           spotifyTrackId,
-          upc: identifiers.upc,
+          isrc: identifiers.isrc,
           artist: identifiers.artists,
           title: identifiers.title,
           bpm: null,
@@ -785,6 +747,7 @@ export async function getBpmForSpotifyTrack(
           error: errorMessage,
           urlsTried: previewResult.urlsTried,
           successfulUrl: previewResult.successfulUrl,
+          isrcMismatch: previewResult.isrcMismatch || false,
         })
         
         throw error

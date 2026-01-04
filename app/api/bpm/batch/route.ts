@@ -15,6 +15,7 @@ interface CacheRecord {
   updated_at: Date
   urls_tried?: string[] | null
   successful_url?: string | null
+  isrc_mismatch: boolean
 }
 
 // Cache TTL: 90 days
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
 
     // Query cache for all tracks at once
     const cacheResults = await query<CacheRecord>(
-      `SELECT spotify_track_id, isrc, bpm, bpm_raw, source, error, updated_at, urls_tried, successful_url
+      `SELECT spotify_track_id, isrc, bpm, bpm_raw, source, error, updated_at, urls_tried, successful_url, isrc_mismatch
        FROM track_bpm_cache 
        WHERE spotify_track_id = ANY($1)`,
       [limitedTrackIds]
@@ -105,7 +106,6 @@ export async function POST(request: Request) {
         results[trackId] = {
           bpm: cached.bpm,
           source: cached.source,
-          upc: cached.isrc || undefined, // Note: UPC stored in isrc column
           bpmRaw: cached.bpm_raw || undefined,
           urlsTried: parseUrlsTried(cached.urls_tried),
           successfulUrl: cached.successful_url || undefined,
@@ -116,7 +116,6 @@ export async function POST(request: Request) {
         results[trackId] = {
           bpm: errorRecord.bpm,
           source: errorRecord.source,
-          upc: errorRecord.isrc || undefined, // Note: UPC stored in isrc column
           bpmRaw: errorRecord.bpm_raw || undefined,
           error: errorRecord.error || undefined,
           urlsTried: parseUrlsTried(errorRecord.urls_tried),
@@ -128,7 +127,6 @@ export async function POST(request: Request) {
         results[trackId] = {
           bpm: allCached.bpm,
           source: allCached.source,
-          upc: allCached.isrc || undefined, // Note: UPC stored in isrc column
           bpmRaw: allCached.bpm_raw || undefined,
           urlsTried: parseUrlsTried(allCached.urls_tried),
           successfulUrl: allCached.successful_url || undefined,
