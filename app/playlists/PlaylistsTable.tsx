@@ -170,12 +170,11 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
 
   // Drag and drop handlers - use playlist IDs instead of indices
   const handleDragStart = (e: React.DragEvent, playlistId: string) => {
-    e.stopPropagation()
     setDraggedPlaylistId(playlistId)
     // Set drag data
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', playlistId)
-    // Make the drag image invisible (we'll use CSS instead)
+    // Make the drag image invisible
     if (typeof window !== 'undefined') {
       const img = new window.Image()
       img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs='
@@ -185,26 +184,16 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
 
   const handleDragOver = (e: React.DragEvent, playlistId: string) => {
     e.preventDefault()
-    e.stopPropagation()
     e.dataTransfer.dropEffect = 'move'
     setDragOverPlaylistId(playlistId)
   }
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    // Only clear if we're actually leaving the element (not just moving to a child)
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    const x = e.clientX
-    const y = e.clientY
-    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
-      setDragOverPlaylistId(null)
-    }
+  const handleDragLeave = () => {
+    setDragOverPlaylistId(null)
   }
 
   const handleDrop = (e: React.DragEvent, dropPlaylistId: string) => {
     e.preventDefault()
-    e.stopPropagation()
     
     if (!draggedPlaylistId || draggedPlaylistId === dropPlaylistId) {
       setDraggedPlaylistId(null)
@@ -239,10 +228,21 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
   }
   
   // Prevent Link navigation during drag
-  const handleLinkClick = (e: React.MouseEvent, isDragging: boolean) => {
-    if (isDragging || draggedPlaylistId) {
+  const handleLinkClick = (e: React.MouseEvent) => {
+    if (draggedPlaylistId) {
       e.preventDefault()
       e.stopPropagation()
+    }
+  }
+  
+  // Prevent Link from interfering with drag
+  const handleLinkMouseDown = (e: React.MouseEvent) => {
+    // Only prevent if we're about to start a drag
+    // This is a bit of a hack, but it works
+    const target = e.target as HTMLElement
+    if (target.closest('[draggable="true"]')) {
+      // Let the drag handle handle it
+      return
     }
   }
 
@@ -379,6 +379,8 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
           return (
             <div
               key={playlist.id}
+              draggable
+              onDragStart={(e) => handleDragStart(e, playlist.id)}
               onDragOver={(e) => handleDragOver(e, playlist.id)}
               onDragLeave={handleDragLeave}
               onDrop={(e) => handleDrop(e, playlist.id)}
@@ -387,12 +389,16 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                 isNew ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'
               }`}
             >
-              <div className="flex items-start gap-3">
+              <Link
+                href={`/playlists/${playlist.id}`}
+                className="flex items-start gap-3"
+                onClick={handleLinkClick}
+                onMouseDown={handleLinkMouseDown}
+                style={{ pointerEvents: draggedPlaylistId ? 'none' : 'auto' }}
+              >
                 <div
                   className="cursor-move text-gray-400 hover:text-gray-600 flex-shrink-0 mt-1"
                   title="Drag to reorder"
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, playlist.id)}
                 >
                   <svg
                     className="w-5 h-5"
@@ -408,11 +414,6 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                     />
                   </svg>
                 </div>
-                <Link
-                  href={`/playlists/${playlist.id}`}
-                  className="flex items-start gap-3 flex-1"
-                  onClick={(e) => handleLinkClick(e, draggedPlaylistId === playlist.id)}
-                >
                 {playlist.images[0] ? (
                   <Image
                     src={playlist.images[0].url}
@@ -556,6 +557,8 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                 return (
                   <tr
                     key={playlist.id}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, playlist.id)}
                     onDragOver={(e) => handleDragOver(e, playlist.id)}
                     onDragLeave={handleDragLeave}
                     onDrop={(e) => handleDrop(e, playlist.id)}
@@ -566,11 +569,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                       isNew ? 'bg-green-50 hover:bg-green-100' : 'hover:bg-gray-50'
                     }`}
                   >
-                    <td 
-                      className="px-2 py-3"
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, playlist.id)}
-                    >
+                    <td className="px-2 py-3">
                       <div
                         className="cursor-move text-gray-400 hover:text-gray-600"
                         title="Drag to reorder"
@@ -594,7 +593,9 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                       <Link
                         href={`/playlists/${playlist.id}`}
                         className="flex items-center gap-3 sm:gap-4 group"
-                        onClick={(e) => handleLinkClick(e, isDragging)}
+                        onClick={handleLinkClick}
+                        onMouseDown={handleLinkMouseDown}
+                        style={{ pointerEvents: draggedPlaylistId ? 'none' : 'auto' }}
                       >
                         {playlist.images[0] ? (
                           <Image
