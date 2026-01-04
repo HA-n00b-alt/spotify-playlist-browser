@@ -332,8 +332,8 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                       <span className="text-gray-400 italic">No description</span>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-                    <span className="truncate max-w-[80px]">
+                  <div className="flex flex-nowrap items-center text-xs text-gray-500">
+                    <span className="truncate min-w-0 flex-shrink" title={playlist.owner.display_name}>
                       {playlist.owner.external_urls?.spotify ? (
                         <a
                           href={playlist.owner.external_urls.spotify}
@@ -341,26 +341,19 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                           rel="noopener noreferrer"
                           className="text-green-600 hover:text-green-700"
                           onClick={(e) => e.stopPropagation()}
-                          title={playlist.owner.display_name}
                         >
-                          {playlist.owner.display_name.length > 12 
-                            ? playlist.owner.display_name.substring(0, 12) + '...'
-                            : playlist.owner.display_name}
+                          {playlist.owner.display_name}
                         </a>
                       ) : (
-                        <span title={playlist.owner.display_name}>
-                          {playlist.owner.display_name.length > 12 
-                            ? playlist.owner.display_name.substring(0, 12) + '...'
-                            : playlist.owner.display_name}
-                        </span>
+                        playlist.owner.display_name
                       )}
                     </span>
-                    <span>•</span>
-                    <span>{playlist.tracks.total} tracks</span>
+                    <span className="flex-shrink-0 mx-1">•</span>
+                    <span className="flex-1 text-center">{playlist.tracks.total} tracks</span>
                     {playlist.followers?.total !== undefined && (
                       <>
-                        <span>•</span>
-                        <span>{formatFollowers(playlist.followers.total)} followers</span>
+                        <span className="flex-shrink-0 mx-1">•</span>
+                        <span className="flex-1 text-center">{formatFollowers(playlist.followers.total)} followers</span>
                       </>
                     )}
                   </div>
