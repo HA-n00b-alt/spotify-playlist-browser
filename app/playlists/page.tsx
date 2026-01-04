@@ -168,7 +168,7 @@ export default async function PlaylistsPage() {
                     Login with Spotify
                   </Link>
                   <Link
-                    href="/"
+                    href="/?skipRedirect=true"
                     className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded transition-colors text-sm"
                   >
                     Go to Home
@@ -196,7 +196,7 @@ export default async function PlaylistsPage() {
                     </button>
                   </form>
                   <Link
-                    href="/"
+                    href="/?skipRedirect=true"
                     className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 px-6 rounded-full transition-colors inline-block text-center"
                   >
                     Go to Home

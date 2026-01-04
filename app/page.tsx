@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import Image from 'next/image'
 import PageHeader from './components/PageHeader'
 
 async function checkAuth() {
@@ -29,6 +30,19 @@ export default async function Home({
     <main className="flex min-h-screen flex-col p-4 sm:p-8 bg-gray-50">
       <div className="max-w-7xl mx-auto flex-1 w-full">
         <PageHeader subtitle="Search and sort your playlists with ease" center />
+        
+        <div className="flex items-center justify-center my-8">
+          <div className="w-full max-w-2xl px-4">
+            <Image
+              src="/login_picture.png"
+              alt="Music playlist browser interface"
+              width={600}
+              height={400}
+              className="w-full h-auto"
+              priority
+            />
+          </div>
+        </div>
         
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center max-w-md w-full">
