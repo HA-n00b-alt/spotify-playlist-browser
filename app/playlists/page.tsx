@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { getPlaylists } from '@/lib/spotify'
 import { isAdminUser } from '@/lib/analytics'
 import PlaylistsTable from './PlaylistsTable'
-import UserMenu from '../components/UserMenu'
+import PageHeader from '../components/PageHeader'
 
 interface Playlist {
   id: string
@@ -69,18 +69,7 @@ export default async function PlaylistsPage() {
     return (
       <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
         <div className="max-w-7xl mx-auto flex-1 w-full">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sm:mb-8">
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">My Playlists</h1>
-            <div className="flex gap-2 items-center">
-              <Link
-                href="/"
-                className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded transition-colors text-sm sm:text-base"
-              >
-                Home
-              </Link>
-              <UserMenu />
-            </div>
-          </div>
+          <PageHeader subtitle="Search and sort your playlists with ease" />
           <div className="flex items-center justify-center min-h-[60vh]">
             <div className="text-center">
               <h1 className="text-2xl font-bold mb-4">Please log in</h1>
@@ -93,6 +82,17 @@ export default async function PlaylistsPage() {
             </div>
           </div>
         </div>
+        <footer className="mt-auto py-6 sm:py-8 text-center text-xs sm:text-sm text-gray-500 border-t border-gray-200">
+          Created by{' '}
+          <a href="mailto:delman@delman.it" className="text-green-600 hover:text-green-700 hover:underline">
+            delman@delman.it
+          </a>
+          . Powered by{' '}
+          <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
+            Spotify
+          </a>
+          .
+        </footer>
       </div>
     )
   }
@@ -110,18 +110,7 @@ export default async function PlaylistsPage() {
     return (
       <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
         <div className="max-w-7xl mx-auto flex-1 w-full">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sm:mb-8">
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">My Playlists</h1>
-            <div className="flex gap-2 items-center">
-              <Link
-                href="/"
-                className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded transition-colors text-sm sm:text-base"
-              >
-                Home
-              </Link>
-              <UserMenu />
-            </div>
-          </div>
+          <PageHeader subtitle="Search and sort your playlists with ease" />
           
           <div className="flex items-center justify-center min-h-[60vh]">
             <div className="text-center max-w-md px-4">
@@ -210,26 +199,19 @@ export default async function PlaylistsPage() {
   return (
     <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
       <div className="max-w-7xl mx-auto flex-1 w-full">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">My Playlists</h1>
-          <div className="flex gap-2 items-center">
-            <Link
-              href="/"
-              className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded transition-colors text-sm sm:text-base"
-            >
-              Home
-            </Link>
-            {isAdmin && (
+        <PageHeader 
+          subtitle="[user] playlists"
+          rightButtons={
+            isAdmin ? (
               <Link
                 href="/stats"
                 className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded transition-colors text-sm sm:text-base"
               >
                 Stats
               </Link>
-            )}
-            <UserMenu />
-          </div>
-        </div>
+            ) : undefined
+          }
+        />
         
         {playlists.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 sm:py-24 bg-white rounded-lg border border-gray-200 shadow-sm">
@@ -297,6 +279,7 @@ export default async function PlaylistsPage() {
         <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
           Spotify
         </a>
+        .
       </footer>
     </div>
   )

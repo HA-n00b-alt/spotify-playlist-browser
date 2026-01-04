@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import PageHeader from '../components/PageHeader'
 
 function RateLimitContent() {
   const router = useRouter()
@@ -114,32 +115,36 @@ function RateLimitContent() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-8 bg-gray-50">
-      <div className="text-center max-w-md w-full">
-        <div className="mb-6">
-          <svg
-            className="w-20 h-20 mx-auto text-yellow-500"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-        </div>
+    <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
+      <div className="max-w-7xl mx-auto flex-1 w-full">
+        <PageHeader subtitle="Search and sort your playlists with ease" />
         
-        <h1 className="text-2xl sm:text-3xl font-bold mb-4 text-gray-900">
-          Rate Limit Reached
-        </h1>
-        
-        <p className="text-gray-600 mb-6 text-base sm:text-lg">
-          Spotify API is temporarily rate limiting requests. We&apos;re automatically retrying...
-        </p>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center max-w-md w-full">
+            <div className="mb-6">
+              <svg
+                className="w-20 h-20 mx-auto text-yellow-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            </div>
+            
+            <h1 className="text-2xl sm:text-3xl font-bold mb-4 text-gray-900">
+              Rate Limit Reached
+            </h1>
+            
+            <p className="text-gray-600 mb-6 text-base sm:text-lg">
+              Spotify API is temporarily rate limiting requests. We&apos;re automatically retrying...
+            </p>
 
         {isRetrying && countdown !== null && (
           <div className="mb-6">
@@ -173,9 +178,22 @@ function RateLimitContent() {
           </button>
         </div>
 
-        <p className="mt-6 text-xs text-gray-500">
-          This page will automatically retry the request. You can cancel at any time.
-        </p>
+            <p className="mt-6 text-xs text-gray-500">
+              This page will automatically retry the request. You can cancel at any time.
+            </p>
+          </div>
+        </div>
+        <footer className="mt-auto py-6 sm:py-8 text-center text-xs sm:text-sm text-gray-500 border-t border-gray-200">
+          Created by{' '}
+          <a href="mailto:delman@delman.it" className="text-green-600 hover:text-green-700 hover:underline">
+            delman@delman.it
+          </a>
+          . Powered by{' '}
+          <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
+            Spotify
+          </a>
+          .
+        </footer>
       </div>
     </div>
   )
@@ -184,27 +202,32 @@ function RateLimitContent() {
 export default function RateLimitPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex flex-col items-center justify-center p-8 bg-gray-50">
-        <div className="text-center">
-          <div className="mb-6">
-            <svg
-              className="w-20 h-20 mx-auto text-yellow-500 animate-spin"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
+      <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
+        <div className="max-w-7xl mx-auto flex-1 w-full">
+          <PageHeader subtitle="Search and sort your playlists with ease" />
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center">
+              <div className="mb-6">
+                <svg
+                  className="w-20 h-20 mx-auto text-yellow-500 animate-spin"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-bold mb-4 text-gray-900">
+                Loading...
+              </h1>
+            </div>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold mb-4 text-gray-900">
-            Loading...
-          </h1>
         </div>
       </div>
     }>

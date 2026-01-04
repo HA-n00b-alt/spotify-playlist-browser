@@ -28,3 +28,4 @@ COMMENT ON COLUMN playlist_cache.snapshot_id IS 'Spotify snapshot_id that corres
 COMMENT ON COLUMN playlist_cache.playlist_data IS 'Full playlist metadata from Spotify API';
 COMMENT ON COLUMN playlist_cache.tracks_data IS 'Full tracks array from Spotify API';
 
+

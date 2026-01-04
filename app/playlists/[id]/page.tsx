@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import type { MouseEvent } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import UserMenu from '../../components/UserMenu'
+import PageHeader from '../../components/PageHeader'
 import { ErrorBoundary } from '../../components/ErrorBoundary'
 import { TrackTableSkeleton, SkeletonLoader } from '../../components/SkeletonLoader'
 import { usePlaylist, useRefreshPlaylist } from '../../hooks/usePlaylist'
@@ -1305,30 +1305,43 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="mb-6">
-            <SkeletonLoader variant="text" width="300px" height="32px" className="mb-2" />
-            <SkeletonLoader variant="text" width="200px" height="20px" />
-          </div>
+      <div className="min-h-screen flex flex-col bg-gray-50 p-4 sm:p-8">
+        <div className="max-w-7xl mx-auto flex-1 w-full">
+          <PageHeader
+            subtitle="[user] playlists"
+            backLink={{
+              href: '/playlists',
+              text: '← Back to Playlists'
+            }}
+          />
           <TrackTableSkeleton />
         </div>
+        <footer className="mt-auto py-6 sm:py-8 text-center text-xs sm:text-sm text-gray-500 border-t border-gray-200">
+          Created by{' '}
+          <a href="mailto:delman@delman.it" className="text-green-600 hover:text-green-700 hover:underline">
+            delman@delman.it
+          </a>
+          . Powered by{' '}
+          <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
+            Spotify
+          </a>
+          .
+        </footer>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="min-h-screen p-8 bg-gray-50">
-        <div className="max-w-7xl mx-auto">
-          <div className="mb-6">
-            <Link
-              href="/playlists"
-              className="text-blue-600 hover:text-blue-700 inline-block"
-            >
-              ← Back to Playlists
-            </Link>
-          </div>
+      <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
+        <div className="max-w-7xl mx-auto flex-1 w-full">
+          <PageHeader
+            subtitle="Search and sort your playlists with ease"
+            backLink={{
+              href: '/playlists',
+              text: '← Back to Playlists'
+            }}
+          />
           <div className="flex items-center justify-center min-h-[60vh]">
             <div className="text-center">
               <h1 className="text-2xl font-bold mb-4 text-red-600">Error</h1>
@@ -1342,6 +1355,17 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             </div>
           </div>
         </div>
+        <footer className="mt-auto py-6 sm:py-8 text-center text-xs sm:text-sm text-gray-500 border-t border-gray-200">
+          Created by{' '}
+          <a href="mailto:delman@delman.it" className="text-green-600 hover:text-green-700 hover:underline">
+            delman@delman.it
+          </a>
+          . Powered by{' '}
+          <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
+            Spotify
+          </a>
+          .
+        </footer>
       </div>
     )
   }
@@ -1363,34 +1387,23 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   return (
     <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
       <div className="max-w-7xl mx-auto flex-1 w-full">
-        <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <div className="flex gap-2 items-center">
-            <Link
-              href="/"
-              className="text-blue-600 hover:text-blue-700 inline-block text-sm sm:text-base"
-            >
-              Home
-            </Link>
-            <span className="text-gray-400">|</span>
-            <Link
-              href="/playlists"
-              className="text-blue-600 hover:text-blue-700 inline-block text-sm sm:text-base"
-            >
-              ← Back to Playlists
-            </Link>
-          </div>
-          <div className="flex gap-2 items-center">
-            {isAdmin && (
+        <PageHeader
+          subtitle="[user] playlists"
+          backLink={{
+            href: '/playlists',
+            text: '← Back to Playlists'
+          }}
+          rightButtons={
+            isAdmin ? (
               <button
                 onClick={() => setShowBpmDebug(!showBpmDebug)}
                 className="text-xs sm:text-sm bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-1.5 px-3 sm:py-2 sm:px-4 rounded transition-colors"
               >
                 {showBpmDebug ? 'Hide' : 'Show'} BPM Debug
               </button>
-            )}
-            <UserMenu />
-          </div>
-        </div>
+            ) : undefined
+          }
+        />
         
         {/* Show auth error with manual login option */}
         {error && (error.includes('Unauthorized') || error.includes('No access token') || error.includes('Please log in')) && (
@@ -2623,6 +2636,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
           Spotify
         </a>
+        .
       </footer>
     </div>
   )
