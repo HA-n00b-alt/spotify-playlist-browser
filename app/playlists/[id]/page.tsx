@@ -104,12 +104,13 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   useEffect(() => {
     const handleBeforeUnload = () => {
       // Clear all blob URLs from cache
-      audioCache.current.forEach((blobUrl) => {
+      const cache = audioCache.current
+      cache.forEach((blobUrl) => {
         if (blobUrl.startsWith('blob:')) {
           URL.revokeObjectURL(blobUrl)
         }
       })
-      audioCache.current.clear()
+      cache.clear()
     }
     
     window.addEventListener('beforeunload', handleBeforeUnload)
@@ -119,13 +120,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         audioRef.current.pause()
         audioRef.current = null
       }
-      // Cleanup blob URLs
-      audioCache.current.forEach((blobUrl) => {
+      // Cleanup blob URLs - capture current cache reference
+      const cache = audioCache.current
+      cache.forEach((blobUrl) => {
         if (blobUrl.startsWith('blob:')) {
           URL.revokeObjectURL(blobUrl)
         }
       })
-      audioCache.current.clear()
+      cache.clear()
       window.removeEventListener('beforeunload', handleBeforeUnload)
     }
   }, [])

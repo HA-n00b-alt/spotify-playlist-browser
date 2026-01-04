@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { getBpmForSpotifyTrack } from '@/lib/bpm'
 import { trackApiRequest, getCurrentUserId } from '@/lib/analytics'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const spotifyTrackId = searchParams.get('spotifyTrackId')

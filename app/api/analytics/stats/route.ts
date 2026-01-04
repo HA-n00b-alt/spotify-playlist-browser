@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { isAdminUser } from '@/lib/analytics'
 import { query } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   // Check if user is admin
   const isAdmin = await isAdminUser()

@@ -5,6 +5,8 @@ import { isAdminUser } from '@/lib/analytics'
 import PlaylistsTable from './PlaylistsTable'
 import PageHeader from '../components/PageHeader'
 
+export const dynamic = 'force-dynamic'
+
 interface Playlist {
   id: string
   name: string

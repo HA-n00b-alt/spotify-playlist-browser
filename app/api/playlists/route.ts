@@ -3,6 +3,8 @@ import { getPlaylists } from '@/lib/spotify'
 import { trackApiRequest, getCurrentUserId } from '@/lib/analytics'
 import { query } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
 interface PlaylistCacheRecord {
   playlist_id: string
   snapshot_id: string

@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { query } from '@/lib/db'
 import { trackApiRequest, getCurrentUserId } from '@/lib/analytics'
 
+export const dynamic = 'force-dynamic'
+
 interface CacheRecord {
   spotify_track_id: string
   isrc: string | null

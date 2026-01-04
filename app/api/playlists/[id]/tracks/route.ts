@@ -3,6 +3,8 @@ import { getPlaylistTracks } from '@/lib/spotify'
 import { query } from '@/lib/db'
 import { AuthenticationError } from '@/lib/errors'
 
+export const dynamic = 'force-dynamic'
+
 interface PlaylistCacheRecord {
   snapshot_id: string
   updated_at: Date

@@ -3,6 +3,8 @@ import { isAdminUser } from '@/lib/analytics'
 import StatsClient from './StatsClient'
 import PageHeader from '../components/PageHeader'
 
+export const dynamic = 'force-dynamic'
+
 export default async function StatsPage() {
   // Check if user is admin
   const isAdmin = await isAdminUser()
