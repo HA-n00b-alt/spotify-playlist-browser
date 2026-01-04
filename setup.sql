@@ -19,6 +19,9 @@ CREATE TABLE IF NOT EXISTS track_bpm_cache (
   urls_tried JSONB, -- Array of URLs that were attempted to find preview audio
   successful_url TEXT, -- URL that successfully provided preview audio (null if all failed)
   isrc_mismatch BOOLEAN DEFAULT FALSE, -- True when ISRC from search results doesn't match Spotify ISRC
+  key TEXT, -- Musical key detected by BPM service (e.g., C, D, E)
+  scale TEXT, -- Musical scale detected by BPM service (e.g., major, minor)
+  key_confidence NUMERIC(5, 2), -- Confidence score for key detection (0-1)
   CONSTRAINT unique_spotify_track UNIQUE (spotify_track_id)
 );
 
@@ -32,6 +35,9 @@ COMMENT ON COLUMN track_bpm_cache.isrc IS 'International Standard Recording Code
 COMMENT ON COLUMN track_bpm_cache.urls_tried IS 'Array of URLs that were attempted to find preview audio';
 COMMENT ON COLUMN track_bpm_cache.successful_url IS 'URL that successfully provided preview audio (null if all failed)';
 COMMENT ON COLUMN track_bpm_cache.isrc_mismatch IS 'True when ISRC from iTunes/Deezer search results does not match Spotify ISRC, may affect BPM accuracy';
+COMMENT ON COLUMN track_bpm_cache.key IS 'Musical key detected by BPM service (e.g., C, D, E)';
+COMMENT ON COLUMN track_bpm_cache.scale IS 'Musical scale detected by BPM service (e.g., major, minor)';
+COMMENT ON COLUMN track_bpm_cache.key_confidence IS 'Confidence score for key detection (0-1)';
 
 -- ============================================================================
 -- Analytics Tables

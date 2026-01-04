@@ -38,6 +38,9 @@ interface CacheRecord {
   urls_tried?: string[] | null
   successful_url?: string | null
   isrc_mismatch: boolean
+  key?: string | null
+  scale?: string | null
+  key_confidence?: number | null
 }
 
 // In-flight computation locks to prevent duplicate work
@@ -495,8 +498,11 @@ async function storeInCache(params: {
   urlsTried?: string[]
   successfulUrl?: string | null
   isrcMismatch?: boolean
+  key?: string | null
+  scale?: string | null
+  keyConfidence?: number | null
 }): Promise<void> {
-  const { spotifyTrackId, isrc, artist, title, bpm, bpmRaw, source, error, urlsTried, successfulUrl, isrcMismatch = false } = params
+  const { spotifyTrackId, isrc, artist, title, bpm, bpmRaw, source, error, urlsTried, successfulUrl, isrcMismatch = false, key, scale, keyConfidence } = params
   
   // Check if record exists
   const existing = await query<CacheRecord>(
@@ -521,16 +527,19 @@ async function storeInCache(params: {
            urls_tried = COALESCE($8::jsonb, urls_tried),
            successful_url = COALESCE($9, successful_url),
            isrc_mismatch = $10,
+           key = COALESCE($11, key),
+           scale = COALESCE($12, scale),
+           key_confidence = COALESCE($13, key_confidence),
            updated_at = NOW()
-       WHERE spotify_track_id = $11`,
-      [isrc, artist, title, bpm, bpmRaw, source, error, urlsTriedJson, successfulUrl, isrcMismatch, spotifyTrackId]
+       WHERE spotify_track_id = $14`,
+      [isrc, artist, title, bpm, bpmRaw, source, error, urlsTriedJson, successfulUrl, isrcMismatch, key, scale, keyConfidence, spotifyTrackId]
     )
   } else {
     // Insert new record
     await query(
       `INSERT INTO track_bpm_cache 
-       (spotify_track_id, isrc, artist, title, bpm, bpm_raw, source, error, urls_tried, successful_url, isrc_mismatch, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, NOW())
+       (spotify_track_id, isrc, artist, title, bpm, bpm_raw, source, error, urls_tried, successful_url, isrc_mismatch, key, scale, key_confidence, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13, $14, NOW())
        ON CONFLICT (spotify_track_id) DO UPDATE SET
          isrc = COALESCE(EXCLUDED.isrc, track_bpm_cache.isrc),
          artist = EXCLUDED.artist,
@@ -542,8 +551,11 @@ async function storeInCache(params: {
          urls_tried = COALESCE(EXCLUDED.urls_tried, track_bpm_cache.urls_tried),
          successful_url = COALESCE(EXCLUDED.successful_url, track_bpm_cache.successful_url),
          isrc_mismatch = EXCLUDED.isrc_mismatch,
+         key = COALESCE(EXCLUDED.key, track_bpm_cache.key),
+         scale = COALESCE(EXCLUDED.scale, track_bpm_cache.scale),
+         key_confidence = COALESCE(EXCLUDED.key_confidence, track_bpm_cache.key_confidence),
          updated_at = NOW()`,
-      [spotifyTrackId, isrc, artist, title, bpm, bpmRaw, source, error, urlsTriedJson, successfulUrl, isrcMismatch]
+      [spotifyTrackId, isrc, artist, title, bpm, bpmRaw, source, error, urlsTriedJson, successfulUrl, isrcMismatch, key, scale, keyConfidence]
     )
   }
 }
@@ -609,12 +621,71 @@ export async function getBpmForSpotifyTrack(
             console.warn('[BPM Module] Error parsing urls_tried:', e)
           }
         }
+        
+        // If we have BPM but no key/scale, re-run preview URL search with new ISRC logic and fetch key/scale
+        if (!cached.key || !cached.scale) {
+          console.log(`[BPM Module] Cache has BPM but missing key/scale. Re-running preview URL search with new ISRC logic...`)
+          try {
+            // Re-run preview URL resolution with new ISRC logic
+            const countryCode = getCountryCodeFromRequest(request)
+            const previewResult = await resolvePreviewUrl({
+              isrc: identifiers.isrc,
+              title: identifiers.title,
+              artists: identifiers.artists,
+              countryCode,
+            })
+            
+            if (previewResult.url) {
+              console.log(`[BPM Module] Preview URL resolved: ${previewResult.source}, fetching key/scale...`)
+              const { key, scale, keyConfidence } = await computeBpmFromService(previewResult.url)
+              console.log(`[BPM Module] Key/scale fetched: key=${key}, scale=${scale}, confidence=${keyConfidence}`)
+              
+              // Update cache with key/scale and potentially new successful_url
+              await storeInCache({
+                spotifyTrackId,
+                isrc: identifiers.isrc,
+                artist: cached.artist || identifiers.artists,
+                title: cached.title || identifiers.title,
+                bpm: cached.bpm,
+                bpmRaw: cached.bpm_raw,
+                source: cached.source,
+                error: cached.error,
+                urlsTried: previewResult.urlsTried,
+                successfulUrl: previewResult.successfulUrl || cached.successful_url,
+                isrcMismatch: previewResult.isrcMismatch || cached.isrc_mismatch,
+                key: key || null,
+                scale: scale || null,
+                keyConfidence: keyConfidence || null,
+              })
+              
+              return {
+                bpm: cached.bpm,
+                source: cached.source,
+                bpmRaw: cached.bpm_raw || undefined,
+                urlsTried: previewResult.urlsTried,
+                successfulUrl: previewResult.successfulUrl || cached.successful_url || undefined,
+                key: key || undefined,
+                scale: scale || undefined,
+                keyConfidence: keyConfidence || undefined,
+              }
+            } else {
+              console.warn(`[BPM Module] Could not resolve preview URL for key/scale backfill`)
+            }
+          } catch (error) {
+            console.warn(`[BPM Module] Failed to fetch key/scale from BPM service:`, error)
+            // Continue with cached result without key/scale
+          }
+        }
+        
         return {
           bpm: cached.bpm,
           source: cached.source,
           bpmRaw: cached.bpm_raw || undefined,
           urlsTried,
           successfulUrl: cached.successful_url || undefined,
+          key: cached.key || undefined,
+          scale: cached.scale || undefined,
+          keyConfidence: cached.key_confidence || undefined,
         }
       }
       // If cached but bpm is null, return the error if available
@@ -710,6 +781,9 @@ export async function getBpmForSpotifyTrack(
           urlsTried: previewResult.urlsTried,
           successfulUrl: previewResult.successfulUrl,
           isrcMismatch: previewResult.isrcMismatch || false,
+          key: key || null,
+          scale: scale || null,
+          keyConfidence: keyConfidence || null,
         })
         console.log(`[BPM Module] Successfully cached BPM for ${spotifyTrackId}`)
         

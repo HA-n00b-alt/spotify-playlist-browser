@@ -16,6 +16,9 @@ interface CacheRecord {
   urls_tried?: string[] | null
   successful_url?: string | null
   isrc_mismatch: boolean
+  key?: string | null
+  scale?: string | null
+  key_confidence?: number | null
 }
 
 // Cache TTL: 90 days
@@ -49,7 +52,7 @@ export async function POST(request: Request) {
 
     // Query cache for all tracks at once
     const cacheResults = await query<CacheRecord>(
-      `SELECT spotify_track_id, isrc, bpm, bpm_raw, source, error, updated_at, urls_tried, successful_url, isrc_mismatch
+      `SELECT spotify_track_id, isrc, bpm, bpm_raw, source, error, updated_at, urls_tried, successful_url, isrc_mismatch, key, scale, key_confidence
        FROM track_bpm_cache 
        WHERE spotify_track_id = ANY($1)`,
       [limitedTrackIds]
@@ -110,6 +113,9 @@ export async function POST(request: Request) {
           urlsTried: parseUrlsTried(cached.urls_tried),
           successfulUrl: cached.successful_url || undefined,
           cached: true,
+          key: cached.key || undefined,
+          scale: cached.scale || undefined,
+          keyConfidence: cached.key_confidence || undefined,
         }
       } else if (errorRecord) {
         // Has error record - return error info even if expired
@@ -121,6 +127,9 @@ export async function POST(request: Request) {
           urlsTried: parseUrlsTried(errorRecord.urls_tried),
           successfulUrl: errorRecord.successful_url || undefined,
           cached: false, // Not valid cache, will need recalculation
+          key: errorRecord.key || undefined,
+          scale: errorRecord.scale || undefined,
+          keyConfidence: errorRecord.key_confidence || undefined,
         }
       } else if (allCached) {
         // Cached but expired - return basic info
@@ -131,6 +140,9 @@ export async function POST(request: Request) {
           urlsTried: parseUrlsTried(allCached.urls_tried),
           successfulUrl: allCached.successful_url || undefined,
           cached: false, // Not valid cache, will need recalculation
+          key: allCached.key || undefined,
+          scale: allCached.scale || undefined,
+          keyConfidence: allCached.key_confidence || undefined,
         }
       } else {
         // Return null to indicate not cached (frontend can fetch individually if needed)
