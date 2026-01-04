@@ -593,7 +593,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         setBpmDetails({})
         // Trigger refetch of BPMs
         if (tracks.length > 0) {
-          await fetchBpmsBatch(tracks)
+          await fetchBpmsBatch()
         }
         alert(`Cache cleared for ${data.cleared} tracks. Recalculation started.`)
       } else {
