@@ -37,12 +37,34 @@ export default function PageHeader({ subtitle, backLink, rightButtons }: PageHea
 
   return (
     <div className="mb-6 sm:mb-8">
+      {/* Mobile: User menu top right, title/subtitle below */}
+      {/* Desktop: User menu and buttons on the right, title/subtitle on the left */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-        <div className="flex-1 min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Spotify Playlist Tools</h1>
-          <p className="text-sm text-gray-500 mt-1">{displaySubtitle}</p>
+        <div className="flex-1 min-w-0 w-full sm:w-auto">
+          {/* Mobile: Header with user menu on top */}
+          <div className="flex justify-between items-start mb-2 sm:hidden">
+            <div className="flex-1 min-w-0">
+              <h1 className="text-2xl font-bold text-gray-900">Spotify Playlist Tools</h1>
+              <p className="text-sm text-gray-500 mt-1">{displaySubtitle}</p>
+            </div>
+            <div className="flex-shrink-0 ml-4">
+              <UserMenu />
+            </div>
+          </div>
+          {/* Desktop: Header without user menu (it's on the right) */}
+          <div className="hidden sm:block">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Spotify Playlist Tools</h1>
+            <p className="text-sm text-gray-500 mt-1">{displaySubtitle}</p>
+          </div>
+          {/* Mobile: Buttons below title */}
+          {rightButtons && (
+            <div className="mt-3 sm:hidden">
+              {rightButtons}
+            </div>
+          )}
         </div>
-        <div className="flex gap-2 items-center">
+        {/* Desktop: User menu and buttons on the right */}
+        <div className="hidden sm:flex gap-2 items-center">
           {rightButtons}
           <UserMenu />
         </div>
