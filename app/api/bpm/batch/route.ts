@@ -81,12 +81,14 @@ export async function POST(request: Request) {
     const results: Record<string, {
       bpm: number | null
       source?: string
-      upc?: string
       bpmRaw?: number
       error?: string
       urlsTried?: string[]
       successfulUrl?: string | null
       cached: boolean
+      key?: string
+      scale?: string
+      keyConfidence?: number
     }> = {}
 
     // Helper to parse urls_tried from JSONB
