@@ -233,44 +233,53 @@ export default function StatusMonitor({ batchId, onComplete, onError }: StatusMo
           <h3 className="font-semibold mb-2">Results ({results.length}):</h3>
           <div className="results-list space-y-2">
             {results
-              .filter((result) => result != null) // Filter out any null/undefined results
-              .map((result, idx) => (
-                <div
-                  key={result?.index ?? idx}
-                  className="result-item p-3 bg-white border rounded shadow-sm"
-                >
-                  <div className="result-header flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium">
-                      #{result?.index ?? idx + 1}
-                    </span>
-                    {result?.bpm_essentia && (
-                      <span className="text-lg font-bold text-blue-600">
-                        {result.bpm_essentia} BPM
+              .filter((result): result is StreamStatus => result != null && typeof result === 'object') // Type guard to filter out null/undefined
+              .map((result, idx) => {
+                // Additional safety check
+                if (!result) {
+                  return null
+                }
+                
+                return (
+                  <div
+                    key={result.index ?? idx}
+                    className="result-item p-3 bg-white border rounded shadow-sm"
+                  >
+                    <div className="result-header flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium">
+                        #{result.index ?? idx + 1}
                       </span>
-                    )}
-                  </div>
-                  {result?.url && (
-                    <div className="text-xs text-gray-500 truncate mb-1">
-                      {result.url}
-                    </div>
-                  )}
-                  {result?.key_essentia && (
-                    <div className="text-sm text-gray-600">
-                      Key: {result.key_essentia} {result.scale_essentia}
-                      {result.keyscale_confidence_essentia && (
-                        <span className="text-xs text-gray-400 ml-1">
-                          ({Math.round(result.keyscale_confidence_essentia * 100)}%)
+                      {result.bpm_essentia != null && (
+                        <span className="text-lg font-bold text-blue-600">
+                          {result.bpm_essentia} BPM
                         </span>
                       )}
                     </div>
-                  )}
-                  {result?.bpm_confidence_essentia !== undefined && result.bpm_confidence_essentia !== null && (
-                    <div className="text-xs text-gray-500 mt-1">
-                      Confidence: {Math.round(result.bpm_confidence_essentia * 100)}%
-                    </div>
-                  )}
-                </div>
-              ))}
+                    {result.url && (
+                      <div className="text-xs text-gray-500 truncate mb-1">
+                        {result.url}
+                      </div>
+                    )}
+                    {result.key_essentia && (
+                      <div className="text-sm text-gray-600">
+                        Key: {result.key_essentia} {result.scale_essentia}
+                        {result.keyscale_confidence_essentia != null && (
+                          <span className="text-xs text-gray-400 ml-1">
+                            ({Math.round(result.keyscale_confidence_essentia * 100)}%)
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {result.bpm_confidence_essentia != null && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        Confidence: {Math.round(result.bpm_confidence_essentia * 100)}%
+                      </div>
+                    )}
+                  </div>
+                )
+              })
+              .filter(Boolean) // Remove any null entries from the map
+            }
           </div>
         </div>
       )}
