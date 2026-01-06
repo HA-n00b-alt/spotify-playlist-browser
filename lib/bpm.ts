@@ -992,8 +992,6 @@ export async function getBpmForSpotifyTrack(
           isrc: identifiers.isrc,
           artist: identifiers.artists,
           title: identifiers.title,
-          bpm: null,
-          bpmRaw: null,
           source: previewResult.source,
           error: errorMessage,
           urlsTried: previewResult.urlsTried,
