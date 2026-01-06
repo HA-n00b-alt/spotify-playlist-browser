@@ -551,6 +551,10 @@ async function computeBpmFromService(previewUrl: string): Promise<{
     
     const data = results[0]
     
+    if (!data || typeof data !== 'object') {
+      throw new Error(`BPM service returned invalid result: ${JSON.stringify(data)}`)
+    }
+    
     console.log(`[BPM Module] BPM service response:`, {
       bpm_essentia: data.bpm_essentia,
       bpm_raw_essentia: data.bpm_raw_essentia,
@@ -569,15 +573,15 @@ async function computeBpmFromService(previewUrl: string): Promise<{
       bpmEssentia: data.bpm_essentia,
       bpmRawEssentia: data.bpm_raw_essentia,
       bpmConfidenceEssentia: data.bpm_confidence_essentia,
-      bpmLibrosa: data.bpm_librosa,
-      bpmRawLibrosa: data.bpm_raw_librosa,
-      bpmConfidenceLibrosa: data.bpm_confidence_librosa,
+      bpmLibrosa: data.bpm_librosa ?? null,
+      bpmRawLibrosa: data.bpm_raw_librosa ?? null,
+      bpmConfidenceLibrosa: data.bpm_confidence_librosa ?? null,
       keyEssentia: data.key_essentia,
       scaleEssentia: data.scale_essentia,
       keyscaleConfidenceEssentia: data.keyscale_confidence_essentia,
-      keyLibrosa: data.key_librosa,
-      scaleLibrosa: data.scale_librosa,
-      keyscaleConfidenceLibrosa: data.keyscale_confidence_librosa,
+      keyLibrosa: data.key_librosa ?? null,
+      scaleLibrosa: data.scale_librosa ?? null,
+      keyscaleConfidenceLibrosa: data.keyscale_confidence_librosa ?? null,
       debugTxt: data.debug_txt,
     }
   } catch (error) {
