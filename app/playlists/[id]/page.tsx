@@ -583,6 +583,33 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   error: data.error,
                 },
               }))
+              // Store full BPM data for modal
+              if (data.bpmEssentia !== undefined || data.bpmLibrosa !== undefined || data.bpmSelected || 
+                  data.keyEssentia !== undefined || data.keyLibrosa !== undefined || data.keySelected) {
+                setBpmFullData(prev => ({
+                  ...prev,
+                  [track.id]: {
+                    bpmEssentia: data.bpmEssentia,
+                    bpmRawEssentia: data.bpmRawEssentia,
+                    bpmConfidenceEssentia: data.bpmConfidenceEssentia,
+                    bpmLibrosa: data.bpmLibrosa,
+                    bpmRawLibrosa: data.bpmRawLibrosa,
+                    bpmConfidenceLibrosa: data.bpmConfidenceLibrosa,
+                    keyEssentia: data.keyEssentia,
+                    scaleEssentia: data.scaleEssentia,
+                    keyscaleConfidenceEssentia: data.keyscaleConfidenceEssentia,
+                    keyLibrosa: data.keyLibrosa,
+                    scaleLibrosa: data.scaleLibrosa,
+                    keyscaleConfidenceLibrosa: data.keyscaleConfidenceLibrosa,
+                    bpmSelected: data.bpmSelected || 'essentia',
+                    keySelected: data.keySelected || 'essentia',
+                    bpmManual: data.bpmManual,
+                    keyManual: data.keyManual,
+                    scaleManual: data.scaleManual,
+                    debugTxt: data.debugTxt,
+                  },
+                }))
+              }
               setBpmDebugInfo(prev => ({
                 ...prev,
                 [track.id]: {
@@ -716,7 +743,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   setTrackScales(prev => ({ ...prev, [trackId]: data.scale }))
                 }
                 // Update full data for modal
-                if (data.bpmEssentia !== undefined || data.bpmLibrosa !== undefined || data.bpmSelected) {
+                if (data.bpmEssentia !== undefined || data.bpmLibrosa !== undefined || data.bpmSelected || 
+                    data.keyEssentia !== undefined || data.keyLibrosa !== undefined || data.keySelected) {
                   setBpmFullData(prev => ({
                     ...prev,
                     [trackId]: {
@@ -2679,6 +2707,39 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             setTracksInDb(prev => new Set(prev).add(bpmModalData.trackId))
                             if (data.bpm != null) {
                               setTrackBpms(prev => ({ ...prev, [bpmModalData.trackId]: data.bpm }))
+                              if (data.key !== undefined) {
+                                setTrackKeys(prev => ({ ...prev, [bpmModalData.trackId]: data.key || null }))
+                              }
+                              if (data.scale !== undefined) {
+                                setTrackScales(prev => ({ ...prev, [bpmModalData.trackId]: data.scale || null }))
+                              }
+                              // Store full BPM data for modal
+                              if (data.bpmEssentia !== undefined || data.bpmLibrosa !== undefined || data.bpmSelected || 
+                                  data.keyEssentia !== undefined || data.keyLibrosa !== undefined || data.keySelected) {
+                                setBpmFullData(prev => ({
+                                  ...prev,
+                                  [bpmModalData.trackId]: {
+                                    bpmEssentia: data.bpmEssentia,
+                                    bpmRawEssentia: data.bpmRawEssentia,
+                                    bpmConfidenceEssentia: data.bpmConfidenceEssentia,
+                                    bpmLibrosa: data.bpmLibrosa,
+                                    bpmRawLibrosa: data.bpmRawLibrosa,
+                                    bpmConfidenceLibrosa: data.bpmConfidenceLibrosa,
+                                    keyEssentia: data.keyEssentia,
+                                    scaleEssentia: data.scaleEssentia,
+                                    keyscaleConfidenceEssentia: data.keyscaleConfidenceEssentia,
+                                    keyLibrosa: data.keyLibrosa,
+                                    scaleLibrosa: data.scaleLibrosa,
+                                    keyscaleConfidenceLibrosa: data.keyscaleConfidenceLibrosa,
+                                    bpmSelected: data.bpmSelected || 'essentia',
+                                    keySelected: data.keySelected || 'essentia',
+                                    bpmManual: data.bpmManual,
+                                    keyManual: data.keyManual,
+                                    scaleManual: data.scaleManual,
+                                    debugTxt: data.debugTxt,
+                                  },
+                                }))
+                              }
                               setBpmDetails(prev => ({
                                 ...prev,
                                 [bpmModalData.trackId]: { source: data.source, error: data.error },

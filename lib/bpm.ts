@@ -501,7 +501,7 @@ async function computeBpmFromService(previewUrl: string): Promise<{
   
   // Call the service using batch endpoint (with single URL)
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 30000) // 30s timeout
+  const timeoutId = setTimeout(() => controller.abort(), 120000) // 120s timeout (2 minutes)
   
   console.log(`[BPM Module] Sending preview URL to BPM service:`, previewUrl)
   console.log(`[BPM Module] URL details:`, {
@@ -545,7 +545,7 @@ async function computeBpmFromService(previewUrl: string): Promise<{
     const batchId = batchData.batch_id
     
     // Step 2: Poll /batch/{batch_id} until completed
-    const maxWaitTime = 30000 // 30 seconds max (matching timeout)
+    const maxWaitTime = 120000 // 120 seconds max (2 minutes, matching timeout)
     const pollInterval = 1000 // Poll every 1 second
     const startTime = Date.now()
     
