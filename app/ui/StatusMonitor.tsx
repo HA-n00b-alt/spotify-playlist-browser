@@ -108,30 +108,34 @@ export default function StatusMonitor({ batchId, onComplete, onError }: StatusMo
                 setStatus(data)
               } else if (data.type === 'result') {
                 // Only push valid result objects with required fields
-                if (data && typeof data === 'object' && data.type === 'result' && data.index !== undefined) {
-                  // Ensure we have a valid result object
+                if (data && typeof data === 'object' && data.type === 'result' && typeof data.index === 'number') {
+                  // Ensure we have a valid result object with all fields properly typed
                   const validResult: StreamStatus = {
                     type: 'result',
                     index: data.index,
-                    url: data.url,
-                    bpm_essentia: data.bpm_essentia ?? null,
-                    bpm_raw_essentia: data.bpm_raw_essentia ?? null,
-                    bpm_confidence_essentia: data.bpm_confidence_essentia ?? null,
-                    bpm_librosa: data.bpm_librosa ?? null,
-                    bpm_raw_librosa: data.bpm_raw_librosa ?? null,
-                    bpm_confidence_librosa: data.bpm_confidence_librosa ?? null,
-                    key_essentia: data.key_essentia ?? null,
-                    scale_essentia: data.scale_essentia ?? null,
-                    keyscale_confidence_essentia: data.keyscale_confidence_essentia ?? null,
-                    key_librosa: data.key_librosa ?? null,
-                    scale_librosa: data.scale_librosa ?? null,
-                    keyscale_confidence_librosa: data.keyscale_confidence_librosa ?? null,
-                    debug_txt: data.debug_txt ?? null,
+                    url: typeof data.url === 'string' ? data.url : undefined,
+                    bpm_essentia: typeof data.bpm_essentia === 'number' ? data.bpm_essentia : (data.bpm_essentia === null ? null : undefined),
+                    bpm_raw_essentia: typeof data.bpm_raw_essentia === 'number' ? data.bpm_raw_essentia : (data.bpm_raw_essentia === null ? null : undefined),
+                    bpm_confidence_essentia: typeof data.bpm_confidence_essentia === 'number' ? data.bpm_confidence_essentia : (data.bpm_confidence_essentia === null ? null : undefined),
+                    bpm_librosa: typeof data.bpm_librosa === 'number' ? data.bpm_librosa : (data.bpm_librosa === null ? null : undefined),
+                    bpm_raw_librosa: typeof data.bpm_raw_librosa === 'number' ? data.bpm_raw_librosa : (data.bpm_raw_librosa === null ? null : undefined),
+                    bpm_confidence_librosa: typeof data.bpm_confidence_librosa === 'number' ? data.bpm_confidence_librosa : (data.bpm_confidence_librosa === null ? null : undefined),
+                    key_essentia: typeof data.key_essentia === 'string' ? data.key_essentia : (data.key_essentia === null ? null : undefined),
+                    scale_essentia: typeof data.scale_essentia === 'string' ? data.scale_essentia : (data.scale_essentia === null ? null : undefined),
+                    keyscale_confidence_essentia: typeof data.keyscale_confidence_essentia === 'number' ? data.keyscale_confidence_essentia : (data.keyscale_confidence_essentia === null ? null : undefined),
+                    key_librosa: typeof data.key_librosa === 'string' ? data.key_librosa : (data.key_librosa === null ? null : undefined),
+                    scale_librosa: typeof data.scale_librosa === 'string' ? data.scale_librosa : (data.scale_librosa === null ? null : undefined),
+                    keyscale_confidence_librosa: typeof data.keyscale_confidence_librosa === 'number' ? data.keyscale_confidence_librosa : (data.keyscale_confidence_librosa === null ? null : undefined),
+                    debug_txt: typeof data.debug_txt === 'string' ? data.debug_txt : (data.debug_txt === null ? null : undefined),
                   }
                   allResults.push(validResult)
-                  setResults([...allResults])
+                  // Only update state with valid results
+                  const validResults = allResults.filter((r): r is StreamStatus => 
+                    r != null && typeof r === 'object' && r.type === 'result' && typeof r.index === 'number'
+                  )
+                  setResults(validResults)
                 } else {
-                  console.warn('[StatusMonitor] Invalid result data:', data)
+                  console.warn('[StatusMonitor] Invalid result data:', data, 'Type:', typeof data, 'Has index:', data?.index)
                 }
               } else if (data.type === 'progress') {
                 setStatus((prev) => ({
