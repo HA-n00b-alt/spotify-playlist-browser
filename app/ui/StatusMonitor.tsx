@@ -251,7 +251,7 @@ export default function StatusMonitor({ batchId, onComplete, onError }: StatusMo
                     )}
                   </div>
                 )}
-                {result.bpm_confidence_essentia !== undefined && (
+                {result.bpm_confidence_essentia !== undefined && result.bpm_confidence_essentia !== null && (
                   <div className="text-xs text-gray-500 mt-1">
                     Confidence: {Math.round(result.bpm_confidence_essentia * 100)}%
                   </div>
