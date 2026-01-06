@@ -2639,7 +2639,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                   </span>
                                 )}
                               </div>
-                              {bpmModalData.fullData.bpmRawEssentia != null && bpmModalData.fullData.bpmRawEssentia !== bpmModalData.fullData.bpmEssentia && (
+                              {typeof bpmModalData.fullData.bpmRawEssentia === 'number' && bpmModalData.fullData.bpmRawEssentia !== bpmModalData.fullData.bpmEssentia && (
                                 <div className="text-xs text-gray-500 mt-1">
                                   Raw: {bpmModalData.fullData.bpmRawEssentia.toFixed(1)}
                                 </div>
@@ -2693,7 +2693,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                   </span>
                                 )}
                               </div>
-                              {bpmModalData.fullData.bpmRawLibrosa != null && bpmModalData.fullData.bpmRawLibrosa !== bpmModalData.fullData.bpmLibrosa && (
+                              {typeof bpmModalData.fullData.bpmRawLibrosa === 'number' && bpmModalData.fullData.bpmRawLibrosa !== bpmModalData.fullData.bpmLibrosa && (
                                 <div className="text-xs text-gray-500 mt-1">
                                   Raw: {bpmModalData.fullData.bpmRawLibrosa.toFixed(1)}
                                 </div>
