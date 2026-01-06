@@ -594,10 +594,10 @@ async function computeBpmFromService(previewUrl: string): Promise<{
  * Returns 'essentia', 'librosa', or 'essentia' (default if librosa is null)
  */
 function selectBestBpm(
-  bpmEssentia: number | null,
-  bpmConfidenceEssentia: number | null,
-  bpmLibrosa: number | null,
-  bpmConfidenceLibrosa: number | null
+  bpmEssentia: number | null | undefined,
+  bpmConfidenceEssentia: number | null | undefined,
+  bpmLibrosa: number | null | undefined,
+  bpmConfidenceLibrosa: number | null | undefined
 ): 'essentia' | 'librosa' {
   if (bpmLibrosa == null) return 'essentia'
   if (bpmEssentia == null) return 'librosa'
@@ -608,10 +608,10 @@ function selectBestBpm(
 }
 
 function selectBestKey(
-  keyEssentia: string | null,
-  keyscaleConfidenceEssentia: number | null,
-  keyLibrosa: string | null,
-  keyscaleConfidenceLibrosa: number | null
+  keyEssentia: string | null | undefined,
+  keyscaleConfidenceEssentia: number | null | undefined,
+  keyLibrosa: string | null | undefined,
+  keyscaleConfidenceLibrosa: number | null | undefined
 ): 'essentia' | 'librosa' {
   if (keyLibrosa == null) return 'essentia'
   if (keyEssentia == null) return 'librosa'
