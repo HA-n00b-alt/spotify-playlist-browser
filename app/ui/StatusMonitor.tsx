@@ -96,13 +96,24 @@ export default function StatusMonitor({ batchId, onComplete, onError }: StatusMo
 
             try {
               const data: StreamStatus = JSON.parse(line)
+              
+              // Validate parsed data
+              if (!data || typeof data !== 'object') {
+                console.warn('[StatusMonitor] Invalid parsed data:', data)
+                continue
+              }
 
               // Update status based on message type
               if (data.type === 'status') {
                 setStatus(data)
               } else if (data.type === 'result') {
-                allResults.push(data)
-                setResults([...allResults])
+                // Only push valid result objects with required fields
+                if (data && typeof data === 'object' && data.type === 'result') {
+                  allResults.push(data)
+                  setResults([...allResults])
+                } else {
+                  console.warn('[StatusMonitor] Invalid result data:', data)
+                }
               } else if (data.type === 'progress') {
                 setStatus((prev) => ({
                   ...prev,
@@ -221,43 +232,45 @@ export default function StatusMonitor({ batchId, onComplete, onError }: StatusMo
         <div className="results-container mt-4">
           <h3 className="font-semibold mb-2">Results ({results.length}):</h3>
           <div className="results-list space-y-2">
-            {results.map((result, idx) => (
-              <div
-                key={result.index ?? idx}
-                className="result-item p-3 bg-white border rounded shadow-sm"
-              >
-                <div className="result-header flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium">
-                    #{result.index ?? idx + 1}
-                  </span>
-                  {result.bpm_essentia && (
-                    <span className="text-lg font-bold text-blue-600">
-                      {result.bpm_essentia} BPM
+            {results
+              .filter((result) => result != null) // Filter out any null/undefined results
+              .map((result, idx) => (
+                <div
+                  key={result?.index ?? idx}
+                  className="result-item p-3 bg-white border rounded shadow-sm"
+                >
+                  <div className="result-header flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium">
+                      #{result?.index ?? idx + 1}
                     </span>
-                  )}
-                </div>
-                {result.url && (
-                  <div className="text-xs text-gray-500 truncate mb-1">
-                    {result.url}
-                  </div>
-                )}
-                {result.key_essentia && (
-                  <div className="text-sm text-gray-600">
-                    Key: {result.key_essentia} {result.scale_essentia}
-                    {result.keyscale_confidence_essentia && (
-                      <span className="text-xs text-gray-400 ml-1">
-                        ({Math.round(result.keyscale_confidence_essentia * 100)}%)
+                    {result?.bpm_essentia && (
+                      <span className="text-lg font-bold text-blue-600">
+                        {result.bpm_essentia} BPM
                       </span>
                     )}
                   </div>
-                )}
-                {result.bpm_confidence_essentia !== undefined && result.bpm_confidence_essentia !== null && (
-                  <div className="text-xs text-gray-500 mt-1">
-                    Confidence: {Math.round(result.bpm_confidence_essentia * 100)}%
-                  </div>
-                )}
-              </div>
-            ))}
+                  {result?.url && (
+                    <div className="text-xs text-gray-500 truncate mb-1">
+                      {result.url}
+                    </div>
+                  )}
+                  {result?.key_essentia && (
+                    <div className="text-sm text-gray-600">
+                      Key: {result.key_essentia} {result.scale_essentia}
+                      {result.keyscale_confidence_essentia && (
+                        <span className="text-xs text-gray-400 ml-1">
+                          ({Math.round(result.keyscale_confidence_essentia * 100)}%)
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {result?.bpm_confidence_essentia !== undefined && result.bpm_confidence_essentia !== null && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      Confidence: {Math.round(result.bpm_confidence_essentia * 100)}%
+                    </div>
+                  )}
+                </div>
+              ))}
           </div>
         </div>
       )}
