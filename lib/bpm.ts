@@ -591,7 +591,7 @@ async function computeBpmFromService(previewUrl: string): Promise<{
       
       batchStatus = await statusResponse.json()
       
-      if (batchStatus.status === 'completed' && batchStatus.results) {
+      if (batchStatus && batchStatus.status === 'completed' && batchStatus.results) {
         break
       }
       
