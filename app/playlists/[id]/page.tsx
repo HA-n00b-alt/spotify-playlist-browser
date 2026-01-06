@@ -96,6 +96,27 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [manualKey, setManualKey] = useState<string>('')
   const [manualScale, setManualScale] = useState<string>('major')
   const [isUpdatingSelection, setIsUpdatingSelection] = useState(false)
+  
+  // Initialize manual values when modal opens
+  useEffect(() => {
+    if (showBpmModal && selectedBpmTrack) {
+      const fullData = bpmFullData[selectedBpmTrack.id]
+      if (fullData?.bpmManual) {
+        setManualBpm(String(fullData.bpmManual))
+      }
+      if (fullData?.keyManual) {
+        setManualKey(fullData.keyManual)
+      }
+      if (fullData?.scaleManual) {
+        setManualScale(fullData.scaleManual)
+      }
+    } else {
+      // Reset when modal closes
+      setManualBpm('')
+      setManualKey('')
+      setManualScale('major')
+    }
+  }, [showBpmModal, selectedBpmTrack, bpmFullData])
   const [showBpmMoreInfo, setShowBpmMoreInfo] = useState(false)
   const [countryCode, setCountryCode] = useState<string>('us')
   const [tracksInDb, setTracksInDb] = useState<Set<string>>(new Set()) // Track IDs that are already in the DB
@@ -2458,64 +2479,70 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       )}
 
       {/* BPM Details Modal */}
-      {showBpmModal && selectedBpmTrack && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-          onClick={() => setShowBpmModal(false)}
-        >
+      {showBpmModal && selectedBpmTrack && (() => {
+        const trackId = selectedBpmTrack.id
+        const fullData = bpmFullData[trackId]
+        const currentBpm = trackBpms[trackId]
+        const currentKey = trackKeys[trackId]
+        const currentScale = trackScales[trackId]
+        const bpmSelected = fullData?.bpmSelected || 'essentia'
+        const keySelected = fullData?.keySelected || 'essentia'
+        const hasEssentiaBpm = fullData?.bpmEssentia != null
+        const hasLibrosaBpm = fullData?.bpmLibrosa != null
+        const hasEssentiaKey = fullData?.keyEssentia != null
+        const hasLibrosaKey = fullData?.keyLibrosa != null
+        
+        return (
           <div 
-            className="bg-white rounded-lg shadow-xl max-w-md w-full p-6"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={() => {
+              setShowBpmModal(false)
+              setRetryStatus(null)
+              setRetryAttempted(false)
+              setManualBpm('')
+              setManualKey('')
+              setManualScale('major')
+            }}
           >
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-900">BPM Information</h2>
-              <button
-                onClick={() => setShowBpmModal(false)}
-                className="text-gray-400 hover:text-gray-600 text-2xl"
-              >
-                ×
-              </button>
-            </div>
-            
-            <div className="mb-4">
-              <h3 className="font-semibold text-gray-900 mb-2">{selectedBpmTrack.name}</h3>
-              <p className="text-sm text-gray-600">
-                {selectedBpmTrack.artists.map(a => a.name).join(', ')}
-              </p>
-            </div>
+            <div 
+              className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-gray-900">BPM & Key Information</h2>
+                <button
+                  onClick={() => {
+                    setShowBpmModal(false)
+                    setRetryStatus(null)
+                    setRetryAttempted(false)
+                    setManualBpm('')
+                    setManualKey('')
+                    setManualScale('major')
+                  }}
+                  className="text-gray-400 hover:text-gray-600 text-2xl"
+                >
+                  ×
+                </button>
+              </div>
+              
+              <div className="mb-4">
+                <h3 className="font-semibold text-gray-900 mb-2">{selectedBpmTrack.name}</h3>
+                <p className="text-sm text-gray-600">
+                  {selectedBpmTrack.artists.map(a => a.name).join(', ')}
+                </p>
+              </div>
 
-            <div className="space-y-3">
-              {trackBpms[selectedBpmTrack.id] != null ? (
-                <>
-                  <div>
-                    <span className="font-semibold text-gray-700">BPM: </span>
-                    <span className="text-gray-900">{Math.round(trackBpms[selectedBpmTrack.id]!)}</span>
-                  </div>
-                  {bpmDetails[selectedBpmTrack.id]?.source && (
-                    <div>
-                      <span className="font-semibold text-gray-700">Source: </span>
-                      <span className="text-gray-900 capitalize">
-                        {bpmDetails[selectedBpmTrack.id].source?.replace(/_/g, ' ')}
-                      </span>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <>
+              {currentBpm == null && !hasEssentiaBpm && !hasLibrosaBpm ? (
+                // No BPM data available
+                <div className="space-y-3">
                   <div>
                     <span className="font-semibold text-gray-700">BPM: </span>
                     <span className="text-gray-600">Not available</span>
                   </div>
-                  {bpmDetails[selectedBpmTrack.id]?.error ? (
+                  {bpmDetails[trackId]?.error ? (
                     <div>
                       <span className="font-semibold text-gray-700">Reason: </span>
-                      <span className="text-gray-600">{bpmDetails[selectedBpmTrack.id].error}</span>
-                    </div>
-                  ) : bpmDetails[selectedBpmTrack.id]?.source === 'computed_failed' ? (
-                    <div>
-                      <span className="text-gray-600 text-sm">
-                        BPM calculation failed. {bpmDetails[selectedBpmTrack.id]?.error || 'No preview audio available for this track.'}
-                      </span>
+                      <span className="text-gray-600">{bpmDetails[trackId].error}</span>
                     </div>
                   ) : (
                     <div>
@@ -2524,147 +2551,437 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       </span>
                     </div>
                   )}
-                  {bpmDetails[selectedBpmTrack.id]?.source && bpmDetails[selectedBpmTrack.id].source !== 'computed_failed' && (
-                    <div>
-                      <span className="font-semibold text-gray-700">Last attempt source: </span>
-                      <span className="text-gray-900 capitalize">
-                        {bpmDetails[selectedBpmTrack.id].source?.replace(/_/g, ' ')}
-                      </span>
+                  {trackBpms[trackId] == null && !retryAttempted && (
+                    <button
+                      onClick={async () => {
+                        setRetryStatus({ loading: true })
+                        setRetryAttempted(true)
+                        setLoadingBpms(prev => new Set(prev).add(trackId))
+                        try {
+                          const res = await fetch(`/api/bpm?spotifyTrackId=${trackId}&country=${countryCode}`)
+                          if (res.ok) {
+                            const data = await res.json()
+                            if (data.successfulUrl) {
+                              setPreviewUrls(prev => ({ ...prev, [trackId]: data.successfulUrl }))
+                            }
+                            setTracksInDb(prev => new Set(prev).add(trackId))
+                            if (data.bpm != null) {
+                              setTrackBpms(prev => ({ ...prev, [trackId]: data.bpm }))
+                              setBpmDetails(prev => ({
+                                ...prev,
+                                [trackId]: { source: data.source, error: data.error },
+                              }))
+                              setRetryStatus({ loading: false, success: true })
+                            } else {
+                              setBpmDetails(prev => ({
+                                ...prev,
+                                [trackId]: { source: data.source, error: data.error || 'BPM calculation failed' },
+                              }))
+                              setRetryStatus({ loading: false, success: false, error: data.error || 'BPM calculation failed' })
+                            }
+                          } else {
+                            const errorData = await res.json().catch(() => ({}))
+                            setRetryStatus({ loading: false, success: false, error: errorData.error || 'Failed to fetch BPM' })
+                          }
+                        } catch (error) {
+                          setRetryStatus({ loading: false, success: false, error: 'Network error. Please try again.' })
+                        } finally {
+                          setLoadingBpms(prev => {
+                            const next = new Set(prev)
+                            next.delete(trackId)
+                            return next
+                          })
+                        }
+                      }}
+                      disabled={retryStatus?.loading}
+                      className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded transition-colors"
+                    >
+                      {retryStatus?.loading ? 'Retrying...' : 'Retry'}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                // Show BPM and Key data with switching and manual override
+                <div className="space-y-6">
+                  {/* BPM Section */}
+                  <div>
+                    <h4 className="font-semibold text-gray-900 mb-3">BPM</h4>
+                    <div className="space-y-3">
+                      {/* Essentia BPM */}
+                      {hasEssentiaBpm && (
+                        <div className={`p-3 rounded border-2 ${bpmSelected === 'essentia' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-gray-700">Essentia:</span>
+                                <span className="text-gray-900">{Math.round(fullData.bpmEssentia!)}</span>
+                                {fullData.bpmConfidenceEssentia != null && (
+                                  <span className="text-xs text-gray-500">
+                                    (confidence: {(fullData.bpmConfidenceEssentia * 100).toFixed(0)}%)
+                                  </span>
+                                )}
+                              </div>
+                              {fullData.bpmRawEssentia != null && fullData.bpmRawEssentia !== fullData.bpmEssentia && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  Raw: {fullData.bpmRawEssentia.toFixed(1)}
+                                </div>
+                              )}
+                            </div>
+                            {bpmSelected === 'essentia' && (
+                              <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">Selected</span>
+                            )}
+                            {bpmSelected !== 'essentia' && hasLibrosaBpm && (
+                              <button
+                                onClick={async () => {
+                                  setIsUpdatingSelection(true)
+                                  try {
+                                    const res = await fetch('/api/bpm/update-selection', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({
+                                        spotifyTrackId: trackId,
+                                        bpmSelected: 'essentia',
+                                      }),
+                                    })
+                                    if (res.ok) {
+                                      // Refresh BPM data
+                                      await fetchBpmsBatch()
+                                    }
+                                  } finally {
+                                    setIsUpdatingSelection(false)
+                                  }
+                                }}
+                                disabled={isUpdatingSelection}
+                                className="text-xs bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white px-2 py-1 rounded transition-colors"
+                              >
+                                Use This
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Librosa BPM */}
+                      {hasLibrosaBpm && (
+                        <div className={`p-3 rounded border-2 ${bpmSelected === 'librosa' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-gray-700">Librosa:</span>
+                                <span className="text-gray-900">{Math.round(fullData.bpmLibrosa!)}</span>
+                                {fullData.bpmConfidenceLibrosa != null && (
+                                  <span className="text-xs text-gray-500">
+                                    (confidence: {(fullData.bpmConfidenceLibrosa * 100).toFixed(0)}%)
+                                  </span>
+                                )}
+                              </div>
+                              {fullData.bpmRawLibrosa != null && fullData.bpmRawLibrosa !== fullData.bpmLibrosa && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  Raw: {fullData.bpmRawLibrosa.toFixed(1)}
+                                </div>
+                              )}
+                            </div>
+                            {bpmSelected === 'librosa' && (
+                              <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">Selected</span>
+                            )}
+                            {bpmSelected !== 'librosa' && (
+                              <button
+                                onClick={async () => {
+                                  setIsUpdatingSelection(true)
+                                  try {
+                                    const res = await fetch('/api/bpm/update-selection', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({
+                                        spotifyTrackId: trackId,
+                                        bpmSelected: 'librosa',
+                                      }),
+                                    })
+                                    if (res.ok) {
+                                      await fetchBpmsBatch()
+                                    }
+                                  } finally {
+                                    setIsUpdatingSelection(false)
+                                  }
+                                }}
+                                disabled={isUpdatingSelection}
+                                className="text-xs bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white px-2 py-1 rounded transition-colors"
+                              >
+                                Use This
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Manual BPM Override */}
+                      <div className={`p-3 rounded border-2 ${bpmSelected === 'manual' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-semibold text-gray-700">Manual Override:</span>
+                          {bpmSelected === 'manual' && fullData.bpmManual != null && (
+                            <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">Selected: {Math.round(fullData.bpmManual)}</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            value={manualBpm || fullData.bpmManual || ''}
+                            onChange={(e) => setManualBpm(e.target.value)}
+                            placeholder="Enter BPM"
+                            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                            min="1"
+                            max="300"
+                          />
+                          <button
+                            onClick={async () => {
+                              const bpmValue = parseFloat(manualBpm || String(fullData.bpmManual || ''))
+                              if (isNaN(bpmValue) || bpmValue < 1 || bpmValue > 300) {
+                                alert('Please enter a valid BPM between 1 and 300')
+                                return
+                              }
+                              setIsUpdatingSelection(true)
+                              try {
+                                const res = await fetch('/api/bpm/update-selection', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    spotifyTrackId: trackId,
+                                    bpmSelected: 'manual',
+                                    bpmManual: bpmValue,
+                                  }),
+                                })
+                                if (res.ok) {
+                                  await fetchBpmsBatch()
+                                  setManualBpm('')
+                                }
+                              } finally {
+                                setIsUpdatingSelection(false)
+                              }
+                            }}
+                            disabled={isUpdatingSelection || (!manualBpm && !fullData.bpmManual)}
+                            className="text-xs bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white px-3 py-1 rounded transition-colors"
+                          >
+                            {isUpdatingSelection ? 'Saving...' : 'Save Manual'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Key/Scale Section */}
+                  <div>
+                    <h4 className="font-semibold text-gray-900 mb-3">Key & Scale</h4>
+                    <div className="space-y-3">
+                      {/* Essentia Key */}
+                      {hasEssentiaKey && (
+                        <div className={`p-3 rounded border-2 ${keySelected === 'essentia' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-gray-700">Essentia:</span>
+                                <span className="text-gray-900">
+                                  {fullData.keyEssentia} {fullData.scaleEssentia}
+                                </span>
+                                {fullData.keyscaleConfidenceEssentia != null && (
+                                  <span className="text-xs text-gray-500">
+                                    (confidence: {(fullData.keyscaleConfidenceEssentia * 100).toFixed(0)}%)
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            {keySelected === 'essentia' && (
+                              <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">Selected</span>
+                            )}
+                            {keySelected !== 'essentia' && hasLibrosaKey && (
+                              <button
+                                onClick={async () => {
+                                  setIsUpdatingSelection(true)
+                                  try {
+                                    const res = await fetch('/api/bpm/update-selection', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({
+                                        spotifyTrackId: trackId,
+                                        keySelected: 'essentia',
+                                      }),
+                                    })
+                                    if (res.ok) {
+                                      await fetchBpmsBatch()
+                                    }
+                                  } finally {
+                                    setIsUpdatingSelection(false)
+                                  }
+                                }}
+                                disabled={isUpdatingSelection}
+                                className="text-xs bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white px-2 py-1 rounded transition-colors"
+                              >
+                                Use This
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Librosa Key */}
+                      {hasLibrosaKey && (
+                        <div className={`p-3 rounded border-2 ${keySelected === 'librosa' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-gray-700">Librosa:</span>
+                                <span className="text-gray-900">
+                                  {fullData.keyLibrosa} {fullData.scaleLibrosa}
+                                </span>
+                                {fullData.keyscaleConfidenceLibrosa != null && (
+                                  <span className="text-xs text-gray-500">
+                                    (confidence: {(fullData.keyscaleConfidenceLibrosa * 100).toFixed(0)}%)
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            {keySelected === 'librosa' && (
+                              <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">Selected</span>
+                            )}
+                            {keySelected !== 'librosa' && (
+                              <button
+                                onClick={async () => {
+                                  setIsUpdatingSelection(true)
+                                  try {
+                                    const res = await fetch('/api/bpm/update-selection', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({
+                                        spotifyTrackId: trackId,
+                                        keySelected: 'librosa',
+                                      }),
+                                    })
+                                    if (res.ok) {
+                                      await fetchBpmsBatch()
+                                    }
+                                  } finally {
+                                    setIsUpdatingSelection(false)
+                                  }
+                                }}
+                                disabled={isUpdatingSelection}
+                                className="text-xs bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white px-2 py-1 rounded transition-colors"
+                              >
+                                Use This
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Manual Key Override */}
+                      <div className={`p-3 rounded border-2 ${keySelected === 'manual' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-semibold text-gray-700">Manual Override:</span>
+                          {keySelected === 'manual' && fullData.keyManual && (
+                            <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">
+                              Selected: {fullData.keyManual} {fullData.scaleManual}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={manualKey || fullData.keyManual || ''}
+                            onChange={(e) => setManualKey(e.target.value)}
+                            className="px-2 py-1 border border-gray-300 rounded text-sm"
+                          >
+                            <option value="">Select Key</option>
+                            {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].map(k => (
+                              <option key={k} value={k}>{k}</option>
+                            ))}
+                          </select>
+                          <select
+                            value={manualScale || fullData.scaleManual || 'major'}
+                            onChange={(e) => setManualScale(e.target.value)}
+                            className="px-2 py-1 border border-gray-300 rounded text-sm"
+                          >
+                            <option value="major">Major</option>
+                            <option value="minor">Minor</option>
+                          </select>
+                          <button
+                            onClick={async () => {
+                              const key = manualKey || fullData.keyManual
+                              const scale = manualScale || fullData.scaleManual || 'major'
+                              if (!key) {
+                                alert('Please select a key')
+                                return
+                              }
+                              setIsUpdatingSelection(true)
+                              try {
+                                const res = await fetch('/api/bpm/update-selection', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    spotifyTrackId: trackId,
+                                    keySelected: 'manual',
+                                    keyManual: key,
+                                    scaleManual: scale,
+                                  }),
+                                })
+                                if (res.ok) {
+                                  await fetchBpmsBatch()
+                                  setManualKey('')
+                                  setManualScale('major')
+                                }
+                              } finally {
+                                setIsUpdatingSelection(false)
+                              }
+                            }}
+                            disabled={isUpdatingSelection || (!manualKey && !fullData.keyManual)}
+                            className="text-xs bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white px-3 py-1 rounded transition-colors"
+                          >
+                            {isUpdatingSelection ? 'Saving...' : 'Save Manual'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Status Messages */}
+                  {retryStatus && (
+                    <div className={`p-3 rounded text-sm ${
+                      retryStatus.loading 
+                        ? 'bg-blue-50 text-blue-700' 
+                        : retryStatus.success 
+                          ? 'bg-green-50 text-green-700' 
+                          : 'bg-red-50 text-red-700'
+                    }`}>
+                      {retryStatus.loading && 'Retrying...'}
+                      {!retryStatus.loading && retryStatus.success && 'BPM successfully calculated!'}
+                      {!retryStatus.loading && !retryStatus.success && retryStatus.error && `Error: ${retryStatus.error}`}
                     </div>
                   )}
-                </>
+                  
+                  {isUpdatingSelection && (
+                    <div className="p-3 rounded text-sm bg-blue-50 text-blue-700">
+                      Updating selection...
+                    </div>
+                  )}
+                </div>
               )}
-            </div>
 
-            {/* Retry Status Message */}
-            {retryStatus && (
-              <div className={`mt-4 p-3 rounded text-sm ${
-                retryStatus.loading 
-                  ? 'bg-blue-50 text-blue-700' 
-                  : retryStatus.success 
-                    ? 'bg-green-50 text-green-700' 
-                    : 'bg-red-50 text-red-700'
-              }`}>
-                {retryStatus.loading && 'Retrying...'}
-                {!retryStatus.loading && retryStatus.success && 'BPM successfully calculated!'}
-                {!retryStatus.loading && !retryStatus.success && retryStatus.error && `Error: ${retryStatus.error}`}
-              </div>
-            )}
-
-            <div className="mt-6 flex justify-end gap-3">
-              {trackBpms[selectedBpmTrack.id] == null && !retryAttempted && (
+              <div className="mt-6 flex justify-end">
                 <button
-                  onClick={async () => {
-                    // Retry fetching BPM for this track
-                    setRetryStatus({ loading: true })
-                    setRetryAttempted(true)
-                    setLoadingBpms(prev => new Set(prev).add(selectedBpmTrack.id))
-                    try {
-                      const res = await fetch(`/api/bpm?spotifyTrackId=${selectedBpmTrack.id}&country=${countryCode}`)
-                      if (res.ok) {
-                        const data = await res.json()
-                        // Store successful preview URL from DB
-                        if (data.successfulUrl) {
-                          setPreviewUrls(prev => ({
-                            ...prev,
-                            [selectedBpmTrack.id]: data.successfulUrl,
-                          }))
-                        }
-                        // Mark track as in DB (now it has an entry, whether BPM or N/A)
-                        setTracksInDb(prev => new Set(prev).add(selectedBpmTrack.id))
-                        if (data.bpm != null) {
-                          setTrackBpms(prev => ({
-                            ...prev,
-                            [selectedBpmTrack.id]: data.bpm,
-                          }))
-                          setBpmDetails(prev => ({
-                            ...prev,
-                            [selectedBpmTrack.id]: {
-                              source: data.source,
-                              error: data.error,
-                            },
-                          }))
-                          setRetryStatus({ loading: false, success: true })
-                        } else {
-                          // Use error from API, or generate descriptive message from source
-                          let errorMessage = data.error
-                          if (!errorMessage) {
-                            // Generate descriptive message based on source
-                            if (data.source === 'computed_failed') {
-                              errorMessage = 'No preview audio available from any source (iTunes, Deezer)'
-                            } else if (data.source === 'itunes_search') {
-                              errorMessage = 'No preview available on iTunes/Apple Music'
-                            } else if (data.source === 'deezer_isrc' || data.source === 'deezer_search') {
-                              errorMessage = 'No preview available on Deezer'
-                            } else {
-                              errorMessage = 'BPM calculation failed. No preview audio available.'
-                            }
-                          }
-                          
-                          // Make error messages more user-friendly
-                          if (errorMessage.includes('Invalid base62 id') || errorMessage.includes('base62')) {
-                            errorMessage = 'Invalid track ID format. This track may have been removed or is unavailable.'
-                          } else if (errorMessage.includes('Invalid Spotify track ID')) {
-                            errorMessage = 'Invalid track ID. This track may have been removed or is unavailable.'
-                          }
-                          setBpmDetails(prev => ({
-                            ...prev,
-                            [selectedBpmTrack.id]: {
-                              source: data.source,
-                              error: errorMessage,
-                            },
-                          }))
-                          setRetryStatus({ loading: false, success: false, error: errorMessage })
-                        }
-                      } else {
-                        const errorData = await res.json().catch(() => ({}))
-                        const errorMessage = errorData.error || 'Failed to fetch BPM'
-                        setBpmDetails(prev => ({
-                          ...prev,
-                          [selectedBpmTrack.id]: {
-                            error: errorMessage,
-                          },
-                        }))
-                        setRetryStatus({ loading: false, success: false, error: errorMessage })
-                      }
-                    } catch (error) {
-                      console.error(`[BPM Client] Error retrying BPM for ${selectedBpmTrack.id}:`, error)
-                      const errorMessage = 'Network error. Please try again.'
-                      setBpmDetails(prev => ({
-                        ...prev,
-                        [selectedBpmTrack.id]: {
-                          error: errorMessage,
-                        },
-                      }))
-                      setRetryStatus({ loading: false, success: false, error: errorMessage })
-                    } finally {
-                      setLoadingBpms(prev => {
-                        const next = new Set(prev)
-                        next.delete(selectedBpmTrack.id)
-                        return next
-                      })
-                    }
+                  onClick={() => {
+                    setShowBpmModal(false)
+                    setRetryStatus(null)
+                    setRetryAttempted(false)
+                    setManualBpm('')
+                    setManualKey('')
+                    setManualScale('major')
                   }}
-                  disabled={retryStatus?.loading}
-                  className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded transition-colors"
+                  className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded transition-colors"
                 >
-                  {retryStatus?.loading ? 'Retrying...' : 'Retry'}
+                  Close
                 </button>
-              )}
-              <button
-                onClick={() => {
-                  setShowBpmModal(false)
-                  setRetryStatus(null)
-                  setRetryAttempted(false)
-                }}
-                className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded transition-colors"
-              >
-                Close
-              </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
       
       {/* Cache Info Modal */}
       {showCacheModal && isCached && cachedAt && (

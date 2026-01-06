@@ -108,33 +108,39 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
     setPlaylists(initialPlaylists)
   }, [initialPlaylists])
 
-  // Check if playlist is new (created after last visit)
+  // Check if playlist is new (not seen before on this page load)
+  // A playlist is "new" if it's not in the seen list when the page first loads
   const isNewPlaylist = useCallback((playlist: Playlist): boolean => {
-    if (!lastVisitTimestamp) return false
-    // We can't determine creation date from Spotify API, so we'll use cached_at as a proxy
-    // If it's cached and cached_at is after last visit, it's "new" to us
-    if (playlist.cached_at) {
-      const cachedAt = new Date(playlist.cached_at).getTime()
-      return cachedAt > lastVisitTimestamp
-    }
-    // If not cached, assume it's new if we haven't seen it before
-    // We'll track seen playlists in localStorage
     if (typeof window === 'undefined') return false
+    if (hasMarkedAsSeen.current) return false // Once we've marked playlists as seen, nothing is new anymore
+    
+    // Check if we've seen this playlist before
     const seenPlaylists = localStorage.getItem('playlist_seen_ids')
     if (seenPlaylists) {
       const seen: string[] = JSON.parse(seenPlaylists)
       return !seen.includes(playlist.id)
     }
-    return false
-  }, [lastVisitTimestamp])
+    // If no seen list exists, all playlists are "new" (first visit ever)
+    return true
+  }, [])
 
-  // Mark playlist as seen
+  // Mark playlists as seen and update lastVisitTimestamp after first render
+  // This ensures new playlists are only pinned on the first page load
+  const hasMarkedAsSeen = useRef(false)
   useEffect(() => {
-    if (typeof window === 'undefined') return
+    if (typeof window === 'undefined' || hasMarkedAsSeen.current) return
+    
+    // Mark all current playlists as seen
     const seenPlaylists = localStorage.getItem('playlist_seen_ids')
     const seen: string[] = seenPlaylists ? JSON.parse(seenPlaylists) : []
     const newSeen = [...new Set([...seen, ...playlists.map(p => p.id)])]
     localStorage.setItem('playlist_seen_ids', JSON.stringify(newSeen))
+    
+    // Update lastVisitTimestamp to current time so these playlists won't be "new" on next load
+    const now = Date.now()
+    localStorage.setItem(STORAGE_KEY_LAST_VISIT, now.toString())
+    setLastVisitTimestamp(now)
+    hasMarkedAsSeen.current = true
   }, [playlists])
 
   // Refresh playlists from Spotify
