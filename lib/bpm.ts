@@ -440,7 +440,7 @@ async function resolvePreviewUrl(params: {
 /**
  * Get Google Cloud Identity Token for authenticating with Cloud Run service
  */
-async function getIdentityToken(serviceUrl: string): Promise<string> {
+export async function getIdentityToken(serviceUrl: string): Promise<string> {
   const serviceAccountKeyJson = process.env.GCP_SERVICE_ACCOUNT_KEY
   
   if (!serviceAccountKeyJson) {
