@@ -472,7 +472,10 @@ export async function getIdentityToken(serviceUrl: string): Promise<string> {
 
 /**
  * Call external BPM service to compute BPM from preview URL
- * Uses the new /analyze/batch endpoint (with single URL in array)
+ * Uses the async batch pattern:
+ * 1. POST /analyze/batch to submit and get batch_id
+ * 2. Poll GET /batch/{batch_id} until status is "completed"
+ * 3. Extract first result from results object
  */
 async function computeBpmFromService(previewUrl: string): Promise<{ 
   bpmEssentia?: number
@@ -508,7 +511,8 @@ async function computeBpmFromService(previewUrl: string): Promise<{
   })
   
   try {
-    const response = await fetch(`${serviceUrl}/analyze/batch`, {
+    // Step 1: Submit batch and get batch_id
+    const batchResponse = await fetch(`${serviceUrl}/analyze/batch`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${idToken}`,
@@ -522,62 +526,101 @@ async function computeBpmFromService(previewUrl: string): Promise<{
       signal: controller.signal,
     })
     
-    clearTimeout(timeoutId)
-    
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`BPM service returned ${response.status}: ${errorText}`)
+    if (!batchResponse.ok) {
+      const errorText = await batchResponse.text()
+      throw new Error(`BPM service returned ${batchResponse.status}: ${errorText}`)
     }
     
-    const responseData = await response.json()
-    console.log(`[BPM Module] BPM service raw response:`, {
-      type: typeof responseData,
-      isArray: Array.isArray(responseData),
-      hasResults: responseData && typeof responseData === 'object' && 'results' in responseData,
-      hasData: responseData && typeof responseData === 'object' && 'data' in responseData,
-      keys: responseData && typeof responseData === 'object' ? Object.keys(responseData) : [],
-      preview: JSON.stringify(responseData).substring(0, 200),
+    const batchData = await batchResponse.json()
+    console.log(`[BPM Module] Batch submitted:`, {
+      batch_id: batchData.batch_id,
+      total_urls: batchData.total_urls,
+      status: batchData.status,
     })
     
-    // Handle different response formats
-    let results: Array<{
-      bpm_essentia: number
-      bpm_raw_essentia: number
-      bpm_confidence_essentia: number
-      bpm_librosa: number | null
-      bpm_raw_librosa: number | null
-      bpm_confidence_librosa: number | null
-      key_essentia: string
-      scale_essentia: string
-      keyscale_confidence_essentia: number
-      key_librosa: string | null
-      scale_librosa: string | null
-      keyscale_confidence_librosa: number | null
-      debug_txt?: string
-    }>
-    
-    if (Array.isArray(responseData)) {
-      results = responseData
-    } else if (responseData && typeof responseData === 'object' && 'results' in responseData && Array.isArray(responseData.results)) {
-      results = responseData.results
-    } else if (responseData && typeof responseData === 'object' && 'data' in responseData && Array.isArray(responseData.data)) {
-      results = responseData.data
-    } else {
-      throw new Error(`BPM service returned unexpected response format: ${JSON.stringify(responseData).substring(0, 500)}`)
+    if (!batchData.batch_id) {
+      throw new Error(`BPM service did not return batch_id: ${JSON.stringify(batchData)}`)
     }
     
-    if (!results || results.length === 0) {
-      throw new Error('BPM service returned empty results')
+    const batchId = batchData.batch_id
+    
+    // Step 2: Poll /batch/{batch_id} until completed
+    const maxWaitTime = 60000 // 60 seconds max
+    const pollInterval = 1000 // Poll every 1 second
+    const startTime = Date.now()
+    
+    let batchStatus: {
+      batch_id: string
+      status: string
+      total_urls: number
+      processed: number
+      results?: {
+        [key: string]: {
+          index: number
+          url: string
+          bpm_essentia: number
+          bpm_raw_essentia: number
+          bpm_confidence_essentia: number
+          bpm_librosa: number | null
+          bpm_raw_librosa: number | null
+          bpm_confidence_librosa: number | null
+          key_essentia: string
+          scale_essentia: string
+          keyscale_confidence_essentia: number
+          key_librosa: string | null
+          scale_librosa: string | null
+          keyscale_confidence_librosa: number | null
+          debug_txt?: string
+        }
+      }
+    } | null = null
+    
+    while (Date.now() - startTime < maxWaitTime) {
+      const statusResponse = await fetch(`${serviceUrl}/batch/${batchId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${idToken}`,
+        },
+        signal: controller.signal,
+      })
+      
+      if (!statusResponse.ok) {
+        const errorText = await statusResponse.text()
+        throw new Error(`BPM service batch status returned ${statusResponse.status}: ${errorText}`)
+      }
+      
+      batchStatus = await statusResponse.json()
+      
+      if (batchStatus.status === 'completed' && batchStatus.results) {
+        break
+      }
+      
+      // Wait before next poll
+      await new Promise(resolve => setTimeout(resolve, pollInterval))
     }
     
-    const data = results[0]
+    clearTimeout(timeoutId)
+    
+    if (!batchStatus || batchStatus.status !== 'completed' || !batchStatus.results) {
+      throw new Error(`BPM service batch did not complete within ${maxWaitTime}ms. Status: ${batchStatus?.status || 'unknown'}`)
+    }
+    
+    // Step 3: Extract first result from results object
+    // Results are keyed by index as strings: {"0": {...}, "1": {...}}
+    const resultKeys = Object.keys(batchStatus.results).sort((a, b) => parseInt(a) - parseInt(b))
+    
+    if (resultKeys.length === 0) {
+      throw new Error('BPM service returned no results')
+    }
+    
+    const firstResultKey = resultKeys[0]
+    const data = batchStatus.results[firstResultKey]
     
     if (!data || typeof data !== 'object') {
       console.error(`[BPM Module] Invalid result data:`, {
         data,
         dataType: typeof data,
-        resultsLength: results.length,
-        resultsPreview: results.map((r, i) => ({ index: i, type: typeof r, keys: r && typeof r === 'object' ? Object.keys(r) : [] })),
+        resultKeys,
       })
       throw new Error(`BPM service returned invalid result: ${JSON.stringify(data)}`)
     }
