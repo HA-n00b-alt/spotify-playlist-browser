@@ -669,11 +669,41 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         setTracksInDb(new Set())
         setBpmDebugInfo({})
         setBpmDetails({})
-        // Trigger refetch of BPMs
-        if (tracks.length > 0) {
+        
+        // Trigger actual recalculation by calling individual BPM API for each track
+        // This ensures the recalculation actually happens, not just cache clearing
+        if (trackIds.length > 0) {
+          console.log(`[BPM Client] Triggering recalculation for ${trackIds.length} tracks`)
+          
+          // Process in batches to avoid overwhelming the system
+          const BATCH_SIZE = 10
+          let processed = 0
+          
+          for (let i = 0; i < trackIds.length; i += BATCH_SIZE) {
+            const batch = trackIds.slice(i, i + BATCH_SIZE)
+            
+            // Trigger recalculation for each track in the batch
+            // Use Promise.allSettled to continue even if some fail
+            await Promise.allSettled(
+              batch.map(trackId => 
+                fetch(`/api/bpm?spotifyTrackId=${encodeURIComponent(trackId)}`, {
+                  method: 'GET',
+                }).catch(err => {
+                  console.error(`[BPM Client] Error triggering recalculation for track ${trackId}:`, err)
+                  return null
+                })
+              )
+            )
+            
+            processed += batch.length
+            console.log(`[BPM Client] Triggered recalculation for ${processed}/${trackIds.length} tracks`)
+          }
+          
+          // Now fetch the updated BPMs (some may still be processing, but we'll get what's ready)
           await fetchBpmsBatch()
         }
-        alert(`Cache cleared for ${data.cleared} tracks. Recalculation started.`)
+        
+        alert(`Cache cleared for ${data.cleared} tracks. Recalculation triggered for all tracks.`)
       } else {
         const errorData = await res.json().catch(() => ({}))
         alert(`Failed to recalculate: ${errorData.error || 'Unknown error'}`)
