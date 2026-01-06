@@ -669,6 +669,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         setTracksInDb(new Set())
         setBpmDebugInfo({})
         setBpmDetails({})
+        setBpmFullData({}) // Clear full data as well
         
         // Trigger actual recalculation by calling individual BPM API for each track
         // This ensures the recalculation actually happens, not just cache clearing
@@ -692,13 +693,64 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   if (!res.ok) {
                     throw new Error(`HTTP ${res.status}`)
                   }
-                  return res.json()
+                  return res.json().then(data => ({ trackId, data }))
                 }).catch(err => {
                   console.error(`[BPM Client] Error triggering recalculation for track ${trackId}:`, err)
                   throw err
                 })
               )
             )
+            
+            // Process successful results and update state
+            for (const result of results) {
+              if (result.status === 'fulfilled') {
+                const { trackId, data } = result.value
+                // Update BPM, key, scale from the response
+                if (data.bpm != null) {
+                  setTrackBpms(prev => ({ ...prev, [trackId]: data.bpm }))
+                }
+                if (data.key) {
+                  setTrackKeys(prev => ({ ...prev, [trackId]: data.key }))
+                }
+                if (data.scale) {
+                  setTrackScales(prev => ({ ...prev, [trackId]: data.scale }))
+                }
+                // Update full data for modal
+                if (data.bpmEssentia !== undefined || data.bpmLibrosa !== undefined || data.bpmSelected) {
+                  setBpmFullData(prev => ({
+                    ...prev,
+                    [trackId]: {
+                      bpmEssentia: data.bpmEssentia,
+                      bpmRawEssentia: data.bpmRawEssentia,
+                      bpmConfidenceEssentia: data.bpmConfidenceEssentia,
+                      bpmLibrosa: data.bpmLibrosa,
+                      bpmRawLibrosa: data.bpmRawLibrosa,
+                      bpmConfidenceLibrosa: data.bpmConfidenceLibrosa,
+                      keyEssentia: data.keyEssentia,
+                      scaleEssentia: data.scaleEssentia,
+                      keyscaleConfidenceEssentia: data.keyscaleConfidenceEssentia,
+                      keyLibrosa: data.keyLibrosa,
+                      scaleLibrosa: data.scaleLibrosa,
+                      keyscaleConfidenceLibrosa: data.keyscaleConfidenceLibrosa,
+                      bpmSelected: data.bpmSelected || 'essentia',
+                      keySelected: data.keySelected || 'essentia',
+                      bpmManual: data.bpmManual,
+                      keyManual: data.keyManual,
+                      scaleManual: data.scaleManual,
+                      debugTxt: data.debugTxt,
+                    },
+                  }))
+                }
+                // Update details
+                setBpmDetails(prev => ({
+                  ...prev,
+                  [trackId]: { source: data.source, error: data.error },
+                }))
+                if (data.bpm != null) {
+                  setTracksInDb(prev => new Set(prev).add(trackId))
+                }
+              }
+            }
             
             // Count successful results
             const successful = results.filter(r => r.status === 'fulfilled').length
@@ -711,8 +763,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             }
           }
           
-          // Wait a bit more for any final writes to complete, then fetch the updated BPMs
-          await new Promise(resolve => setTimeout(resolve, 1000))
+          // Also fetch batch to ensure we have all data
           await fetchBpmsBatch()
         }
         
@@ -2675,14 +2726,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             <div>
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-gray-700">Essentia:</span>
-                                <span className="text-gray-900">{bpmModalData.fullData.bpmEssentia != null ? Math.round(bpmModalData.fullData.bpmEssentia) : 'N/A'}</span>
-                                {bpmModalData.fullData.bpmConfidenceEssentia != null && (
+                                <span className="text-gray-900">{bpmModalData.fullData?.bpmEssentia != null ? Math.round(bpmModalData.fullData.bpmEssentia) : 'N/A'}</span>
+                                {bpmModalData.fullData?.bpmConfidenceEssentia != null && (
                                   <span className="text-xs text-gray-500">
                                     (confidence: {(bpmModalData.fullData.bpmConfidenceEssentia * 100).toFixed(0)}%)
                                   </span>
                                 )}
                               </div>
-                              {typeof bpmModalData.fullData.bpmRawEssentia === 'number' && bpmModalData.fullData.bpmRawEssentia !== bpmModalData.fullData.bpmEssentia && (
+                              {typeof bpmModalData.fullData?.bpmRawEssentia === 'number' && bpmModalData.fullData.bpmRawEssentia !== bpmModalData.fullData.bpmEssentia && (
                                 <div className="text-xs text-gray-500 mt-1">
                                   Raw: {bpmModalData.fullData.bpmRawEssentia.toFixed(1)}
                                 </div>
@@ -2729,14 +2780,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             <div>
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-gray-700">Librosa:</span>
-                                <span className="text-gray-900">{bpmModalData.fullData.bpmLibrosa != null ? Math.round(bpmModalData.fullData.bpmLibrosa) : 'N/A'}</span>
-                                {bpmModalData.fullData.bpmConfidenceLibrosa != null && (
+                                <span className="text-gray-900">{bpmModalData.fullData?.bpmLibrosa != null ? Math.round(bpmModalData.fullData.bpmLibrosa) : 'N/A'}</span>
+                                {bpmModalData.fullData?.bpmConfidenceLibrosa != null && (
                                   <span className="text-xs text-gray-500">
                                     (confidence: {(bpmModalData.fullData.bpmConfidenceLibrosa * 100).toFixed(0)}%)
                                   </span>
                                 )}
                               </div>
-                              {typeof bpmModalData.fullData.bpmRawLibrosa === 'number' && bpmModalData.fullData.bpmRawLibrosa !== bpmModalData.fullData.bpmLibrosa && (
+                              {typeof bpmModalData.fullData?.bpmRawLibrosa === 'number' && bpmModalData.fullData.bpmRawLibrosa !== bpmModalData.fullData.bpmLibrosa && (
                                 <div className="text-xs text-gray-500 mt-1">
                                   Raw: {bpmModalData.fullData.bpmRawLibrosa.toFixed(1)}
                                 </div>
@@ -2779,14 +2830,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       <div className={`p-3 rounded border-2 ${bpmModalData.bpmSelected === 'manual' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-semibold text-gray-700">Manual Override:</span>
-                          {bpmModalData.bpmSelected === 'manual' && bpmModalData.fullData.bpmManual != null && (
+                          {bpmModalData.bpmSelected === 'manual' && bpmModalData.fullData?.bpmManual != null && (
                             <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">Selected: {Math.round(bpmModalData.fullData.bpmManual)}</span>
                           )}
                         </div>
                         <div className="flex items-center gap-2">
                           <input
                             type="number"
-                            value={manualBpm || bpmModalData.fullData.bpmManual || ''}
+                            value={manualBpm || bpmModalData.fullData?.bpmManual || ''}
                             onChange={(e) => setManualBpm(e.target.value)}
                             placeholder="Enter BPM"
                             className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
@@ -2795,7 +2846,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           />
                           <button
                             onClick={async () => {
-                              const bpmValue = parseFloat(manualBpm || String(bpmModalData.fullData.bpmManual || ''))
+                              const bpmValue = parseFloat(manualBpm || String(bpmModalData.fullData?.bpmManual || ''))
                               if (isNaN(bpmValue) || bpmValue < 1 || bpmValue > 300) {
                                 alert('Please enter a valid BPM between 1 and 300')
                                 return
@@ -2819,7 +2870,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                 setIsUpdatingSelection(false)
                               }
                             }}
-                            disabled={isUpdatingSelection || (!manualBpm && !bpmModalData.fullData.bpmManual)}
+                            disabled={isUpdatingSelection || (!manualBpm && !bpmModalData.fullData?.bpmManual)}
                             className="text-xs bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white px-3 py-1 rounded transition-colors"
                           >
                             {isUpdatingSelection ? 'Saving...' : 'Save Manual'}
@@ -2841,9 +2892,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-gray-700">Essentia:</span>
                                 <span className="text-gray-900">
-                                  {bpmModalData.fullData.keyEssentia || 'N/A'} {bpmModalData.fullData.scaleEssentia || ''}
+                                  {bpmModalData.fullData?.keyEssentia || 'N/A'} {bpmModalData.fullData?.scaleEssentia || ''}
                                 </span>
-                                {bpmModalData.fullData.keyscaleConfidenceEssentia != null && (
+                                {bpmModalData.fullData?.keyscaleConfidenceEssentia != null && (
                                   <span className="text-xs text-gray-500">
                                     (confidence: {(bpmModalData.fullData.keyscaleConfidenceEssentia * 100).toFixed(0)}%)
                                   </span>
@@ -2891,9 +2942,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-gray-700">Librosa:</span>
                                 <span className="text-gray-900">
-                                  {bpmModalData.fullData.keyLibrosa || 'N/A'} {bpmModalData.fullData.scaleLibrosa || ''}
+                                  {bpmModalData.fullData?.keyLibrosa || 'N/A'} {bpmModalData.fullData?.scaleLibrosa || ''}
                                 </span>
-                                {bpmModalData.fullData.keyscaleConfidenceLibrosa != null && (
+                                {bpmModalData.fullData?.keyscaleConfidenceLibrosa != null && (
                                   <span className="text-xs text-gray-500">
                                     (confidence: {(bpmModalData.fullData.keyscaleConfidenceLibrosa * 100).toFixed(0)}%)
                                   </span>
@@ -2937,7 +2988,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       <div className={`p-3 rounded border-2 ${bpmModalData.keySelected === 'manual' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-semibold text-gray-700">Manual Override:</span>
-                          {bpmModalData.keySelected === 'manual' && bpmModalData.fullData.keyManual && (
+                          {bpmModalData.keySelected === 'manual' && bpmModalData.fullData?.keyManual && (
                             <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">
                               Selected: {bpmModalData.fullData.keyManual} {bpmModalData.fullData.scaleManual}
                             </span>
@@ -2945,7 +2996,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         </div>
                         <div className="flex items-center gap-2">
                           <select
-                            value={manualKey || bpmModalData.fullData.keyManual || ''}
+                            value={manualKey || bpmModalData.fullData?.keyManual || ''}
                             onChange={(e) => setManualKey(e.target.value)}
                             className="px-2 py-1 border border-gray-300 rounded text-sm"
                           >
@@ -2954,8 +3005,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                               <option key={k} value={k}>{k}</option>
                             ))}
                           </select>
-                          <select
-                            value={manualScale || bpmModalData.fullData.scaleManual || 'major'}
+                            <select
+                              value={manualScale || bpmModalData.fullData?.scaleManual || 'major'}
                             onChange={(e) => setManualScale(e.target.value)}
                             className="px-2 py-1 border border-gray-300 rounded text-sm"
                           >
@@ -2964,8 +3015,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           </select>
                           <button
                             onClick={async () => {
-                              const key = manualKey || bpmModalData.fullData.keyManual
-                              const scale = manualScale || bpmModalData.fullData.scaleManual || 'major'
+                              const key = manualKey || bpmModalData.fullData?.keyManual
+                              const scale = manualScale || bpmModalData.fullData?.scaleManual || 'major'
                               if (!key) {
                                 alert('Please select a key')
                                 return
@@ -2991,7 +3042,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                 setIsUpdatingSelection(false)
                               }
                             }}
-                            disabled={isUpdatingSelection || (!manualKey && !bpmModalData.fullData.keyManual)}
+                            disabled={isUpdatingSelection || (!manualKey && !bpmModalData.fullData?.keyManual)}
                             className="text-xs bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white px-3 py-1 rounded transition-colors"
                           >
                             {isUpdatingSelection ? 'Saving...' : 'Save Manual'}
