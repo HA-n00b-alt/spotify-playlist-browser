@@ -529,7 +529,18 @@ async function computeBpmFromService(previewUrl: string): Promise<{
       throw new Error(`BPM service returned ${response.status}: ${errorText}`)
     }
     
-    const results = await response.json() as Array<{
+    const responseData = await response.json()
+    console.log(`[BPM Module] BPM service raw response:`, {
+      type: typeof responseData,
+      isArray: Array.isArray(responseData),
+      hasResults: responseData && typeof responseData === 'object' && 'results' in responseData,
+      hasData: responseData && typeof responseData === 'object' && 'data' in responseData,
+      keys: responseData && typeof responseData === 'object' ? Object.keys(responseData) : [],
+      preview: JSON.stringify(responseData).substring(0, 200),
+    })
+    
+    // Handle different response formats
+    let results: Array<{
       bpm_essentia: number
       bpm_raw_essentia: number
       bpm_confidence_essentia: number
@@ -545,6 +556,16 @@ async function computeBpmFromService(previewUrl: string): Promise<{
       debug_txt?: string
     }>
     
+    if (Array.isArray(responseData)) {
+      results = responseData
+    } else if (responseData && typeof responseData === 'object' && 'results' in responseData && Array.isArray(responseData.results)) {
+      results = responseData.results
+    } else if (responseData && typeof responseData === 'object' && 'data' in responseData && Array.isArray(responseData.data)) {
+      results = responseData.data
+    } else {
+      throw new Error(`BPM service returned unexpected response format: ${JSON.stringify(responseData).substring(0, 500)}`)
+    }
+    
     if (!results || results.length === 0) {
       throw new Error('BPM service returned empty results')
     }
@@ -552,6 +573,12 @@ async function computeBpmFromService(previewUrl: string): Promise<{
     const data = results[0]
     
     if (!data || typeof data !== 'object') {
+      console.error(`[BPM Module] Invalid result data:`, {
+        data,
+        dataType: typeof data,
+        resultsLength: results.length,
+        resultsPreview: results.map((r, i) => ({ index: i, type: typeof r, keys: r && typeof r === 'object' ? Object.keys(r) : [] })),
+      })
       throw new Error(`BPM service returned invalid result: ${JSON.stringify(data)}`)
     }
     
