@@ -23,6 +23,25 @@ interface BpmResult {
   scale?: string
   keyConfidence?: number
   bpmConfidence?: number
+  // Full details for modal
+  bpmEssentia?: number | null
+  bpmRawEssentia?: number | null
+  bpmConfidenceEssentia?: number | null
+  bpmLibrosa?: number | null
+  bpmRawLibrosa?: number | null
+  bpmConfidenceLibrosa?: number | null
+  keyEssentia?: string | null
+  scaleEssentia?: string | null
+  keyscaleConfidenceEssentia?: number | null
+  keyLibrosa?: string | null
+  scaleLibrosa?: string | null
+  keyscaleConfidenceLibrosa?: number | null
+  bpmSelected?: 'essentia' | 'librosa' | 'manual'
+  keySelected?: 'essentia' | 'librosa' | 'manual'
+  bpmManual?: number | null
+  keyManual?: string | null
+  scaleManual?: string | null
+  debugTxt?: string | null
 }
 
 interface CacheRecord {
@@ -958,9 +977,17 @@ export async function getBpmForSpotifyTrack(
                 keySelected: cached.key_selected as 'essentia' | 'librosa' | 'manual' | null,
               })
               
-              // Get updated selected values
-              const updatedSelectedBpm = getSelectedBpm(cached)
-              const updatedSelectedKey = getSelectedKey(cached)
+              // Get updated selected values (using values we just stored)
+              const updatedSelectedBpm = bpmResult.keyEssentia || bpmResult.keyLibrosa ? 
+                (bpmResult.bpmLibrosa != null && bpmResult.bpmConfidenceLibrosa != null && 
+                 bpmResult.bpmConfidenceLibrosa > (bpmResult.bpmConfidenceEssentia || 0)) ? bpmResult.bpmLibrosa : (bpmResult.bpmEssentia || getSelectedBpm(cached))
+                : getSelectedBpm(cached)
+              const updatedSelectedKey = bpmResult.keyEssentia || bpmResult.keyLibrosa ?
+                (bpmResult.keyLibrosa != null && bpmResult.keyscaleConfidenceLibrosa != null && 
+                 bpmResult.keyscaleConfidenceLibrosa > (bpmResult.keyscaleConfidenceEssentia || 0)) 
+                  ? { key: bpmResult.keyLibrosa, scale: bpmResult.scaleLibrosa }
+                  : { key: bpmResult.keyEssentia, scale: bpmResult.scaleEssentia }
+                : getSelectedKey(cached)
               
               // For Deezer URLs, prefer a URL from urls_tried instead of successful_url
               let previewUrlToReturn = previewResult.successfulUrl || cached.successful_url || undefined
@@ -987,6 +1014,25 @@ export async function getBpmForSpotifyTrack(
                 scale: updatedSelectedKey.scale || undefined,
                 keyConfidence: (cached.key_selected === 'librosa' && cached.keyscale_confidence_librosa) ? cached.keyscale_confidence_librosa : (cached.keyscale_confidence_essentia || undefined),
                 bpmConfidence: (cached.bpm_selected === 'librosa' && cached.bpm_confidence_librosa) ? cached.bpm_confidence_librosa : (cached.bpm_confidence_essentia || undefined),
+                // Full details for modal - use values we just stored
+                bpmEssentia: cached.bpm_essentia ?? undefined,
+                bpmRawEssentia: cached.bpm_raw_essentia ?? undefined,
+                bpmConfidenceEssentia: cached.bpm_confidence_essentia ?? undefined,
+                bpmLibrosa: cached.bpm_librosa ?? undefined,
+                bpmRawLibrosa: cached.bpm_raw_librosa ?? undefined,
+                bpmConfidenceLibrosa: cached.bpm_confidence_librosa ?? undefined,
+                keyEssentia: bpmResult.keyEssentia || cached.key_essentia ?? undefined,
+                scaleEssentia: bpmResult.scaleEssentia || cached.scale_essentia ?? undefined,
+                keyscaleConfidenceEssentia: bpmResult.keyscaleConfidenceEssentia || cached.keyscale_confidence_essentia ?? undefined,
+                keyLibrosa: bpmResult.keyLibrosa || cached.key_librosa ?? undefined,
+                scaleLibrosa: bpmResult.scaleLibrosa || cached.scale_librosa ?? undefined,
+                keyscaleConfidenceLibrosa: bpmResult.keyscaleConfidenceLibrosa || cached.keyscale_confidence_librosa ?? undefined,
+                bpmSelected: (cached.bpm_selected as 'essentia' | 'librosa' | 'manual') || undefined,
+                keySelected: (cached.key_selected as 'essentia' | 'librosa' | 'manual') || undefined,
+                bpmManual: cached.bpm_manual ?? undefined,
+                keyManual: cached.key_manual ?? undefined,
+                scaleManual: cached.scale_manual ?? undefined,
+                debugTxt: bpmResult.debugTxt || cached.debug_txt ?? undefined,
               }
             } else {
               console.warn(`[BPM Module] Could not resolve preview URL for key/scale backfill`)
@@ -1053,6 +1099,25 @@ export async function getBpmForSpotifyTrack(
           scale: finalSelectedKey.scale || undefined,
           keyConfidence: (cached.key_selected === 'librosa' && cached.keyscale_confidence_librosa) ? cached.keyscale_confidence_librosa : (cached.keyscale_confidence_essentia || undefined),
           bpmConfidence: (cached.bpm_selected === 'librosa' && cached.bpm_confidence_librosa) ? cached.bpm_confidence_librosa : (cached.bpm_confidence_essentia || undefined),
+          // Full details for modal
+          bpmEssentia: cached.bpm_essentia ?? undefined,
+          bpmRawEssentia: cached.bpm_raw_essentia ?? undefined,
+          bpmConfidenceEssentia: cached.bpm_confidence_essentia ?? undefined,
+          bpmLibrosa: cached.bpm_librosa ?? undefined,
+          bpmRawLibrosa: cached.bpm_raw_librosa ?? undefined,
+          bpmConfidenceLibrosa: cached.bpm_confidence_librosa ?? undefined,
+          keyEssentia: cached.key_essentia ?? undefined,
+          scaleEssentia: cached.scale_essentia ?? undefined,
+          keyscaleConfidenceEssentia: cached.keyscale_confidence_essentia ?? undefined,
+          keyLibrosa: cached.key_librosa ?? undefined,
+          scaleLibrosa: cached.scale_librosa ?? undefined,
+          keyscaleConfidenceLibrosa: cached.keyscale_confidence_librosa ?? undefined,
+          bpmSelected: (cached.bpm_selected as 'essentia' | 'librosa' | 'manual') || undefined,
+          keySelected: (cached.key_selected as 'essentia' | 'librosa' | 'manual') || undefined,
+          bpmManual: cached.bpm_manual ?? undefined,
+          keyManual: cached.key_manual ?? undefined,
+          scaleManual: cached.scale_manual ?? undefined,
+          debugTxt: cached.debug_txt ?? undefined,
         }
       }
       // If cached but bpm is null, return the error if available
@@ -1242,6 +1307,24 @@ export async function getBpmForSpotifyTrack(
           scale: finalScale || undefined,
           keyConfidence: finalKeyConfidence || undefined,
           bpmConfidence: finalBpmConfidence || undefined,
+          // Full details for modal
+          bpmEssentia: bpmResult.bpmEssentia ?? undefined,
+          bpmRawEssentia: bpmResult.bpmRawEssentia ?? undefined,
+          bpmConfidenceEssentia: bpmResult.bpmConfidenceEssentia ?? undefined,
+          bpmLibrosa: bpmResult.bpmLibrosa ?? undefined,
+          bpmRawLibrosa: bpmResult.bpmRawLibrosa ?? undefined,
+          bpmConfidenceLibrosa: bpmResult.bpmConfidenceLibrosa ?? undefined,
+          keyEssentia: bpmResult.keyEssentia ?? undefined,
+          scaleEssentia: bpmResult.scaleEssentia ?? undefined,
+          keyscaleConfidenceEssentia: bpmResult.keyscaleConfidenceEssentia ?? undefined,
+          keyLibrosa: bpmResult.keyLibrosa ?? undefined,
+          scaleLibrosa: bpmResult.scaleLibrosa ?? undefined,
+          keyscaleConfidenceLibrosa: bpmResult.keyscaleConfidenceLibrosa ?? undefined,
+          bpmSelected: (bpmResult.bpmLibrosa != null && bpmResult.bpmConfidenceLibrosa != null && 
+                        bpmResult.bpmConfidenceLibrosa > (bpmResult.bpmConfidenceEssentia || 0)) ? 'librosa' : 'essentia',
+          keySelected: (bpmResult.keyLibrosa != null && bpmResult.keyscaleConfidenceLibrosa != null && 
+                       bpmResult.keyscaleConfidenceLibrosa > (bpmResult.keyscaleConfidenceEssentia || 0)) ? 'librosa' : 'essentia',
+          debugTxt: bpmResult.debugTxt ?? undefined,
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
