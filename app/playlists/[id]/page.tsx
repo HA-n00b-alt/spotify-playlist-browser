@@ -1438,6 +1438,37 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     return 0
   })
 
+  // Compute BPM modal data (must be before any early returns)
+  const bpmModalData = useMemo(() => {
+    if (!showBpmModal || !selectedBpmTrack) return null
+    
+    const trackId = selectedBpmTrack.id
+    const fullData = bpmFullData[trackId] || {}
+    const currentBpm = trackBpms[trackId]
+    const currentKey = trackKeys[trackId]
+    const currentScale = trackScales[trackId]
+    const bpmSelected = fullData?.bpmSelected || 'essentia'
+    const keySelected = fullData?.keySelected || 'essentia'
+    const hasEssentiaBpm = fullData?.bpmEssentia != null
+    const hasLibrosaBpm = fullData?.bpmLibrosa != null
+    const hasEssentiaKey = fullData?.keyEssentia != null
+    const hasLibrosaKey = fullData?.keyLibrosa != null
+    
+    return {
+      trackId,
+      fullData,
+      currentBpm,
+      currentKey,
+      currentScale,
+      bpmSelected,
+      keySelected,
+      hasEssentiaBpm,
+      hasLibrosaBpm,
+      hasEssentiaKey,
+      hasLibrosaKey,
+    }
+  }, [showBpmModal, selectedBpmTrack, bpmFullData, trackBpms, trackKeys, trackScales])
+
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) {
       return (
@@ -1534,37 +1565,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     div.innerHTML = decoded
     return div.textContent || div.innerText || ''
   }
-
-  // Compute BPM modal data
-  const bpmModalData = useMemo(() => {
-    if (!showBpmModal || !selectedBpmTrack) return null
-    
-    const trackId = selectedBpmTrack.id
-    const fullData = bpmFullData[trackId] || {}
-    const currentBpm = trackBpms[trackId]
-    const currentKey = trackKeys[trackId]
-    const currentScale = trackScales[trackId]
-    const bpmSelected = fullData?.bpmSelected || 'essentia'
-    const keySelected = fullData?.keySelected || 'essentia'
-    const hasEssentiaBpm = fullData?.bpmEssentia != null
-    const hasLibrosaBpm = fullData?.bpmLibrosa != null
-    const hasEssentiaKey = fullData?.keyEssentia != null
-    const hasLibrosaKey = fullData?.keyLibrosa != null
-    
-    return {
-      trackId,
-      fullData,
-      currentBpm,
-      currentKey,
-      currentScale,
-      bpmSelected,
-      keySelected,
-      hasEssentiaBpm,
-      hasLibrosaBpm,
-      hasEssentiaKey,
-      hasLibrosaKey,
-    }
-  }, [showBpmModal, selectedBpmTrack, bpmFullData, trackBpms, trackKeys, trackScales])
 
   return (
     <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
