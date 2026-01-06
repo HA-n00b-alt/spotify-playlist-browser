@@ -108,8 +108,27 @@ export default function StatusMonitor({ batchId, onComplete, onError }: StatusMo
                 setStatus(data)
               } else if (data.type === 'result') {
                 // Only push valid result objects with required fields
-                if (data && typeof data === 'object' && data.type === 'result') {
-                  allResults.push(data)
+                if (data && typeof data === 'object' && data.type === 'result' && data.index !== undefined) {
+                  // Ensure we have a valid result object
+                  const validResult: StreamStatus = {
+                    type: 'result',
+                    index: data.index,
+                    url: data.url,
+                    bpm_essentia: data.bpm_essentia ?? null,
+                    bpm_raw_essentia: data.bpm_raw_essentia ?? null,
+                    bpm_confidence_essentia: data.bpm_confidence_essentia ?? null,
+                    bpm_librosa: data.bpm_librosa ?? null,
+                    bpm_raw_librosa: data.bpm_raw_librosa ?? null,
+                    bpm_confidence_librosa: data.bpm_confidence_librosa ?? null,
+                    key_essentia: data.key_essentia ?? null,
+                    scale_essentia: data.scale_essentia ?? null,
+                    keyscale_confidence_essentia: data.keyscale_confidence_essentia ?? null,
+                    key_librosa: data.key_librosa ?? null,
+                    scale_librosa: data.scale_librosa ?? null,
+                    keyscale_confidence_librosa: data.keyscale_confidence_librosa ?? null,
+                    debug_txt: data.debug_txt ?? null,
+                  }
+                  allResults.push(validResult)
                   setResults([...allResults])
                 } else {
                   console.warn('[StatusMonitor] Invalid result data:', data)
@@ -129,7 +148,11 @@ export default function StatusMonitor({ batchId, onComplete, onError }: StatusMo
                   total: data.total,
                 })
                 setIsStreaming(false)
-                onComplete?.(allResults)
+                // Filter out any invalid results before calling onComplete
+                const validResults = allResults.filter((r): r is StreamStatus => 
+                  r != null && typeof r === 'object' && r.type === 'result'
+                )
+                onComplete?.(validResults)
                 return // Stream is complete
               } else if (data.type === 'error') {
                 setError(data.message || 'Unknown error')
@@ -156,10 +179,25 @@ export default function StatusMonitor({ batchId, onComplete, onError }: StatusMo
                 total: data.total,
               })
               setIsStreaming(false)
-              onComplete?.(allResults)
+              // Filter out any invalid results before calling onComplete
+              const validResults = allResults.filter((r): r is StreamStatus => 
+                r != null && typeof r === 'object' && r.type === 'result'
+              )
+              onComplete?.(validResults)
             }
           } catch (parseError) {
             console.error('[StatusMonitor] Failed to parse final buffer:', parseError)
+          }
+        }
+        
+        // If stream ended without complete message, still call onComplete with valid results
+        if (allResults.length > 0) {
+          const validResults = allResults.filter((r): r is StreamStatus => 
+            r != null && typeof r === 'object' && r.type === 'result'
+          )
+          if (validResults.length > 0) {
+            setIsStreaming(false)
+            onComplete?.(validResults)
           }
         }
       } catch (err) {
@@ -233,10 +271,19 @@ export default function StatusMonitor({ batchId, onComplete, onError }: StatusMo
           <h3 className="font-semibold mb-2">Results ({results.length}):</h3>
           <div className="results-list space-y-2">
             {results
-              .filter((result): result is StreamStatus => result != null && typeof result === 'object') // Type guard to filter out null/undefined
+              .filter((result): result is StreamStatus => {
+                // Strict type guard - ensure result is a valid StreamStatus object
+                return (
+                  result != null &&
+                  typeof result === 'object' &&
+                  result.type === 'result' &&
+                  typeof result.index === 'number'
+                )
+              })
               .map((result, idx) => {
-                // Additional safety check
-                if (!result) {
+                // Double-check result is valid (defensive programming)
+                if (!result || typeof result !== 'object' || result.type !== 'result') {
+                  console.warn('[StatusMonitor] Invalid result in map:', result)
                   return null
                 }
                 
@@ -249,28 +296,28 @@ export default function StatusMonitor({ batchId, onComplete, onError }: StatusMo
                       <span className="text-sm font-medium">
                         #{result.index ?? idx + 1}
                       </span>
-                      {result.bpm_essentia != null && (
+                      {result.bpm_essentia != null && typeof result.bpm_essentia === 'number' && (
                         <span className="text-lg font-bold text-blue-600">
                           {result.bpm_essentia} BPM
                         </span>
                       )}
                     </div>
-                    {result.url && (
+                    {result.url && typeof result.url === 'string' && (
                       <div className="text-xs text-gray-500 truncate mb-1">
                         {result.url}
                       </div>
                     )}
-                    {result.key_essentia && (
+                    {result.key_essentia && typeof result.key_essentia === 'string' && (
                       <div className="text-sm text-gray-600">
-                        Key: {result.key_essentia} {result.scale_essentia}
-                        {result.keyscale_confidence_essentia != null && (
+                        Key: {result.key_essentia} {result.scale_essentia || ''}
+                        {result.keyscale_confidence_essentia != null && typeof result.keyscale_confidence_essentia === 'number' && (
                           <span className="text-xs text-gray-400 ml-1">
                             ({Math.round(result.keyscale_confidence_essentia * 100)}%)
                           </span>
                         )}
                       </div>
                     )}
-                    {result.bpm_confidence_essentia != null && (
+                    {result.bpm_confidence_essentia != null && typeof result.bpm_confidence_essentia === 'number' && (
                       <div className="text-xs text-gray-500 mt-1">
                         Confidence: {Math.round(result.bpm_confidence_essentia * 100)}%
                       </div>
@@ -278,7 +325,7 @@ export default function StatusMonitor({ batchId, onComplete, onError }: StatusMo
                   </div>
                 )
               })
-              .filter(Boolean) // Remove any null entries from the map
+              .filter((item): item is JSX.Element => item != null) // Remove any null entries from the map
             }
           </div>
         </div>
