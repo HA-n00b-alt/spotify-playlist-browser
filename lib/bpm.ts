@@ -545,7 +545,7 @@ async function computeBpmFromService(previewUrl: string): Promise<{
     const batchId = batchData.batch_id
     
     // Step 2: Poll /batch/{batch_id} until completed
-    const maxWaitTime = 60000 // 60 seconds max
+    const maxWaitTime = 30000 // 30 seconds max (matching timeout)
     const pollInterval = 1000 // Poll every 1 second
     const startTime = Date.now()
     
@@ -962,12 +962,27 @@ export async function getBpmForSpotifyTrack(
               const updatedSelectedBpm = getSelectedBpm(cached)
               const updatedSelectedKey = getSelectedKey(cached)
               
+              // For Deezer URLs, prefer a URL from urls_tried instead of successful_url
+              let previewUrlToReturn = previewResult.successfulUrl || cached.successful_url || undefined
+              if (previewResult.urlsTried && Array.isArray(previewResult.urlsTried) && previewResult.urlsTried.length > 0) {
+                const deezerPreviewUrls = previewResult.urlsTried.filter((url: string) => {
+                  const isDeezerUrl = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
+                  const isAudioFile = url.includes('.mp3') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('/preview')
+                  const isNotApiEndpoint = !url.includes('api.deezer.com/search') && !url.includes('api.deezer.com/album') && !url.includes('api.deezer.com/track')
+                  return isDeezerUrl && isAudioFile && isNotApiEndpoint
+                })
+                if (deezerPreviewUrls.length > 0) {
+                  previewUrlToReturn = deezerPreviewUrls[deezerPreviewUrls.length - 1]
+                  console.log(`[BPM Module] Using Deezer preview URL from urls_tried for key/scale backfill: ${previewUrlToReturn.substring(0, 100)}...`)
+                }
+              }
+              
               return {
                 bpm: updatedSelectedBpm,
                 source: cached.source,
                 bpmRaw: (cached.bpm_selected === 'librosa' && cached.bpm_raw_librosa) ? cached.bpm_raw_librosa : (cached.bpm_raw_essentia || undefined),
                 urlsTried: previewResult.urlsTried,
-                successfulUrl: previewResult.successfulUrl || cached.successful_url || undefined,
+                successfulUrl: previewUrlToReturn,
                 key: updatedSelectedKey.key || undefined,
                 scale: updatedSelectedKey.scale || undefined,
                 keyConfidence: (cached.key_selected === 'librosa' && cached.keyscale_confidence_librosa) ? cached.keyscale_confidence_librosa : (cached.keyscale_confidence_essentia || undefined),
@@ -984,24 +999,56 @@ export async function getBpmForSpotifyTrack(
         
         // If cached record has ISRC mismatch, treat as error
         if (cached.isrc_mismatch) {
-          return {
-            bpm: null,
-            source: cached.source,
-            error: cached.error || 'ISRC mismatch: Found preview URL but ISRC does not match Spotify track (wrong audio file)',
-            urlsTried,
-            successfulUrl: cached.successful_url || undefined,
+        // For Deezer URLs, prefer a URL from urls_tried instead of successful_url
+        let previewUrlToReturn = cached.successful_url || undefined
+        if (urlsTried && Array.isArray(urlsTried) && urlsTried.length > 0) {
+          const deezerPreviewUrls = urlsTried.filter((url: string) => {
+            const isDeezerUrl = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
+            const isAudioFile = url.includes('.mp3') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('/preview')
+            const isNotApiEndpoint = !url.includes('api.deezer.com/search') && !url.includes('api.deezer.com/album') && !url.includes('api.deezer.com/track')
+            return isDeezerUrl && isAudioFile && isNotApiEndpoint
+          })
+          if (deezerPreviewUrls.length > 0) {
+            previewUrlToReturn = deezerPreviewUrls[deezerPreviewUrls.length - 1]
           }
+        }
+        
+        return {
+          bpm: null,
+          source: cached.source,
+          error: cached.error || 'ISRC mismatch: Found preview URL but ISRC does not match Spotify track (wrong audio file)',
+          urlsTried,
+          successfulUrl: previewUrlToReturn,
+        }
         }
         
         const finalSelectedBpm = getSelectedBpm(cached)
         const finalSelectedKey = getSelectedKey(cached)
+        
+        // For Deezer URLs, prefer a URL from urls_tried instead of successful_url
+        // because successful_url might be expired (403 error)
+        let previewUrlToReturn = cached.successful_url || undefined
+        if (urlsTried && Array.isArray(urlsTried) && urlsTried.length > 0) {
+          // Find Deezer preview URLs in urls_tried (not API endpoints)
+          const deezerPreviewUrls = urlsTried.filter((url: string) => {
+            const isDeezerUrl = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
+            const isAudioFile = url.includes('.mp3') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('/preview')
+            const isNotApiEndpoint = !url.includes('api.deezer.com/search') && !url.includes('api.deezer.com/album') && !url.includes('api.deezer.com/track')
+            return isDeezerUrl && isAudioFile && isNotApiEndpoint
+          })
+          if (deezerPreviewUrls.length > 0) {
+            // Use the last Deezer preview URL from urls_tried (most recent)
+            previewUrlToReturn = deezerPreviewUrls[deezerPreviewUrls.length - 1]
+            console.log(`[BPM Module] Using Deezer preview URL from urls_tried instead of successful_url: ${previewUrlToReturn.substring(0, 100)}...`)
+          }
+        }
         
         return {
           bpm: finalSelectedBpm,
           source: cached.source,
           bpmRaw: (cached.bpm_selected === 'librosa' && cached.bpm_raw_librosa) ? cached.bpm_raw_librosa : (cached.bpm_raw_essentia || undefined),
           urlsTried,
-          successfulUrl: cached.successful_url || undefined,
+          successfulUrl: previewUrlToReturn,
           key: finalSelectedKey.key || undefined,
           scale: finalSelectedKey.scale || undefined,
           keyConfidence: (cached.key_selected === 'librosa' && cached.keyscale_confidence_librosa) ? cached.keyscale_confidence_librosa : (cached.keyscale_confidence_essentia || undefined),
@@ -1020,12 +1067,26 @@ export async function getBpmForSpotifyTrack(
             console.warn('[BPM Module] Error parsing urls_tried:', e)
           }
         }
+        // For Deezer URLs, prefer a URL from urls_tried instead of successful_url
+        let previewUrlToReturn = cached.successful_url || undefined
+        if (urlsTried && Array.isArray(urlsTried) && urlsTried.length > 0) {
+          const deezerPreviewUrls = urlsTried.filter((url: string) => {
+            const isDeezerUrl = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
+            const isAudioFile = url.includes('.mp3') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('/preview')
+            const isNotApiEndpoint = !url.includes('api.deezer.com/search') && !url.includes('api.deezer.com/album') && !url.includes('api.deezer.com/track')
+            return isDeezerUrl && isAudioFile && isNotApiEndpoint
+          })
+          if (deezerPreviewUrls.length > 0) {
+            previewUrlToReturn = deezerPreviewUrls[deezerPreviewUrls.length - 1]
+          }
+        }
+        
         return {
           bpm: null,
           source: cached.source,
           error: cached.error || undefined,
           urlsTried,
-          successfulUrl: cached.successful_url || undefined,
+          successfulUrl: previewUrlToReturn,
         }
       }
       console.log(`[BPM Module] Cache miss. Cached record:`, cached)
@@ -1073,12 +1134,26 @@ export async function getBpmForSpotifyTrack(
           isrcMismatch: previewResult.isrcMismatch || false,
         })
         
+        // For Deezer URLs, prefer a URL from urls_tried instead of successful_url
+        let previewUrlToReturn = previewResult.successfulUrl
+        if (previewResult.urlsTried && Array.isArray(previewResult.urlsTried) && previewResult.urlsTried.length > 0) {
+          const deezerPreviewUrls = previewResult.urlsTried.filter((url: string) => {
+            const isDeezerUrl = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
+            const isAudioFile = url.includes('.mp3') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('/preview')
+            const isNotApiEndpoint = !url.includes('api.deezer.com/search') && !url.includes('api.deezer.com/album') && !url.includes('api.deezer.com/track')
+            return isDeezerUrl && isAudioFile && isNotApiEndpoint
+          })
+          if (deezerPreviewUrls.length > 0) {
+            previewUrlToReturn = deezerPreviewUrls[deezerPreviewUrls.length - 1]
+          }
+        }
+        
         return {
           bpm: null,
           source: previewResult.source,
           error: errorMessage,
           urlsTried: previewResult.urlsTried,
-          successfulUrl: previewResult.successfulUrl,
+          successfulUrl: previewUrlToReturn,
         }
       }
       
@@ -1142,12 +1217,27 @@ export async function getBpmForSpotifyTrack(
           ? bpmResult.keyscaleConfidenceLibrosa
           : (bpmResult.keyscaleConfidenceEssentia || null)
         
+        // For Deezer URLs, prefer a URL from urls_tried instead of successful_url
+        let previewUrlToReturn = previewResult.successfulUrl
+        if (previewResult.urlsTried && Array.isArray(previewResult.urlsTried) && previewResult.urlsTried.length > 0) {
+          const deezerPreviewUrls = previewResult.urlsTried.filter((url: string) => {
+            const isDeezerUrl = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
+            const isAudioFile = url.includes('.mp3') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('/preview')
+            const isNotApiEndpoint = !url.includes('api.deezer.com/search') && !url.includes('api.deezer.com/album') && !url.includes('api.deezer.com/track')
+            return isDeezerUrl && isAudioFile && isNotApiEndpoint
+          })
+          if (deezerPreviewUrls.length > 0) {
+            previewUrlToReturn = deezerPreviewUrls[deezerPreviewUrls.length - 1]
+            console.log(`[BPM Module] Using Deezer preview URL from urls_tried for new computation: ${previewUrlToReturn.substring(0, 100)}...`)
+          }
+        }
+        
         return {
           bpm: finalBpm,
           source: previewResult.source,
           bpmRaw: finalBpmRaw || undefined,
           urlsTried: previewResult.urlsTried,
-          successfulUrl: previewResult.successfulUrl,
+          successfulUrl: previewUrlToReturn,
           key: finalKey || undefined,
           scale: finalScale || undefined,
           keyConfidence: finalKeyConfidence || undefined,

@@ -535,7 +535,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   // Function to fetch BPM for individual tracks (for uncached tracks)
   const fetchBpmsForTracks = async (tracksToFetch: Track[]) => {
     // Process in smaller batches to avoid overwhelming the server
-    const batchSize = 10
+    const batchSize = 20
     for (let i = 0; i < tracksToFetch.length; i += batchSize) {
       const batch = tracksToFetch.slice(i, i + batchSize)
       

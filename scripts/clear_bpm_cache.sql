@@ -11,3 +11,4 @@ ALTER SEQUENCE track_bpm_cache_id_seq RESTART WITH 1;
 -- Show confirmation
 SELECT 'BPM cache cleared successfully' AS status;
 
+
