@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import type { MouseEvent } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -1535,6 +1535,37 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     return div.textContent || div.innerText || ''
   }
 
+  // Compute BPM modal data
+  const bpmModalData = useMemo(() => {
+    if (!showBpmModal || !selectedBpmTrack) return null
+    
+    const trackId = selectedBpmTrack.id
+    const fullData = bpmFullData[trackId] || {}
+    const currentBpm = trackBpms[trackId]
+    const currentKey = trackKeys[trackId]
+    const currentScale = trackScales[trackId]
+    const bpmSelected = fullData?.bpmSelected || 'essentia'
+    const keySelected = fullData?.keySelected || 'essentia'
+    const hasEssentiaBpm = fullData?.bpmEssentia != null
+    const hasLibrosaBpm = fullData?.bpmLibrosa != null
+    const hasEssentiaKey = fullData?.keyEssentia != null
+    const hasLibrosaKey = fullData?.keyLibrosa != null
+    
+    return {
+      trackId,
+      fullData,
+      currentBpm,
+      currentKey,
+      currentScale,
+      bpmSelected,
+      keySelected,
+      hasEssentiaBpm,
+      hasLibrosaBpm,
+      hasEssentiaKey,
+      hasLibrosaKey,
+    }
+  }, [showBpmModal, selectedBpmTrack, bpmFullData, trackBpms, trackKeys, trackScales])
+
   return (
     <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
       <div className="max-w-7xl mx-auto flex-1 w-full">
@@ -2479,20 +2510,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       )}
 
       {/* BPM Details Modal */}
-      {showBpmModal && selectedBpmTrack && (() => {
-        const trackId = selectedBpmTrack.id
-        const fullData = bpmFullData[trackId]
-        const currentBpm = trackBpms[trackId]
-        const currentKey = trackKeys[trackId]
-        const currentScale = trackScales[trackId]
-        const bpmSelected = fullData?.bpmSelected || 'essentia'
-        const keySelected = fullData?.keySelected || 'essentia'
-        const hasEssentiaBpm = fullData?.bpmEssentia != null
-        const hasLibrosaBpm = fullData?.bpmLibrosa != null
-        const hasEssentiaKey = fullData?.keyEssentia != null
-        const hasLibrosaKey = fullData?.keyLibrosa != null
-        
-        return (
+      {bpmModalData && (
           <div 
             className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
             onClick={() => {
@@ -2532,17 +2550,17 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 </p>
               </div>
 
-              {currentBpm == null && !hasEssentiaBpm && !hasLibrosaBpm ? (
+              {!bpmModalData.hasEssentiaBpm && !bpmModalData.hasLibrosaBpm && bpmModalData.currentBpm == null ? (
                 // No BPM data available
                 <div className="space-y-3">
                   <div>
                     <span className="font-semibold text-gray-700">BPM: </span>
                     <span className="text-gray-600">Not available</span>
                   </div>
-                  {bpmDetails[trackId]?.error ? (
+                  {bpmDetails[bpmModalData.trackId]?.error ? (
                     <div>
                       <span className="font-semibold text-gray-700">Reason: </span>
-                      <span className="text-gray-600">{bpmDetails[trackId].error}</span>
+                      <span className="text-gray-600">{bpmDetails[bpmModalData.trackId].error}</span>
                     </div>
                   ) : (
                     <div>
@@ -2551,31 +2569,31 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       </span>
                     </div>
                   )}
-                  {trackBpms[trackId] == null && !retryAttempted && (
+                  {trackBpms[bpmModalData.trackId] == null && !retryAttempted && (
                     <button
                       onClick={async () => {
                         setRetryStatus({ loading: true })
                         setRetryAttempted(true)
-                        setLoadingBpms(prev => new Set(prev).add(trackId))
+                        setLoadingBpms(prev => new Set(prev).add(bpmModalData.trackId))
                         try {
-                          const res = await fetch(`/api/bpm?spotifyTrackId=${trackId}&country=${countryCode}`)
+                          const res = await fetch(`/api/bpm?spotifyTrackId=${bpmModalData.trackId}&country=${countryCode}`)
                           if (res.ok) {
                             const data = await res.json()
                             if (data.successfulUrl) {
-                              setPreviewUrls(prev => ({ ...prev, [trackId]: data.successfulUrl }))
+                              setPreviewUrls(prev => ({ ...prev, [bpmModalData.trackId]: data.successfulUrl }))
                             }
-                            setTracksInDb(prev => new Set(prev).add(trackId))
+                            setTracksInDb(prev => new Set(prev).add(bpmModalData.trackId))
                             if (data.bpm != null) {
-                              setTrackBpms(prev => ({ ...prev, [trackId]: data.bpm }))
+                              setTrackBpms(prev => ({ ...prev, [bpmModalData.trackId]: data.bpm }))
                               setBpmDetails(prev => ({
                                 ...prev,
-                                [trackId]: { source: data.source, error: data.error },
+                                [bpmModalData.trackId]: { source: data.source, error: data.error },
                               }))
                               setRetryStatus({ loading: false, success: true })
                             } else {
                               setBpmDetails(prev => ({
                                 ...prev,
-                                [trackId]: { source: data.source, error: data.error || 'BPM calculation failed' },
+                                [bpmModalData.trackId]: { source: data.source, error: data.error || 'BPM calculation failed' },
                               }))
                               setRetryStatus({ loading: false, success: false, error: data.error || 'BPM calculation failed' })
                             }
@@ -2588,7 +2606,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         } finally {
                           setLoadingBpms(prev => {
                             const next = new Set(prev)
-                            next.delete(trackId)
+                            next.delete(bpmModalData.trackId)
                             return next
                           })
                         }
@@ -2608,29 +2626,29 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     <h4 className="font-semibold text-gray-900 mb-3">BPM</h4>
                     <div className="space-y-3">
                       {/* Essentia BPM */}
-                      {hasEssentiaBpm && (
-                        <div className={`p-3 rounded border-2 ${bpmSelected === 'essentia' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+                      {bpmModalData.hasEssentiaBpm && (
+                        <div className={`p-3 rounded border-2 ${bpmModalData.bpmSelected === 'essentia' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
                           <div className="flex items-center justify-between">
                             <div>
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-gray-700">Essentia:</span>
-                                <span className="text-gray-900">{Math.round(fullData.bpmEssentia!)}</span>
-                                {fullData.bpmConfidenceEssentia != null && (
+                                <span className="text-gray-900">{bpmModalData.fullData.bpmEssentia != null ? Math.round(bpmModalData.fullData.bpmEssentia) : 'N/A'}</span>
+                                {bpmModalData.fullData.bpmConfidenceEssentia != null && (
                                   <span className="text-xs text-gray-500">
-                                    (confidence: {(fullData.bpmConfidenceEssentia * 100).toFixed(0)}%)
+                                    (confidence: {(bpmModalData.fullData.bpmConfidenceEssentia * 100).toFixed(0)}%)
                                   </span>
                                 )}
                               </div>
-                              {fullData.bpmRawEssentia != null && fullData.bpmRawEssentia !== fullData.bpmEssentia && (
+                              {bpmModalData.fullData.bpmRawEssentia != null && bpmModalData.fullData.bpmRawEssentia !== bpmModalData.fullData.bpmEssentia && (
                                 <div className="text-xs text-gray-500 mt-1">
-                                  Raw: {fullData.bpmRawEssentia.toFixed(1)}
+                                  Raw: {bpmModalData.fullData.bpmRawEssentia.toFixed(1)}
                                 </div>
                               )}
                             </div>
-                            {bpmSelected === 'essentia' && (
+                            {bpmModalData.bpmSelected === 'essentia' && (
                               <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">Selected</span>
                             )}
-                            {bpmSelected !== 'essentia' && hasLibrosaBpm && (
+                            {bpmModalData.bpmSelected !== 'essentia' && bpmModalData.hasLibrosaBpm && (
                               <button
                                 onClick={async () => {
                                   setIsUpdatingSelection(true)
@@ -2639,7 +2657,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                       method: 'POST',
                                       headers: { 'Content-Type': 'application/json' },
                                       body: JSON.stringify({
-                                        spotifyTrackId: trackId,
+                                        spotifyTrackId: bpmModalData.trackId,
                                         bpmSelected: 'essentia',
                                       }),
                                     })
@@ -2662,29 +2680,29 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       )}
                       
                       {/* Librosa BPM */}
-                      {hasLibrosaBpm && (
-                        <div className={`p-3 rounded border-2 ${bpmSelected === 'librosa' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+                      {bpmModalData.hasLibrosaBpm && (
+                        <div className={`p-3 rounded border-2 ${bpmModalData.bpmSelected === 'librosa' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
                           <div className="flex items-center justify-between">
                             <div>
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-gray-700">Librosa:</span>
-                                <span className="text-gray-900">{Math.round(fullData.bpmLibrosa!)}</span>
-                                {fullData.bpmConfidenceLibrosa != null && (
+                                <span className="text-gray-900">{bpmModalData.fullData.bpmLibrosa != null ? Math.round(bpmModalData.fullData.bpmLibrosa) : 'N/A'}</span>
+                                {bpmModalData.fullData.bpmConfidenceLibrosa != null && (
                                   <span className="text-xs text-gray-500">
-                                    (confidence: {(fullData.bpmConfidenceLibrosa * 100).toFixed(0)}%)
+                                    (confidence: {(bpmModalData.fullData.bpmConfidenceLibrosa * 100).toFixed(0)}%)
                                   </span>
                                 )}
                               </div>
-                              {fullData.bpmRawLibrosa != null && fullData.bpmRawLibrosa !== fullData.bpmLibrosa && (
+                              {bpmModalData.fullData.bpmRawLibrosa != null && bpmModalData.fullData.bpmRawLibrosa !== bpmModalData.fullData.bpmLibrosa && (
                                 <div className="text-xs text-gray-500 mt-1">
-                                  Raw: {fullData.bpmRawLibrosa.toFixed(1)}
+                                  Raw: {bpmModalData.fullData.bpmRawLibrosa.toFixed(1)}
                                 </div>
                               )}
                             </div>
-                            {bpmSelected === 'librosa' && (
+                            {bpmModalData.bpmSelected === 'librosa' && (
                               <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">Selected</span>
                             )}
-                            {bpmSelected !== 'librosa' && (
+                            {bpmModalData.bpmSelected !== 'librosa' && (
                               <button
                                 onClick={async () => {
                                   setIsUpdatingSelection(true)
@@ -2693,7 +2711,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                       method: 'POST',
                                       headers: { 'Content-Type': 'application/json' },
                                       body: JSON.stringify({
-                                        spotifyTrackId: trackId,
+                                        spotifyTrackId: bpmModalData.trackId,
                                         bpmSelected: 'librosa',
                                       }),
                                     })
@@ -2715,17 +2733,17 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       )}
                       
                       {/* Manual BPM Override */}
-                      <div className={`p-3 rounded border-2 ${bpmSelected === 'manual' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+                      <div className={`p-3 rounded border-2 ${bpmModalData.bpmSelected === 'manual' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-semibold text-gray-700">Manual Override:</span>
-                          {bpmSelected === 'manual' && fullData.bpmManual != null && (
-                            <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">Selected: {Math.round(fullData.bpmManual)}</span>
+                          {bpmModalData.bpmSelected === 'manual' && bpmModalData.fullData.bpmManual != null && (
+                            <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">Selected: {Math.round(bpmModalData.fullData.bpmManual)}</span>
                           )}
                         </div>
                         <div className="flex items-center gap-2">
                           <input
                             type="number"
-                            value={manualBpm || fullData.bpmManual || ''}
+                            value={manualBpm || bpmModalData.fullData.bpmManual || ''}
                             onChange={(e) => setManualBpm(e.target.value)}
                             placeholder="Enter BPM"
                             className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
@@ -2734,7 +2752,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           />
                           <button
                             onClick={async () => {
-                              const bpmValue = parseFloat(manualBpm || String(fullData.bpmManual || ''))
+                              const bpmValue = parseFloat(manualBpm || String(bpmModalData.fullData.bpmManual || ''))
                               if (isNaN(bpmValue) || bpmValue < 1 || bpmValue > 300) {
                                 alert('Please enter a valid BPM between 1 and 300')
                                 return
@@ -2745,7 +2763,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                   method: 'POST',
                                   headers: { 'Content-Type': 'application/json' },
                                   body: JSON.stringify({
-                                    spotifyTrackId: trackId,
+                                    spotifyTrackId: bpmModalData.trackId,
                                     bpmSelected: 'manual',
                                     bpmManual: bpmValue,
                                   }),
@@ -2758,7 +2776,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                 setIsUpdatingSelection(false)
                               }
                             }}
-                            disabled={isUpdatingSelection || (!manualBpm && !fullData.bpmManual)}
+                            disabled={isUpdatingSelection || (!manualBpm && !bpmModalData.fullData.bpmManual)}
                             className="text-xs bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white px-3 py-1 rounded transition-colors"
                           >
                             {isUpdatingSelection ? 'Saving...' : 'Save Manual'}
@@ -2773,26 +2791,26 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     <h4 className="font-semibold text-gray-900 mb-3">Key & Scale</h4>
                     <div className="space-y-3">
                       {/* Essentia Key */}
-                      {hasEssentiaKey && (
-                        <div className={`p-3 rounded border-2 ${keySelected === 'essentia' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+                      {bpmModalData.hasEssentiaKey && (
+                        <div className={`p-3 rounded border-2 ${bpmModalData.keySelected === 'essentia' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
                           <div className="flex items-center justify-between">
                             <div>
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-gray-700">Essentia:</span>
                                 <span className="text-gray-900">
-                                  {fullData.keyEssentia} {fullData.scaleEssentia}
+                                  {bpmModalData.fullData.keyEssentia || 'N/A'} {bpmModalData.fullData.scaleEssentia || ''}
                                 </span>
-                                {fullData.keyscaleConfidenceEssentia != null && (
+                                {bpmModalData.fullData.keyscaleConfidenceEssentia != null && (
                                   <span className="text-xs text-gray-500">
-                                    (confidence: {(fullData.keyscaleConfidenceEssentia * 100).toFixed(0)}%)
+                                    (confidence: {(bpmModalData.fullData.keyscaleConfidenceEssentia * 100).toFixed(0)}%)
                                   </span>
                                 )}
                               </div>
                             </div>
-                            {keySelected === 'essentia' && (
+                            {bpmModalData.keySelected === 'essentia' && (
                               <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">Selected</span>
                             )}
-                            {keySelected !== 'essentia' && hasLibrosaKey && (
+                            {bpmModalData.keySelected !== 'essentia' && bpmModalData.hasLibrosaKey && (
                               <button
                                 onClick={async () => {
                                   setIsUpdatingSelection(true)
@@ -2801,7 +2819,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                       method: 'POST',
                                       headers: { 'Content-Type': 'application/json' },
                                       body: JSON.stringify({
-                                        spotifyTrackId: trackId,
+                                        spotifyTrackId: bpmModalData.trackId,
                                         keySelected: 'essentia',
                                       }),
                                     })
@@ -2823,26 +2841,26 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       )}
                       
                       {/* Librosa Key */}
-                      {hasLibrosaKey && (
-                        <div className={`p-3 rounded border-2 ${keySelected === 'librosa' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+                      {bpmModalData.hasLibrosaKey && (
+                        <div className={`p-3 rounded border-2 ${bpmModalData.keySelected === 'librosa' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
                           <div className="flex items-center justify-between">
                             <div>
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-gray-700">Librosa:</span>
                                 <span className="text-gray-900">
-                                  {fullData.keyLibrosa} {fullData.scaleLibrosa}
+                                  {bpmModalData.fullData.keyLibrosa || 'N/A'} {bpmModalData.fullData.scaleLibrosa || ''}
                                 </span>
-                                {fullData.keyscaleConfidenceLibrosa != null && (
+                                {bpmModalData.fullData.keyscaleConfidenceLibrosa != null && (
                                   <span className="text-xs text-gray-500">
-                                    (confidence: {(fullData.keyscaleConfidenceLibrosa * 100).toFixed(0)}%)
+                                    (confidence: {(bpmModalData.fullData.keyscaleConfidenceLibrosa * 100).toFixed(0)}%)
                                   </span>
                                 )}
                               </div>
                             </div>
-                            {keySelected === 'librosa' && (
+                            {bpmModalData.keySelected === 'librosa' && (
                               <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">Selected</span>
                             )}
-                            {keySelected !== 'librosa' && (
+                            {bpmModalData.keySelected !== 'librosa' && (
                               <button
                                 onClick={async () => {
                                   setIsUpdatingSelection(true)
@@ -2851,7 +2869,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                       method: 'POST',
                                       headers: { 'Content-Type': 'application/json' },
                                       body: JSON.stringify({
-                                        spotifyTrackId: trackId,
+                                        spotifyTrackId: bpmModalData.trackId,
                                         keySelected: 'librosa',
                                       }),
                                     })
@@ -2873,18 +2891,18 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       )}
                       
                       {/* Manual Key Override */}
-                      <div className={`p-3 rounded border-2 ${keySelected === 'manual' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+                      <div className={`p-3 rounded border-2 ${bpmModalData.keySelected === 'manual' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-semibold text-gray-700">Manual Override:</span>
-                          {keySelected === 'manual' && fullData.keyManual && (
+                          {bpmModalData.keySelected === 'manual' && bpmModalData.fullData.keyManual && (
                             <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">
-                              Selected: {fullData.keyManual} {fullData.scaleManual}
+                              Selected: {bpmModalData.fullData.keyManual} {bpmModalData.fullData.scaleManual}
                             </span>
                           )}
                         </div>
                         <div className="flex items-center gap-2">
                           <select
-                            value={manualKey || fullData.keyManual || ''}
+                            value={manualKey || bpmModalData.fullData.keyManual || ''}
                             onChange={(e) => setManualKey(e.target.value)}
                             className="px-2 py-1 border border-gray-300 rounded text-sm"
                           >
@@ -2894,7 +2912,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             ))}
                           </select>
                           <select
-                            value={manualScale || fullData.scaleManual || 'major'}
+                            value={manualScale || bpmModalData.fullData.scaleManual || 'major'}
                             onChange={(e) => setManualScale(e.target.value)}
                             className="px-2 py-1 border border-gray-300 rounded text-sm"
                           >
@@ -2903,8 +2921,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           </select>
                           <button
                             onClick={async () => {
-                              const key = manualKey || fullData.keyManual
-                              const scale = manualScale || fullData.scaleManual || 'major'
+                              const key = manualKey || bpmModalData.fullData.keyManual
+                              const scale = manualScale || bpmModalData.fullData.scaleManual || 'major'
                               if (!key) {
                                 alert('Please select a key')
                                 return
@@ -2915,7 +2933,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                   method: 'POST',
                                   headers: { 'Content-Type': 'application/json' },
                                   body: JSON.stringify({
-                                    spotifyTrackId: trackId,
+                                    spotifyTrackId: bpmModalData.trackId,
                                     keySelected: 'manual',
                                     keyManual: key,
                                     scaleManual: scale,
@@ -2930,7 +2948,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                 setIsUpdatingSelection(false)
                               }
                             }}
-                            disabled={isUpdatingSelection || (!manualKey && !fullData.keyManual)}
+                            disabled={isUpdatingSelection || (!manualKey && !bpmModalData.fullData.keyManual)}
                             className="text-xs bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white px-3 py-1 rounded transition-colors"
                           >
                             {isUpdatingSelection ? 'Saving...' : 'Save Manual'}
@@ -2980,8 +2998,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               </div>
             </div>
           </div>
-        )
-      })()}
+      )}
       
       {/* Cache Info Modal */}
       {showCacheModal && isCached && cachedAt && (
