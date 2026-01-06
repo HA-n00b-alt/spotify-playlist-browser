@@ -676,30 +676,43 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           console.log(`[BPM Client] Triggering recalculation for ${trackIds.length} tracks`)
           
           // Process in batches to avoid overwhelming the system
-          const BATCH_SIZE = 10
+          const BATCH_SIZE = 5 // Smaller batches to ensure completion
           let processed = 0
           
           for (let i = 0; i < trackIds.length; i += BATCH_SIZE) {
             const batch = trackIds.slice(i, i + BATCH_SIZE)
             
-            // Trigger recalculation for each track in the batch
-            // Use Promise.allSettled to continue even if some fail
-            await Promise.allSettled(
+            // Trigger recalculation for each track in the batch and wait for completion
+            // Use Promise.allSettled to continue even if some fail, but wait for all to complete
+            const results = await Promise.allSettled(
               batch.map(trackId => 
                 fetch(`/api/bpm?spotifyTrackId=${encodeURIComponent(trackId)}`, {
                   method: 'GET',
+                }).then(res => {
+                  if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}`)
+                  }
+                  return res.json()
                 }).catch(err => {
                   console.error(`[BPM Client] Error triggering recalculation for track ${trackId}:`, err)
-                  return null
+                  throw err
                 })
               )
             )
             
+            // Count successful results
+            const successful = results.filter(r => r.status === 'fulfilled').length
             processed += batch.length
-            console.log(`[BPM Client] Triggered recalculation for ${processed}/${trackIds.length} tracks`)
+            console.log(`[BPM Client] Completed recalculation for ${successful}/${batch.length} tracks in batch (${processed}/${trackIds.length} total)`)
+            
+            // Small delay between batches to avoid overwhelming the system
+            if (i + BATCH_SIZE < trackIds.length) {
+              await new Promise(resolve => setTimeout(resolve, 500))
+            }
           }
           
-          // Now fetch the updated BPMs (some may still be processing, but we'll get what's ready)
+          // Wait a bit more for any final writes to complete, then fetch the updated BPMs
+          await new Promise(resolve => setTimeout(resolve, 1000))
           await fetchBpmsBatch()
         }
         
