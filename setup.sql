@@ -11,18 +11,30 @@ CREATE TABLE IF NOT EXISTS track_bpm_cache (
   isrc VARCHAR(12), -- International Standard Recording Code from Spotify
   artist TEXT,
   title TEXT,
-  bpm NUMERIC(5, 1),
-  bpm_raw NUMERIC(5, 1),
+  bpm_essentia NUMERIC(5, 1), -- BPM value from Essentia analysis (normalized, integer)
+  bpm_raw_essentia NUMERIC(5, 1), -- Raw BPM value from Essentia analysis (before normalization)
+  bpm_confidence_essentia NUMERIC(5, 2), -- BPM confidence score from Essentia (0-1)
+  bpm_librosa NUMERIC(5, 1), -- BPM value from Librosa fallback analysis (normalized, integer, null if not used)
+  bpm_raw_librosa NUMERIC(5, 1), -- Raw BPM value from Librosa fallback analysis (null if not used)
+  bpm_confidence_librosa NUMERIC(5, 2), -- BPM confidence score from Librosa (0-1, null if not used)
+  key_essentia TEXT, -- Musical key from Essentia (e.g., C, D, E)
+  scale_essentia TEXT, -- Musical scale from Essentia (major or minor)
+  keyscale_confidence_essentia NUMERIC(5, 2), -- Key/scale confidence score from Essentia (0-1)
+  key_librosa TEXT, -- Musical key from Librosa fallback (null if not used)
+  scale_librosa TEXT, -- Musical scale from Librosa fallback (null if not used)
+  keyscale_confidence_librosa NUMERIC(5, 2), -- Key/scale confidence score from Librosa (0-1, null if not used)
+  bpm_selected TEXT DEFAULT 'essentia', -- Which BPM value is selected: essentia, librosa, or manual
+  bpm_manual NUMERIC(5, 1), -- Manually overridden BPM value
+  key_selected TEXT DEFAULT 'essentia', -- Which key/scale value is selected: essentia, librosa, or manual
+  key_manual TEXT, -- Manually overridden key value
+  scale_manual TEXT, -- Manually overridden scale value
   source TEXT NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   error TEXT,
   urls_tried JSONB, -- Array of URLs that were attempted to find preview audio
   successful_url TEXT, -- URL that successfully provided preview audio (null if all failed)
   isrc_mismatch BOOLEAN DEFAULT FALSE, -- True when ISRC from search results doesn't match Spotify ISRC
-  key TEXT, -- Musical key detected by BPM service (e.g., C, D, E)
-  scale TEXT, -- Musical scale detected by BPM service (e.g., major, minor)
-  key_confidence NUMERIC(5, 2), -- Confidence score for key detection (0-1)
-  bpm_confidence NUMERIC(5, 2), -- Confidence score for BPM detection (0-1)
+  debug_txt TEXT, -- Debug information from BPM service
   CONSTRAINT unique_spotify_track UNIQUE (spotify_track_id)
 );
 
@@ -36,10 +48,24 @@ COMMENT ON COLUMN track_bpm_cache.isrc IS 'International Standard Recording Code
 COMMENT ON COLUMN track_bpm_cache.urls_tried IS 'Array of URLs that were attempted to find preview audio';
 COMMENT ON COLUMN track_bpm_cache.successful_url IS 'URL that successfully provided preview audio (null if all failed)';
 COMMENT ON COLUMN track_bpm_cache.isrc_mismatch IS 'True when ISRC from iTunes/Deezer search results does not match Spotify ISRC, may affect BPM accuracy';
-COMMENT ON COLUMN track_bpm_cache.key IS 'Musical key detected by BPM service (e.g., C, D, E)';
-COMMENT ON COLUMN track_bpm_cache.scale IS 'Musical scale detected by BPM service (e.g., major, minor)';
-COMMENT ON COLUMN track_bpm_cache.key_confidence IS 'Confidence score for key detection (0-1)';
-COMMENT ON COLUMN track_bpm_cache.bpm_confidence IS 'Confidence score for BPM detection (0-1)';
+COMMENT ON COLUMN track_bpm_cache.bpm_essentia IS 'BPM value from Essentia analysis (normalized, integer)';
+COMMENT ON COLUMN track_bpm_cache.bpm_raw_essentia IS 'Raw BPM value from Essentia analysis (before normalization)';
+COMMENT ON COLUMN track_bpm_cache.bpm_confidence_essentia IS 'BPM confidence score from Essentia (0-1)';
+COMMENT ON COLUMN track_bpm_cache.bpm_librosa IS 'BPM value from Librosa fallback analysis (normalized, integer, null if not used)';
+COMMENT ON COLUMN track_bpm_cache.bpm_raw_librosa IS 'Raw BPM value from Librosa fallback analysis (null if not used)';
+COMMENT ON COLUMN track_bpm_cache.bpm_confidence_librosa IS 'BPM confidence score from Librosa (0-1, null if not used)';
+COMMENT ON COLUMN track_bpm_cache.key_essentia IS 'Musical key from Essentia (e.g., C, D, E)';
+COMMENT ON COLUMN track_bpm_cache.scale_essentia IS 'Musical scale from Essentia (major or minor)';
+COMMENT ON COLUMN track_bpm_cache.keyscale_confidence_essentia IS 'Key/scale confidence score from Essentia (0-1)';
+COMMENT ON COLUMN track_bpm_cache.key_librosa IS 'Musical key from Librosa fallback (null if not used)';
+COMMENT ON COLUMN track_bpm_cache.scale_librosa IS 'Musical scale from Librosa fallback (null if not used)';
+COMMENT ON COLUMN track_bpm_cache.keyscale_confidence_librosa IS 'Key/scale confidence score from Librosa (0-1, null if not used)';
+COMMENT ON COLUMN track_bpm_cache.bpm_selected IS 'Which BPM value is selected: essentia, librosa, or manual';
+COMMENT ON COLUMN track_bpm_cache.bpm_manual IS 'Manually overridden BPM value';
+COMMENT ON COLUMN track_bpm_cache.key_selected IS 'Which key/scale value is selected: essentia, librosa, or manual';
+COMMENT ON COLUMN track_bpm_cache.key_manual IS 'Manually overridden key value';
+COMMENT ON COLUMN track_bpm_cache.scale_manual IS 'Manually overridden scale value';
+COMMENT ON COLUMN track_bpm_cache.debug_txt IS 'Debug information from BPM service';
 
 -- ============================================================================
 -- Analytics Tables

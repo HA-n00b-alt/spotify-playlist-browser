@@ -63,6 +63,27 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [bpmDebugInfo, setBpmDebugInfo] = useState<Record<string, any>>({})
   const [bpmDetails, setBpmDetails] = useState<Record<string, { source?: string; error?: string }>>({})
   const [previewUrls, setPreviewUrls] = useState<Record<string, string | null>>({}) // Store successful preview URLs from DB
+  // Store all BPM data (Essentia + Librosa) for modal
+  const [bpmFullData, setBpmFullData] = useState<Record<string, {
+    bpmEssentia?: number | null
+    bpmRawEssentia?: number | null
+    bpmConfidenceEssentia?: number | null
+    bpmLibrosa?: number | null
+    bpmRawLibrosa?: number | null
+    bpmConfidenceLibrosa?: number | null
+    keyEssentia?: string | null
+    scaleEssentia?: string | null
+    keyscaleConfidenceEssentia?: number | null
+    keyLibrosa?: string | null
+    scaleLibrosa?: string | null
+    keyscaleConfidenceLibrosa?: number | null
+    bpmSelected?: 'essentia' | 'librosa' | 'manual'
+    keySelected?: 'essentia' | 'librosa' | 'manual'
+    bpmManual?: number | null
+    keyManual?: string | null
+    scaleManual?: string | null
+    debugTxt?: string | null
+  }>>({})
   const [showBpmModal, setShowBpmModal] = useState(false)
   const [selectedBpmTrack, setSelectedBpmTrack] = useState<Track | null>(null)
   const [bpmProcessingStartTime, setBpmProcessingStartTime] = useState<number | null>(null)
@@ -70,6 +91,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [bpmTracksCalculated, setBpmTracksCalculated] = useState<number>(0) // Track how many were actually calculated (not cached)
   const [retryStatus, setRetryStatus] = useState<{ loading: boolean; success?: boolean; error?: string } | null>(null)
   const [retryAttempted, setRetryAttempted] = useState(false)
+  // State for manual override in modal
+  const [manualBpm, setManualBpm] = useState<string>('')
+  const [manualKey, setManualKey] = useState<string>('')
+  const [manualScale, setManualScale] = useState<string>('major')
+  const [isUpdatingSelection, setIsUpdatingSelection] = useState(false)
   const [showBpmMoreInfo, setShowBpmMoreInfo] = useState(false)
   const [countryCode, setCountryCode] = useState<string>('us')
   const [tracksInDb, setTracksInDb] = useState<Set<string>>(new Set()) // Track IDs that are already in the DB
@@ -344,12 +370,38 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         for (const [trackId, result] of Object.entries(data.results || {})) {
           const r = result as any
           newBpms[trackId] = r.bpm
-          // Store key and scale if available
+          // Store key and scale if available (these are already the selected values from API)
           if (r.key !== undefined) {
             newKeys[trackId] = r.key || null
           }
           if (r.scale !== undefined) {
             newScales[trackId] = r.scale || null
+          }
+          // Store full BPM data for modal
+          if (r.bpmEssentia !== undefined || r.bpmLibrosa !== undefined || r.bpmSelected) {
+            setBpmFullData(prev => ({
+              ...prev,
+              [trackId]: {
+                bpmEssentia: r.bpmEssentia,
+                bpmRawEssentia: r.bpmRawEssentia,
+                bpmConfidenceEssentia: r.bpmConfidenceEssentia,
+                bpmLibrosa: r.bpmLibrosa,
+                bpmRawLibrosa: r.bpmRawLibrosa,
+                bpmConfidenceLibrosa: r.bpmConfidenceLibrosa,
+                keyEssentia: r.keyEssentia,
+                scaleEssentia: r.scaleEssentia,
+                keyscaleConfidenceEssentia: r.keyscaleConfidenceEssentia,
+                keyLibrosa: r.keyLibrosa,
+                scaleLibrosa: r.scaleLibrosa,
+                keyscaleConfidenceLibrosa: r.keyscaleConfidenceLibrosa,
+                bpmSelected: r.bpmSelected || 'essentia',
+                keySelected: r.keySelected || 'essentia',
+                bpmManual: r.bpmManual,
+                keyManual: r.keyManual,
+                scaleManual: r.scaleManual,
+                debugTxt: r.debugTxt,
+              },
+            }))
           }
           // Store successful preview URL from DB
           // For Deezer, prefer a URL from urlsTried if available (might be more recent/valid)

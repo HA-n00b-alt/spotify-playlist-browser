@@ -102,7 +102,6 @@ export interface BpmResult {
   scale?: string
   keyConfidence?: number
   bpmConfidence?: number
-  sourceUrlHost?: string
 }
 
 export interface BpmDetails {
