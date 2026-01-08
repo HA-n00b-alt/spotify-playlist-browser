@@ -100,6 +100,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [retryStatus, setRetryStatus] = useState<{ loading: boolean; success?: boolean; error?: string } | null>(null)
   const [retryAttempted, setRetryAttempted] = useState(false)
   const [retryTrackId, setRetryTrackId] = useState<string | null>(null)
+  const [pageSize, setPageSize] = useState<number | 'all'>(50)
+  const [currentPage, setCurrentPage] = useState(1)
   // State for manual override in modal
   const [manualBpm, setManualBpm] = useState<string>('')
   const [manualKey, setManualKey] = useState<string>('')
@@ -432,169 +434,166 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     setLoadingBpmFields(new Set(trackIds))
     setLoadingKeyFields(new Set(trackIds))
 
-    try {
-      console.log(`[BPM Client] Fetching BPM batch for ${trackIds.length} tracks`)
-      const res = await fetch('/api/bpm/batch', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ trackIds }),
+    const applyBatchResults = (results: Record<string, any>) => {
+      const newBpms: Record<string, number | null> = {}
+      const newKeys: Record<string, string | null> = {}
+      const newScales: Record<string, string | null> = {}
+      const newDetails: Record<string, { source?: string; error?: string }> = {}
+      const newPreviewUrls: Record<string, string | null> = {}
+      const needsBpm = new Set<string>()
+      const needsKey = new Set<string>()
+      const needsCalc = new Set<string>()
+      const nextStreamStatus: Record<string, 'partial' | 'final' | 'error'> = {}
+
+      for (const [trackId, result] of Object.entries(results || {})) {
+        const r = result as any
+        newBpms[trackId] = r.bpm
+        if (r.key !== undefined) {
+          newKeys[trackId] = r.key || null
+        }
+        if (r.scale !== undefined) {
+          newScales[trackId] = r.scale || null
+        }
+        if (r.bpmEssentia !== undefined || r.bpmLibrosa !== undefined || r.bpmSelected) {
+          setBpmFullData(prev => ({
+            ...prev,
+            [trackId]: {
+              bpmEssentia: r.bpmEssentia,
+              bpmRawEssentia: r.bpmRawEssentia,
+              bpmConfidenceEssentia: r.bpmConfidenceEssentia,
+              bpmLibrosa: r.bpmLibrosa,
+              bpmRawLibrosa: r.bpmRawLibrosa,
+              bpmConfidenceLibrosa: r.bpmConfidenceLibrosa,
+              keyEssentia: r.keyEssentia,
+              scaleEssentia: r.scaleEssentia,
+              keyscaleConfidenceEssentia: r.keyscaleConfidenceEssentia,
+              keyLibrosa: r.keyLibrosa,
+              scaleLibrosa: r.scaleLibrosa,
+              keyscaleConfidenceLibrosa: r.keyscaleConfidenceLibrosa,
+              bpmSelected: r.bpmSelected || 'essentia',
+              keySelected: r.keySelected || 'essentia',
+              bpmManual: r.bpmManual,
+              keyManual: r.keyManual,
+              scaleManual: r.scaleManual,
+              debugTxt: r.debugTxt,
+            },
+          }))
+        }
+        const previewUrlFromMeta = getPreviewUrlFromMeta({ urls: r.urls })
+        if (previewUrlFromMeta) {
+          newPreviewUrls[trackId] = previewUrlFromMeta
+        }
+        if (r.source || r.error || r.urls) {
+          newDetails[trackId] = {
+            source: r.source,
+            error: r.error,
+          }
+        }
+        if (r.source || r.error || r.urls) {
+          setBpmDebugInfo(prev => ({
+            ...prev,
+            [trackId]: {
+              ...r,
+              urls: r.urls || [],
+            },
+          }))
+        }
+
+        const hasError = Boolean(r.error)
+        const hasBpm = r.bpm != null
+        const hasKey = r.key != null
+        const hasScale = r.scale != null
+        const needsBpmValue = !hasBpm
+        const needsKeyValue = !hasKey || !hasScale
+
+        if (hasError) {
+          nextStreamStatus[trackId] = 'error'
+          newBpms[trackId] = r.bpm ?? null
+          if (r.key === undefined) {
+            newKeys[trackId] = null
+          }
+          if (r.scale === undefined) {
+            newScales[trackId] = null
+          }
+        } else {
+          if (needsBpmValue) {
+            needsBpm.add(trackId)
+          }
+          if (needsKeyValue) {
+            needsKey.add(trackId)
+          }
+          if (needsBpmValue || needsKeyValue) {
+            needsCalc.add(trackId)
+          }
+        }
+      }
+
+      setTrackBpms(newBpms)
+      setTrackKeys(prev => ({ ...prev, ...newKeys }))
+      setTrackScales(prev => ({ ...prev, ...newScales }))
+      setBpmDetails(newDetails)
+      setPreviewUrls(prev => ({ ...prev, ...newPreviewUrls }))
+      setTracksNeedingBpm(needsBpm)
+      setTracksNeedingKey(needsKey)
+      setTracksNeedingCalc(needsCalc)
+      setLoadingBpmFields(new Set(needsBpm))
+      setLoadingKeyFields(new Set(needsKey))
+      if (Object.keys(nextStreamStatus).length > 0) {
+        setBpmStreamStatus(prev => ({ ...prev, ...nextStreamStatus }))
+      }
+
+      const inDbSet = new Set<string>()
+      for (const [trackId, result] of Object.entries(results || {})) {
+        const r = result as any
+        if (r && (r.source !== undefined || r.error !== undefined || r.bpmRaw !== undefined || r.cached === true)) {
+          inDbSet.add(trackId)
+        }
+      }
+      setTracksInDb(prev => {
+        const combined = new Set(prev)
+        inDbSet.forEach(id => combined.add(id))
+        return combined
       })
 
-      if (res.ok) {
-        const data = await res.json()
-        console.log(`[BPM Client] Batch BPM data received:`, data)
+      const calculatedFromBatch = Object.values(results || {}).filter((r: any) => r.bpm !== null && !r.cached).length
+      setBpmTracksCalculated(prev => prev + calculatedFromBatch)
 
-        const newBpms: Record<string, number | null> = {}
-        const newKeys: Record<string, string | null> = {}
-        const newScales: Record<string, string | null> = {}
-        const newDetails: Record<string, { source?: string; error?: string }> = {}
-        const newPreviewUrls: Record<string, string | null> = {}
-        const needsBpm = new Set<string>()
-        const needsKey = new Set<string>()
-        const needsCalc = new Set<string>()
-        const nextStreamStatus: Record<string, 'partial' | 'final' | 'error'> = {}
+      const uncachedTracks = tracks.filter(t => needsCalc.has(t.id))
+      if (uncachedTracks.length > 0) {
+        console.log(`[BPM Client] Streaming ${uncachedTracks.length} uncached tracks`)
+        streamBpmsForTracks(uncachedTracks, needsBpm, needsKey)
+      } else {
+        setBpmProcessingStartTime(null)
+      }
+    }
 
-        for (const [trackId, result] of Object.entries(data.results || {})) {
-          const r = result as any
-          newBpms[trackId] = r.bpm
-          // Store key and scale if available (these are already the selected values from API)
-          if (r.key !== undefined) {
-            newKeys[trackId] = r.key || null
-          }
-          if (r.scale !== undefined) {
-            newScales[trackId] = r.scale || null
-          }
-          // Store full BPM data for modal
-          if (r.bpmEssentia !== undefined || r.bpmLibrosa !== undefined || r.bpmSelected) {
-            setBpmFullData(prev => ({
-              ...prev,
-              [trackId]: {
-                bpmEssentia: r.bpmEssentia,
-                bpmRawEssentia: r.bpmRawEssentia,
-                bpmConfidenceEssentia: r.bpmConfidenceEssentia,
-                bpmLibrosa: r.bpmLibrosa,
-                bpmRawLibrosa: r.bpmRawLibrosa,
-                bpmConfidenceLibrosa: r.bpmConfidenceLibrosa,
-                keyEssentia: r.keyEssentia,
-                scaleEssentia: r.scaleEssentia,
-                keyscaleConfidenceEssentia: r.keyscaleConfidenceEssentia,
-                keyLibrosa: r.keyLibrosa,
-                scaleLibrosa: r.scaleLibrosa,
-                keyscaleConfidenceLibrosa: r.keyscaleConfidenceLibrosa,
-                bpmSelected: r.bpmSelected || 'essentia',
-                keySelected: r.keySelected || 'essentia',
-                bpmManual: r.bpmManual,
-                keyManual: r.keyManual,
-                scaleManual: r.scaleManual,
-                debugTxt: r.debugTxt,
-              },
-            }))
-          }
-          const previewUrlFromMeta = getPreviewUrlFromMeta({ urls: r.urls })
-          if (previewUrlFromMeta) {
-            newPreviewUrls[trackId] = previewUrlFromMeta
-          }
-          // Always store details if available (source, error, urls)
-          if (r.source || r.error || r.urls) {
-            newDetails[trackId] = {
-              source: r.source,
-              error: r.error,
-            }
-          }
-          // Store debug info including URLs
-          if (r.source || r.error || r.urls) {
-            setBpmDebugInfo(prev => ({
-              ...prev,
-              [trackId]: {
-                ...r,
-                urls: r.urls || [],
-              },
-            }))
-          }
-
-          const hasError = Boolean(r.error)
-          const hasBpm = r.bpm != null
-          const hasKey = r.key != null
-          const hasScale = r.scale != null
-          const needsBpmValue = !hasBpm
-          const needsKeyValue = !hasKey || !hasScale
-
-          if (hasError) {
-            nextStreamStatus[trackId] = 'error'
-            newBpms[trackId] = r.bpm ?? null
-            if (r.key === undefined) {
-              newKeys[trackId] = null
-            }
-            if (r.scale === undefined) {
-              newScales[trackId] = null
-            }
-          } else {
-            if (needsBpmValue) {
-              needsBpm.add(trackId)
-            }
-            if (needsKeyValue) {
-              needsKey.add(trackId)
-            }
-            if (needsBpmValue || needsKeyValue) {
-              needsCalc.add(trackId)
-            }
-          }
-        }
-
-        setTrackBpms(newBpms)
-        setTrackKeys(prev => ({ ...prev, ...newKeys }))
-        setTrackScales(prev => ({ ...prev, ...newScales }))
-        setBpmDetails(newDetails)
-        setPreviewUrls(prev => ({ ...prev, ...newPreviewUrls }))
-        setTracksNeedingBpm(needsBpm)
-        setTracksNeedingKey(needsKey)
-        setTracksNeedingCalc(needsCalc)
-        setLoadingBpmFields(new Set(needsBpm))
-        setLoadingKeyFields(new Set(needsKey))
-        if (Object.keys(nextStreamStatus).length > 0) {
-          setBpmStreamStatus(prev => ({ ...prev, ...nextStreamStatus }))
-        }
-
-        // Track which tracks are in DB: if spotify_track_id exists in track_bpm_cache table
-        // The batch API returns results with source/error/bpmRaw for tracks in DB
-        // Tracks NOT in DB return only { bpm: null, cached: false }
-        const inDbSet = new Set<string>()
-        for (const [trackId, result] of Object.entries(data.results || {})) {
-          const r = result as any
-          // Track is in DB if spotify_track_id exists in track_bpm_cache (indicated by source/error/bpmRaw/cached)
-          if (r && (r.source !== undefined || r.error !== undefined || r.bpmRaw !== undefined || r.cached === true)) {
-            inDbSet.add(trackId)
-          }
-        }
-        setTracksInDb(prev => {
-          const combined = new Set(prev)
-          inDbSet.forEach(id => combined.add(id))
-          return combined
+    try {
+      console.log(`[BPM Client] Fetching BPM batch for ${trackIds.length} tracks`)
+      const chunkSize = 100
+      const combinedResults: Record<string, any> = {}
+      for (let i = 0; i < trackIds.length; i += chunkSize) {
+        const chunkIds = trackIds.slice(i, i + chunkSize)
+        const res = await fetch('/api/bpm/batch', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ trackIds: chunkIds }),
         })
 
-        // Count how many were cached (not calculated)
-        const calculatedFromBatch = Object.values(data.results || {}).filter((r: any) => r.bpm !== null && !r.cached).length
-        setBpmTracksCalculated(prev => prev + calculatedFromBatch)
-
-        // For tracks not in cache, fetch individually (but don't block UI)
-        const uncachedTracks = tracks.filter(t => needsCalc.has(t.id))
-        if (uncachedTracks.length > 0) {
-          console.log(`[BPM Client] Streaming ${uncachedTracks.length} uncached tracks`)
-          streamBpmsForTracks(uncachedTracks, needsBpm, needsKey)
-        } else if (uncachedTracks.length === 0) {
-          // No processing needed
-          setBpmProcessingStartTime(null)
+        if (res.ok) {
+          const data = await res.json()
+          console.log(`[BPM Client] Batch BPM data received:`, data)
+          Object.assign(combinedResults, data.results || {})
+        } else {
+          console.error(`[BPM Client] Batch fetch failed:`, res.status)
+          fetchBpmsForTracks(tracks.filter(t => chunkIds.includes(t.id)))
         }
-      } else {
-        console.error(`[BPM Client] Batch fetch failed:`, res.status)
-        // Fallback to individual fetching
-        fetchBpmsForTracks(tracks)
       }
+
+      applyBatchResults(combinedResults)
     } catch (error) {
       console.error(`[BPM Client] Batch fetch error:`, error)
-      // Fallback to individual fetching
       fetchBpmsForTracks(tracks)
     }
   }
@@ -2013,6 +2012,23 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     return 0
   })
 
+  const totalPages = pageSize === 'all' ? 1 : Math.max(1, Math.ceil(sortedTracks.length / pageSize))
+  const safePage = Math.min(currentPage, totalPages)
+  const paginatedTracks =
+    pageSize === 'all'
+      ? sortedTracks
+      : sortedTracks.slice((safePage - 1) * pageSize, safePage * pageSize)
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, sortField, sortDirection, pageSize])
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [currentPage, totalPages])
+
   // Compute BPM modal data (must be before any early returns)
   const bpmModalData = useMemo(() => {
     if (!showBpmModal || !selectedBpmTrack) return null
@@ -2043,6 +2059,27 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       hasLibrosaKey,
     }
   }, [showBpmModal, selectedBpmTrack, bpmFullData, trackBpms, trackKeys, trackScales])
+
+  // Load preferred page size from localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const saved = window.localStorage.getItem('playlistPageSize')
+    if (!saved) return
+    if (saved === 'all') {
+      setPageSize('all')
+      return
+    }
+    const parsed = Number(saved)
+    if (!Number.isNaN(parsed) && parsed > 0) {
+      setPageSize(parsed)
+    }
+  }, [])
+
+  // Persist page size preference
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem('playlistPageSize', String(pageSize))
+  }, [pageSize])
 
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) {
@@ -2477,6 +2514,45 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               className="w-full px-4 py-3 sm:py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-base sm:text-sm"
             />
           </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="text-xs sm:text-sm text-gray-600">Per page</label>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                const value = e.target.value
+                setPageSize(value === 'all' ? 'all' : Number(value))
+              }}
+              className="px-2 py-1 border border-gray-300 rounded text-gray-900 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="all">All</option>
+            </select>
+            {pageSize !== 'all' && (
+              <div className="flex items-center gap-2 ml-auto text-xs sm:text-sm text-gray-600">
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  disabled={safePage <= 1}
+                  className="px-2 py-1 border border-gray-300 rounded disabled:text-gray-400 disabled:border-gray-200"
+                >
+                  Prev
+                </button>
+                <span>
+                  Page {safePage} of {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                  disabled={safePage >= totalPages}
+                  className="px-2 py-1 border border-gray-300 rounded disabled:text-gray-400 disabled:border-gray-200"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </div>
           
           <div>
             <button
@@ -2587,7 +2663,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
         {/* Mobile Card View */}
         <div className="block sm:hidden space-y-3">
-          {sortedTracks.map((track, index) => (
+          {paginatedTracks.map((track, index) => (
             <div
               key={track.id}
               className={`bg-white rounded-lg border shadow-sm p-4 cursor-pointer transition-colors ${
@@ -2614,7 +2690,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
                     </svg>
                   ) : (
-                    index + 1
+                    pageSize === 'all'
+                      ? index + 1
+                      : (safePage - 1) * (pageSize as number) + index + 1
                   )}
                 </div>
                 {track.album.images && track.album.images[0] ? (
@@ -2834,7 +2912,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </td>
                   </tr>
                 ) : (
-                  sortedTracks.map((track, index) => (
+                  paginatedTracks.map((track, index) => (
                     <tr 
                       key={track.id} 
                       className={`transition-colors cursor-pointer ${
@@ -2861,7 +2939,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
                             </svg>
                           ) : (
-                            index + 1
+                            pageSize === 'all'
+                              ? index + 1
+                              : (safePage - 1) * (pageSize as number) + index + 1
                           )}
                         </div>
                       </td>
@@ -3038,7 +3118,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           </div>
         </div>
         <div className="mt-4 text-xs sm:text-sm text-gray-600">
-          Showing {sortedTracks.length} of {tracks.length} tracks
+          Showing {paginatedTracks.length} of {tracks.length} tracks
         </div>
       </div>
 
