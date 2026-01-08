@@ -428,6 +428,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     setTracksNeedingKey(new Set())
     setTracksNeedingCalc(new Set())
     setBpmStreamStatus({})
+    // Show spinners while cached results are being fetched
+    setLoadingBpmFields(new Set(trackIds))
+    setLoadingKeyFields(new Set(trackIds))
 
     try {
       console.log(`[BPM Client] Fetching BPM batch for ${trackIds.length} tracks`)
