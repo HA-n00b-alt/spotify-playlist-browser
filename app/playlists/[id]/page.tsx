@@ -699,6 +699,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
+      let processedResults = 0
+
+      const maybeYield = async () => {
+        processedResults += 1
+        if (processedResults % 5 === 0) {
+          await new Promise(resolve => setTimeout(resolve, 0))
+        }
+      }
 
       const handleStreamResult = async (data: any) => {
         if (typeof data.index !== 'number') return
@@ -784,7 +792,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           }
         }
 
-        const status = data.status === 'partial' || data.status === 'final' ? data.status : 'final'
+        const status =
+          data.result_status === 'partial' || data.result_status === 'final'
+            ? data.result_status
+            : data.status === 'partial' || data.status === 'final'
+              ? data.status
+              : 'final'
         setBpmStreamStatus(prev => ({ ...prev, [trackId]: status }))
 
         if (status === 'final') {
@@ -835,6 +848,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             const data = JSON.parse(line)
             if (data?.type === 'result') {
               await handleStreamResult(data)
+              await maybeYield()
             } else if (data?.type === 'error') {
               console.warn('[BPM Client] Stream error:', data.message)
             }
@@ -849,6 +863,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           const data = JSON.parse(buffer.trim())
           if (data?.type === 'result') {
             await handleStreamResult(data)
+            await maybeYield()
           }
         } catch (parseError) {
           console.error('[BPM Client] Failed to parse stream buffer:', parseError)
