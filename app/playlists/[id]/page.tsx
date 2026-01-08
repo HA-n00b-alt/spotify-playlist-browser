@@ -101,10 +101,13 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [retryAttempted, setRetryAttempted] = useState(false)
   const [retryTrackId, setRetryTrackId] = useState<string | null>(null)
   const [recalcStatus, setRecalcStatus] = useState<{ loading: boolean; success?: boolean; error?: string } | null>(null)
-  const [creditsByTrackId, setCreditsByTrackId] = useState<Record<string, string[]>>({})
-  const [creditsOpenIds, setCreditsOpenIds] = useState<Set<string>>(new Set())
+  const [creditsByTrackId, setCreditsByTrackId] = useState<
+    Record<string, { performers: string[]; production: string[]; composition: string[] }>
+  >({})
   const [creditsLoadingIds, setCreditsLoadingIds] = useState<Set<string>>(new Set())
   const [creditsErrorByTrackId, setCreditsErrorByTrackId] = useState<Record<string, string>>({})
+  const [showCreditsModal, setShowCreditsModal] = useState(false)
+  const [selectedCreditsTrack, setSelectedCreditsTrack] = useState<Track | null>(null)
   const [pageSize, setPageSize] = useState<number | 'all'>(50)
   const [currentPage, setCurrentPage] = useState(1)
   // State for manual override in modal
@@ -1399,20 +1402,34 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   }
 
   const fetchCreditsForTrack = async (track: Track) => {
+    setSelectedCreditsTrack(track)
+    setShowCreditsModal(true)
     if (creditsByTrackId[track.id]) {
-      setCreditsOpenIds(prev => new Set(prev).add(track.id))
+      return
+    }
+    const isrc = track.external_ids?.isrc
+    if (!isrc) {
+      setCreditsErrorByTrackId(prev => ({
+        ...prev,
+        [track.id]: 'Missing ISRC for this track',
+      }))
       return
     }
     setCreditsLoadingIds(prev => new Set(prev).add(track.id))
     try {
-      const artistNames = track.artists.map(a => a.name).join(', ')
-      const res = await fetch(`/api/musicbrainz/credits?title=${encodeURIComponent(track.name)}&artist=${encodeURIComponent(artistNames)}`)
+      const res = await fetch(`/api/musicbrainz/credits?isrc=${encodeURIComponent(isrc)}`)
       if (!res.ok) {
         throw new Error('Failed to fetch credits')
       }
       const data = await res.json()
-      setCreditsByTrackId(prev => ({ ...prev, [track.id]: data.credits || [] }))
-      setCreditsOpenIds(prev => new Set(prev).add(track.id))
+      setCreditsByTrackId(prev => ({
+        ...prev,
+        [track.id]: {
+          performers: data.performers || [],
+          production: data.production || [],
+          composition: data.composition || [],
+        },
+      }))
       setCreditsErrorByTrackId(prev => {
         const next = { ...prev }
         delete next[track.id]
@@ -2819,35 +2836,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
-                              if (creditsOpenIds.has(track.id)) {
-                                setCreditsOpenIds(prev => {
-                                  const next = new Set(prev)
-                                  next.delete(track.id)
-                                  return next
-                                })
-                                return
-                              }
                               fetchCreditsForTrack(track)
                             }}
                             className="mt-1 text-xs text-blue-600 hover:text-blue-700 hover:underline"
                           >
-                            {creditsLoadingIds.has(track.id)
-                              ? 'Loading credits...'
-                              : creditsOpenIds.has(track.id)
-                                ? 'Hide credits'
-                                : 'Show credits'}
+                            {creditsLoadingIds.has(track.id) ? 'Loading credits...' : 'Show credits'}
                           </button>
-                          {creditsOpenIds.has(track.id) && (
-                            <div className="mt-1 text-xs text-gray-600">
-                              {creditsErrorByTrackId[track.id] ? (
-                                <span className="text-red-500">{creditsErrorByTrackId[track.id]}</span>
-                              ) : creditsByTrackId[track.id]?.length ? (
-                                <span>{creditsByTrackId[track.id].join(', ')}</span>
-                              ) : (
-                                <span className="text-gray-400">No credits found</span>
-                              )}
-                            </div>
-                          )}
                       <div className="text-xs text-gray-600 mt-1">
                         {track.artists.map((artist, index) => (
                           <span key={artist.id || index}>
@@ -3104,35 +3098,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
-                              if (creditsOpenIds.has(track.id)) {
-                                setCreditsOpenIds(prev => {
-                                  const next = new Set(prev)
-                                  next.delete(track.id)
-                                  return next
-                                })
-                                return
-                              }
                               fetchCreditsForTrack(track)
                             }}
                             className="text-[11px] text-blue-600 hover:text-blue-700 hover:underline"
                           >
-                            {creditsLoadingIds.has(track.id)
-                              ? 'Loading credits...'
-                              : creditsOpenIds.has(track.id)
-                                ? 'Hide credits'
-                                : 'Show credits'}
+                            {creditsLoadingIds.has(track.id) ? 'Loading credits...' : 'Show credits'}
                           </button>
-                          {creditsOpenIds.has(track.id) && (
-                            <div className="mt-1 text-[11px] text-gray-600">
-                              {creditsErrorByTrackId[track.id] ? (
-                                <span className="text-red-500">{creditsErrorByTrackId[track.id]}</span>
-                              ) : creditsByTrackId[track.id]?.length ? (
-                                <span>{creditsByTrackId[track.id].join(', ')}</span>
-                              ) : (
-                                <span className="text-gray-400">No credits found</span>
-                              )}
-                            </div>
-                          )}
                         </div>
                       </td>
                       <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-700 text-xs sm:text-sm hidden md:table-cell max-w-[120px] truncate" title={track.artists.map(a => a.name).join(', ')}>
@@ -3891,6 +3862,75 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               </div>
             </div>
           </div>
+      )}
+
+      {/* Credits Modal */}
+      {showCreditsModal && selectedCreditsTrack && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowCreditsModal(false)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Song Credits</h2>
+              <button
+                onClick={() => setShowCreditsModal(false)}
+                className="text-gray-400 hover:text-gray-600 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            <div className="mb-4">
+              <h3 className="font-semibold text-gray-900">{selectedCreditsTrack.name}</h3>
+              <p className="text-sm text-gray-600">
+                {selectedCreditsTrack.artists.map(a => a.name).join(', ')}
+              </p>
+            </div>
+            {creditsLoadingIds.has(selectedCreditsTrack.id) ? (
+              <div className="text-sm text-gray-600">Loading credits...</div>
+            ) : creditsErrorByTrackId[selectedCreditsTrack.id] ? (
+              <div className="text-sm text-red-600">{creditsErrorByTrackId[selectedCreditsTrack.id]}</div>
+            ) : (
+              <div className="space-y-4 text-sm text-gray-700">
+                <div>
+                  <div className="font-semibold text-gray-900">Primary Performer</div>
+                  {creditsByTrackId[selectedCreditsTrack.id]?.performers?.length ? (
+                    <div>{creditsByTrackId[selectedCreditsTrack.id].performers.join(', ')}</div>
+                  ) : (
+                    <div className="text-gray-400">Not available</div>
+                  )}
+                </div>
+                <div>
+                  <div className="font-semibold text-gray-900">Production Crew</div>
+                  {creditsByTrackId[selectedCreditsTrack.id]?.production?.length ? (
+                    <div>{creditsByTrackId[selectedCreditsTrack.id].production.join(', ')}</div>
+                  ) : (
+                    <div className="text-gray-400">Not available</div>
+                  )}
+                </div>
+                <div>
+                  <div className="font-semibold text-gray-900">Composition</div>
+                  {creditsByTrackId[selectedCreditsTrack.id]?.composition?.length ? (
+                    <div>{creditsByTrackId[selectedCreditsTrack.id].composition.join(', ')}</div>
+                  ) : (
+                    <div className="text-gray-400">Not available</div>
+                  )}
+                </div>
+              </div>
+            )}
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setShowCreditsModal(false)}
+                className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       
       {/* Cache Info Modal */}

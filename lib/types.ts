@@ -30,6 +30,9 @@ export interface SpotifyTrack {
   external_urls: {
     spotify: string
   }
+  external_ids?: {
+    isrc?: string
+  }
   preview_url?: string | null
   added_at?: string
   tempo?: number | null
@@ -156,5 +159,4 @@ export interface PlaylistCacheResponse {
   isCached: boolean
   cachedAt?: Date
 }
-
 

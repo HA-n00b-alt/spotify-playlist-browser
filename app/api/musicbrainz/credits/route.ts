@@ -1,23 +1,19 @@
 import { NextResponse } from 'next/server'
 
-function sanitizeQuery(value: string) {
-  return value.replace(/"/g, '\\"').trim()
-}
-
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
-  const title = searchParams.get('title')
-  const artist = searchParams.get('artist')
+  const isrc = searchParams.get('isrc')
 
-  if (!title || !artist) {
+  if (!isrc) {
     return NextResponse.json(
-      { error: 'Missing title or artist parameter' },
+      { error: 'Missing isrc parameter' },
       { status: 400 }
     )
   }
 
-  const query = `recording:"${sanitizeQuery(title)}" AND artist:"${sanitizeQuery(artist)}"`
-  const url = `https://musicbrainz.org/ws/2/recording/?query=${encodeURIComponent(query)}&fmt=json&limit=1`
+  const url =
+    `https://musicbrainz.org/ws/2/isrc/${encodeURIComponent(isrc)}` +
+    `?fmt=json&inc=artist-credits+recording-rels+work-rels`
   const userAgent =
     process.env.MUSICBRAINZ_USER_AGENT ?? 'spotify-playlist-browser/1.0 (https://example.com)'
 
@@ -39,8 +35,9 @@ export async function GET(request: Request) {
     }
 
     const data = await response.json()
-    const artistCredit = data?.recordings?.[0]?.['artist-credit']
-    const credits = Array.isArray(artistCredit)
+    const recording = data?.recordings?.[0]
+    const artistCredit = recording?.['artist-credit']
+    const performers = Array.isArray(artistCredit)
       ? Array.from(
           new Set(
             artistCredit
@@ -54,7 +51,60 @@ export async function GET(request: Request) {
         )
       : []
 
-    return NextResponse.json({ credits })
+    const recordingRelations = Array.isArray(recording?.relations) ? recording.relations : []
+    const productionRoles = new Set(['producer', 'mixer', 'engineer'])
+    const compositionRoles = new Set(['composer', 'lyricist'])
+
+    const production = Array.from(
+      new Set(
+        recordingRelations
+          .filter((rel: any) => productionRoles.has(String(rel?.type).toLowerCase()))
+          .map((rel: any) => {
+            if (typeof rel?.artist?.name === 'string') return rel.artist.name
+            if (typeof rel?.name === 'string') return rel.name
+            return null
+          })
+          .filter(Boolean)
+      )
+    )
+
+    const composition = Array.from(
+      new Set(
+        recordingRelations
+          .filter((rel: any) => compositionRoles.has(String(rel?.type).toLowerCase()))
+          .map((rel: any) => {
+            if (typeof rel?.artist?.name === 'string') return rel.artist.name
+            if (typeof rel?.name === 'string') return rel.name
+            return null
+          })
+          .filter(Boolean)
+      )
+    )
+
+    // Some work relations include nested work->relations with composer/lyricist credits.
+    const workRelations = recordingRelations.filter((rel: any) => rel?.work?.relations)
+    for (const rel of workRelations) {
+      const workRels = Array.isArray(rel.work?.relations) ? rel.work.relations : []
+      for (const workRel of workRels) {
+        const role = String(workRel?.type).toLowerCase()
+        if (!compositionRoles.has(role)) continue
+        const name =
+          typeof workRel?.artist?.name === 'string'
+            ? workRel.artist.name
+            : typeof workRel?.name === 'string'
+              ? workRel.name
+              : null
+        if (name) composition.push(name)
+      }
+    }
+
+    const uniqueComposition = Array.from(new Set(composition))
+
+    return NextResponse.json({
+      performers,
+      production,
+      composition: uniqueComposition,
+    })
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Unknown error' },
