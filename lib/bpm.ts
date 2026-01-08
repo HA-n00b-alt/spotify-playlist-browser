@@ -111,7 +111,10 @@ async function extractSpotifyIdentifiers(spotifyTrackId: string): Promise<{
   
   return {
     isrc: track.external_ids?.isrc || null,
-    title: track.name,
+    title: track.name
+      .replace(/\s*[\(\[][^\)\]]*[\)\]]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim(),
     artists: track.artists.map((a: any) => a.name).join(' '),
     spotifyPreviewUrl: track.preview_url || null,
   }

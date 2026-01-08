@@ -2559,7 +2559,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               <option value="all">All</option>
             </select>
             {pageSize !== 'all' && (
-              <div className="flex items-center gap-2 ml-auto text-xs sm:text-sm text-gray-600">
+              <div
+                className={`flex items-center gap-2 ml-auto text-xs sm:text-sm text-gray-600 ${
+                  totalPages <= 1 ? 'opacity-50 pointer-events-none' : ''
+                }`}
+              >
                 <button
                   onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
                   disabled={safePage <= 1}
@@ -3147,8 +3151,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         <div className="mt-4 text-xs sm:text-sm text-gray-600">
           Showing {paginatedTracks.length} of {tracks.length} tracks
         </div>
-        {pageSize !== 'all' && totalPages > 1 && (
-          <div className="mt-3 flex items-center justify-end gap-2 text-xs sm:text-sm text-gray-600">
+        {pageSize !== 'all' && (
+          <div
+            className={`mt-3 flex items-center justify-end gap-2 text-xs sm:text-sm text-gray-600 ${
+              totalPages <= 1 ? 'opacity-50 pointer-events-none' : ''
+            }`}
+          >
             <button
               onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
               disabled={safePage <= 1}
