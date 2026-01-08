@@ -31,8 +31,7 @@ CREATE TABLE IF NOT EXISTS track_bpm_cache (
   source TEXT NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   error TEXT,
-  urls_tried JSONB, -- Array of URLs that were attempted to find preview audio
-  successful_url TEXT, -- URL that successfully provided preview audio (null if all failed)
+  urls JSONB, -- Array of preview URLs with success flag
   isrc_mismatch BOOLEAN DEFAULT FALSE, -- True when ISRC from search results doesn't match Spotify ISRC
   debug_txt TEXT, -- Debug information from BPM service
   CONSTRAINT unique_spotify_track UNIQUE (spotify_track_id)
@@ -45,8 +44,7 @@ CREATE INDEX IF NOT EXISTS idx_track_bpm_cache_updated_at ON track_bpm_cache(upd
 
 COMMENT ON TABLE track_bpm_cache IS 'Cache for BPM values computed from audio previews. Source can be: deezer_isrc, itunes_search, deezer_search, computed_failed';
 COMMENT ON COLUMN track_bpm_cache.isrc IS 'International Standard Recording Code from Spotify, used for cross-platform track matching';
-COMMENT ON COLUMN track_bpm_cache.urls_tried IS 'Array of URLs that were attempted to find preview audio';
-COMMENT ON COLUMN track_bpm_cache.successful_url IS 'URL that successfully provided preview audio (null if all failed)';
+COMMENT ON COLUMN track_bpm_cache.urls IS 'Array of preview URLs with success flag';
 COMMENT ON COLUMN track_bpm_cache.isrc_mismatch IS 'True when ISRC from iTunes/Deezer search results does not match Spotify ISRC, may affect BPM accuracy';
 COMMENT ON COLUMN track_bpm_cache.bpm_essentia IS 'BPM value from Essentia analysis (normalized, integer)';
 COMMENT ON COLUMN track_bpm_cache.bpm_raw_essentia IS 'Raw BPM value from Essentia analysis (before normalization)';
@@ -162,4 +160,3 @@ COMMENT ON TABLE playlist_order IS 'Stores custom display order for playlists pe
 COMMENT ON COLUMN playlist_order.spotify_user_id IS 'Spotify user ID to identify the user';
 COMMENT ON COLUMN playlist_order.playlist_id IS 'Spotify playlist ID';
 COMMENT ON COLUMN playlist_order.display_order IS 'Custom display order (lower numbers appear first)';
-

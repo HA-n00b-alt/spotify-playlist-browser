@@ -378,7 +378,7 @@ Stores BPM, key, scale, and related metadata for tracks.
 - `bpm`, `bpm_raw` - BPM values
 - `key`, `scale`, `key_confidence` - Musical key information
 - `source` - Data source (deezer_isrc, itunes_search, deezer_search, computed_failed)
-- `urls_tried`, `successful_url` - Preview URL tracking
+- `urls` - Preview URL tracking with success flag
 - `isrc_mismatch` - Flag for ISRC mismatches
 
 **Indexes:**
@@ -897,4 +897,3 @@ lib/
 
 **Last Updated**: January 2025
 **Maintained By**: delman@delman.it
-

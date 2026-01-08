@@ -16,7 +16,8 @@ import type {
   SortField, 
   SortDirection,
   BpmResult,
-  BpmDetails
+  BpmDetails,
+  PreviewUrlEntry
 } from '@/lib/types'
 import { 
   AuthenticationError, 
@@ -342,18 +343,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     }
   }
 
-  const getPreviewUrlFromMeta = (meta: { successfulUrl?: string | null; urlsTried?: string[] }) => {
+  const getPreviewUrlFromMeta = (meta: { urls?: PreviewUrlEntry[] }) => {
     if (!meta) return null
-    const previewUrlFromTried = meta.urlsTried?.filter((url: string) => {
-      const isDeezerUrl = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
-      const isAudioFile = url.includes('.mp3') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('/preview')
-      const isNotApiEndpoint = !url.includes('api.deezer.com/search') && !url.includes('api.deezer.com/album') && !url.includes('api.deezer.com/track')
-      return isDeezerUrl && isAudioFile && isNotApiEndpoint
-    })
-    if (previewUrlFromTried && previewUrlFromTried.length > 0) {
-      return previewUrlFromTried[previewUrlFromTried.length - 1]
-    }
-    return meta.successfulUrl || null
+    const successful = meta.urls?.find((entry) => entry.successful)
+    return successful?.url || null
   }
 
   const selectBestBpm = (
@@ -496,58 +489,24 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               },
             }))
           }
-          // Store successful preview URL from DB
-          // For Deezer, prefer a URL from urlsTried if available (might be more recent/valid)
-          if (r.successfulUrl) {
-            // Check if it's a Deezer URL and if we have urlsTried with Deezer URLs
-            const isDeezerSuccessful = r.successfulUrl && (
-              r.successfulUrl.includes('deezer.com') || 
-              r.successfulUrl.includes('cdn-preview') || 
-              r.successfulUrl.includes('cdnt-preview')
-            )
-            
-            if (isDeezerSuccessful && r.urlsTried && Array.isArray(r.urlsTried)) {
-              // Find Deezer API search URLs in urlsTried
-              const deezerApiUrls = r.urlsTried.filter((url: string) => 
-                url.includes('api.deezer.com/search') || url.includes('api.deezer.com/album')
-              )
-              if (deezerApiUrls.length > 0) {
-                // Store the API URL - we'll fetch it when needed to get the preview URL
-                // For now, mark it so we know to fetch it later
-                newPreviewUrls[trackId] = deezerApiUrls[deezerApiUrls.length - 1] // Store API URL temporarily
-              } else {
-                // Check for direct preview URLs
-                const deezerPreviewUrls = r.urlsTried.filter((url: string) => {
-                  const isDeezerUrl = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
-                  const isAudioFile = url.includes('.mp3') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('/preview')
-                  const isNotApiEndpoint = !url.includes('api.deezer.com/search') && !url.includes('api.deezer.com/album') && !url.includes('api.deezer.com/track')
-                  return isDeezerUrl && isAudioFile && isNotApiEndpoint
-                })
-                if (deezerPreviewUrls.length > 0) {
-                  newPreviewUrls[trackId] = deezerPreviewUrls[deezerPreviewUrls.length - 1]
-                } else {
-                  newPreviewUrls[trackId] = r.successfulUrl
-                }
-              }
-            } else {
-              newPreviewUrls[trackId] = r.successfulUrl
-            }
+          const previewUrlFromMeta = getPreviewUrlFromMeta({ urls: r.urls })
+          if (previewUrlFromMeta) {
+            newPreviewUrls[trackId] = previewUrlFromMeta
           }
           // Always store details if available (source, error, urls)
-          if (r.source || r.error || r.urlsTried || r.successfulUrl) {
+          if (r.source || r.error || r.urls) {
             newDetails[trackId] = {
               source: r.source,
               error: r.error,
             }
           }
           // Store debug info including URLs
-          if (r.source || r.error || r.urlsTried || r.successfulUrl) {
+          if (r.source || r.error || r.urls) {
             setBpmDebugInfo(prev => ({
               ...prev,
               [trackId]: {
                 ...r,
-                urlsTried: r.urlsTried || [],
-                successfulUrl: r.successfulUrl || null,
+                urls: r.urls || [],
               },
             }))
           }
@@ -719,11 +678,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             ...prev,
             [trackId]: {
               ...r,
-              urlsTried: r.urlsTried || [],
-              successfulUrl: r.successfulUrl || null,
+              urls: r.urls || [],
             },
           }))
-          const previewUrl = getPreviewUrlFromMeta(r)
+          const previewUrl = getPreviewUrlFromMeta({ urls: r.urls })
           if (previewUrl) {
             setPreviewUrls(prev => ({ ...prev, [trackId]: previewUrl }))
           }
@@ -899,8 +857,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             [trackId]: {
               ...data,
               source: meta.source,
-              urlsTried: meta.urlsTried || [],
-              successfulUrl: meta.successfulUrl || null,
+              urls: meta.urls || [],
             },
           }))
           const previewUrl = getPreviewUrlFromMeta(meta)
@@ -1058,11 +1015,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   [track.id]: data.scale || null,
                 }))
               }
-              // Store successful preview URL from DB
-              if (data.successfulUrl) {
+              const previewUrl = getPreviewUrlFromMeta({ urls: data.urls })
+              if (previewUrl) {
                 setPreviewUrls(prev => ({
                   ...prev,
-                  [track.id]: data.successfulUrl,
+                  [track.id]: previewUrl,
                 }))
               }
               setBpmDetails(prev => ({
@@ -1103,8 +1060,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 ...prev,
                 [track.id]: {
                   ...data,
-                  urlsTried: data.urlsTried || [],
-                  successfulUrl: data.successfulUrl || null,
+                  urls: data.urls || [],
                 },
               }))
               // Mark track as in DB (now it has an entry, whether BPM or N/A)
@@ -1154,8 +1110,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 ...prev,
                 [track.id]: {
                   ...errorData,
-                  urlsTried: errorData.urlsTried || [],
-                  successfulUrl: errorData.successfulUrl || null,
+                  urls: errorData.urls || [],
                 },
               }))
               setBpmStreamStatus(prev => ({ ...prev, [track.id]: 'error' }))
@@ -1577,56 +1532,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         const res = await fetch(`/api/bpm?spotifyTrackId=${track.id}&country=${countryCode}`)
         if (res.ok) {
           const data = await res.json()
-          console.log('[Preview Debug] handleTrackClick - BPM API response successfulUrl:', data.successfulUrl)
-          console.log('[Preview Debug] handleTrackClick - BPM API response urlsTried:', data.urlsTried)
-          // Store the successful URL if found
-          // For Deezer, prefer a URL from urlsTried if available
-          if (data.successfulUrl) {
-            const isDeezerSuccessful = data.successfulUrl && (
-              data.successfulUrl.includes('deezer.com') || 
-              data.successfulUrl.includes('cdn-preview') || 
-              data.successfulUrl.includes('cdnt-preview')
-            )
-            
-            if (isDeezerSuccessful && data.urlsTried && Array.isArray(data.urlsTried)) {
-              // Find Deezer API search URLs in urlsTried
-              const deezerApiUrls = data.urlsTried.filter((url: string) => 
-                url.includes('api.deezer.com/search') || url.includes('api.deezer.com/album')
-              )
-              if (deezerApiUrls.length > 0) {
-                // Use the API URL - we'll fetch it when loading audio to get the preview URL
-                previewUrl = deezerApiUrls[deezerApiUrls.length - 1]
-                console.log(`[Preview Debug] handleTrackClick - Using Deezer API URL from urlsTried (will fetch preview):`, previewUrl)
-                setPreviewUrls(prev => ({
-                  ...prev,
-                  [track.id]: previewUrl,
-                }))
-              } else {
-                // Check for direct preview URLs
-                const deezerPreviewUrls = data.urlsTried.filter((url: string) => {
-                  const isDeezerUrl = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
-                  const isAudioFile = url.includes('.mp3') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('/preview')
-                  const isNotApiEndpoint = !url.includes('api.deezer.com/search') && !url.includes('api.deezer.com/album') && !url.includes('api.deezer.com/track')
-                  return isDeezerUrl && isAudioFile && isNotApiEndpoint
-                })
-                if (deezerPreviewUrls.length > 0) {
-                  previewUrl = deezerPreviewUrls[deezerPreviewUrls.length - 1]
-                  console.log(`[Preview Debug] handleTrackClick - Using Deezer preview URL from urlsTried:`, previewUrl)
-                } else {
-                  previewUrl = data.successfulUrl
-                }
-                setPreviewUrls(prev => ({
-                  ...prev,
-                  [track.id]: previewUrl,
-                }))
-              }
-            } else {
-              previewUrl = data.successfulUrl
-              setPreviewUrls(prev => ({
-                ...prev,
-                [track.id]: data.successfulUrl,
-              }))
-            }
+          console.log('[Preview Debug] handleTrackClick - BPM API response urls:', data.urls)
+          const previewUrlFromMeta = getPreviewUrlFromMeta({ urls: data.urls })
+          if (previewUrlFromMeta) {
+            previewUrl = previewUrlFromMeta
+            setPreviewUrls(prev => ({
+              ...prev,
+              [track.id]: previewUrlFromMeta,
+            }))
           }
         }
       } catch (error) {
@@ -1745,56 +1658,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         const res = await fetch(`/api/bpm?spotifyTrackId=${track.id}&country=${countryCode}`)
         if (res.ok) {
           const data = await res.json()
-          console.log('[Preview Debug] handleTrackTitleClick - BPM API response successfulUrl:', data.successfulUrl)
-          console.log('[Preview Debug] handleTrackTitleClick - BPM API response urlsTried:', data.urlsTried)
-          // Store the successful URL if found
-          // For Deezer, prefer a URL from urlsTried if available
-          if (data.successfulUrl) {
-            const isDeezerSuccessful = data.successfulUrl && (
-              data.successfulUrl.includes('deezer.com') || 
-              data.successfulUrl.includes('cdn-preview') || 
-              data.successfulUrl.includes('cdnt-preview')
-            )
-            
-            if (isDeezerSuccessful && data.urlsTried && Array.isArray(data.urlsTried)) {
-              // Find Deezer API search URLs in urlsTried
-              const deezerApiUrls = data.urlsTried.filter((url: string) => 
-                url.includes('api.deezer.com/search') || url.includes('api.deezer.com/album')
-              )
-              if (deezerApiUrls.length > 0) {
-                // Use the API URL - we'll fetch it when loading audio to get the preview URL
-                previewUrl = deezerApiUrls[deezerApiUrls.length - 1]
-                console.log(`[Preview Debug] handleTrackTitleClick - Using Deezer API URL from urlsTried (will fetch preview):`, previewUrl)
-                setPreviewUrls(prev => ({
-                  ...prev,
-                  [track.id]: previewUrl,
-                }))
-              } else {
-                // Check for direct preview URLs
-                const deezerPreviewUrls = data.urlsTried.filter((url: string) => {
-                  const isDeezerUrl = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
-                  const isAudioFile = url.includes('.mp3') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('/preview')
-                  const isNotApiEndpoint = !url.includes('api.deezer.com/search') && !url.includes('api.deezer.com/album') && !url.includes('api.deezer.com/track')
-                  return isDeezerUrl && isAudioFile && isNotApiEndpoint
-                })
-                if (deezerPreviewUrls.length > 0) {
-                  previewUrl = deezerPreviewUrls[deezerPreviewUrls.length - 1]
-                  console.log(`[Preview Debug] handleTrackTitleClick - Using Deezer preview URL from urlsTried:`, previewUrl)
-                } else {
-                  previewUrl = data.successfulUrl
-                }
-                setPreviewUrls(prev => ({
-                  ...prev,
-                  [track.id]: previewUrl,
-                }))
-              }
-            } else {
-              previewUrl = data.successfulUrl
-              setPreviewUrls(prev => ({
-                ...prev,
-                [track.id]: data.successfulUrl,
-              }))
-            }
+          console.log('[Preview Debug] handleTrackTitleClick - BPM API response urls:', data.urls)
+          const previewUrlFromMeta = getPreviewUrlFromMeta({ urls: data.urls })
+          if (previewUrlFromMeta) {
+            previewUrl = previewUrlFromMeta
+            setPreviewUrls(prev => ({
+              ...prev,
+              [track.id]: previewUrlFromMeta,
+            }))
           }
         }
       } catch (error) {
@@ -2111,10 +1982,21 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         aValue = a.added_at || ''
         bValue = b.added_at || ''
         break
-                    case 'tempo':
-                      aValue = trackBpms[a.id] ?? a.tempo ?? -1
-                      bValue = trackBpms[b.id] ?? b.tempo ?? -1
-                      break
+      case 'tempo': {
+        const rawA = trackBpms[a.id]
+        const rawB = trackBpms[b.id]
+        const fallbackA = a.tempo ?? -1
+        const fallbackB = b.tempo ?? -1
+        const parsedA = typeof rawA === 'string' ? Number(rawA) : rawA
+        const parsedB = typeof rawB === 'string' ? Number(rawB) : rawB
+        const normalizedA =
+          typeof parsedA === 'number' && !Number.isNaN(parsedA) ? parsedA : fallbackA
+        const normalizedB =
+          typeof parsedB === 'number' && !Number.isNaN(parsedB) ? parsedB : fallbackB
+        aValue = normalizedA
+        bValue = normalizedB
+        break
+      }
       case 'popularity':
         aValue = a.popularity ?? -1
         bValue = b.popularity ?? -1
@@ -2363,7 +2245,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 <div className="mt-2 text-xs bg-white p-2 rounded overflow-auto max-h-48">
                   {Object.entries(bpmDebugInfo)
                     .filter(([id, data]: [string, any]) => 
-                      data?.urlsTried && data.urlsTried.length > 0
+                      data?.urls && data.urls.length > 0
                     )
                     .slice(0, 10)
                     .map(([id, data]: [string, any]) => {
@@ -2376,22 +2258,19 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           ) : (
                             <p className="text-red-600 mb-1">✗ Error: {data.error || 'No preview found'}</p>
                           )}
-                          <p className="font-semibold mb-1">URLs tried ({data.urlsTried.length}):</p>
+                          <p className="font-semibold mb-1">URLs tried ({data.urls.length}):</p>
                           <ul className="list-disc list-inside space-y-1 text-gray-700">
-                            {data.urlsTried.map((url: string, idx: number) => (
-                              <li key={idx} className={`break-all ${url === data.successfulUrl ? 'text-green-600 font-semibold' : ''}`}>
-                                {url === data.successfulUrl ? '✓ ' : ''}{url}
+                            {data.urls.map((entry: PreviewUrlEntry, idx: number) => (
+                              <li key={idx} className={`break-all ${entry.successful ? 'text-green-600 font-semibold' : ''}`}>
+                                {entry.successful ? '✓ ' : ''}{entry.url}
                               </li>
                             ))}
                           </ul>
-                          {data.successfulUrl && (
-                            <p className="mt-1 text-green-600 text-xs">Successful URL: {data.successfulUrl}</p>
-                          )}
                         </div>
                       )
                     })}
                   {Object.entries(bpmDebugInfo).filter(([id, data]: [string, any]) => 
-                    data?.urlsTried && data.urlsTried.length > 0
+                    data?.urls && data.urls.length > 0
                   ).length === 0 && (
                     <p className="text-gray-500">No searches with URLs tracked yet.</p>
                   )}

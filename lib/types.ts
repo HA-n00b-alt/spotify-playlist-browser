@@ -89,13 +89,17 @@ export interface SpotifyPlaylistInfo {
 // BPM Types
 // ============================================================================
 
+export type PreviewUrlEntry = {
+  url: string
+  successful?: boolean
+}
+
 export interface BpmResult {
   bpm: number | null
   source: string
   upc?: string
   bpmRaw?: number
-  urlsTried?: string[]
-  successfulUrl?: string | null
+  urls?: Array<{ url: string; successful?: boolean }>
   error?: string
   cached?: boolean
   key?: string
@@ -152,7 +156,5 @@ export interface PlaylistCacheResponse {
   isCached: boolean
   cachedAt?: Date
 }
-
-
 
 

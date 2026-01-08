@@ -3,18 +3,21 @@ import { getTrack } from './spotify'
 import { GoogleAuth } from 'google-auth-library'
 import { isValidSpotifyTrackId } from './spotify-validation'
 
+type PreviewUrlEntry = {
+  url: string
+  successful?: boolean
+}
+
 interface PreviewUrlResult {
   url: string | null
   source: string
-  urlsTried: string[] // URLs that were attempted
-  successfulUrl: string | null // URL that succeeded (or null if all failed)
+  urls: PreviewUrlEntry[] // Preview URLs discovered from providers
   isrcMismatch?: boolean // True when ISRC from search results doesn't match Spotify ISRC
 }
 
 export interface StreamingPreviewMeta {
   source: string
-  urlsTried?: string[]
-  successfulUrl?: string | null
+  urls?: PreviewUrlEntry[]
   isrcMismatch?: boolean
 }
 
@@ -24,8 +27,7 @@ interface BpmResult {
   upc?: string
   bpmRaw?: number
   error?: string
-  urlsTried?: string[]
-  successfulUrl?: string | null
+  urls?: PreviewUrlEntry[]
   key?: string
   scale?: string
   keyConfidence?: number
@@ -77,8 +79,7 @@ interface CacheRecord {
   source: string
   updated_at: Date
   error: string | null
-  urls_tried?: string[] | null
-  successful_url?: string | null
+  urls?: PreviewUrlEntry[] | null
   isrc_mismatch: boolean
   debug_txt: string | null
 }
@@ -263,23 +264,99 @@ function getCountryCodeFromRequest(request?: Request): string {
   return 'us' // Default to US
 }
 
-function getPreviewUrlToReturn(
-  successfulUrl: string | null | undefined,
-  urlsTried: string[] | undefined
-): string | null | undefined {
-  let previewUrlToReturn = successfulUrl || undefined
-  if (urlsTried && Array.isArray(urlsTried) && urlsTried.length > 0) {
-    const deezerPreviewUrls = urlsTried.filter((url: string) => {
-      const isDeezerUrl = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
-      const isAudioFile = url.includes('.mp3') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('/preview')
-      const isNotApiEndpoint = !url.includes('api.deezer.com/search') && !url.includes('api.deezer.com/album') && !url.includes('api.deezer.com/track')
-      return isDeezerUrl && isAudioFile && isNotApiEndpoint
+function getSuccessfulPreviewUrl(urls: PreviewUrlEntry[] | undefined): string | null {
+  if (!urls || urls.length === 0) {
+    return null
+  }
+  const successful = urls.find((entry) => entry.successful)
+  return successful ? successful.url : null
+}
+
+async function checkPreviewUrl(url: string): Promise<boolean> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 4000)
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { Range: 'bytes=0-1' },
+      signal: controller.signal,
     })
-    if (deezerPreviewUrls.length > 0) {
-      previewUrlToReturn = deezerPreviewUrls[deezerPreviewUrls.length - 1]
+    return response.ok || response.status === 206
+  } catch {
+    return false
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+export async function ensureSuccessfulPreviewUrlForTrack(params: {
+  spotifyTrackId: string
+  urls: PreviewUrlEntry[] | undefined
+  error?: string | null
+  allowProbe?: boolean
+}): Promise<{ urls: PreviewUrlEntry[] | undefined; error?: string | null }> {
+  const { spotifyTrackId, urls, error, allowProbe = true } = params
+  if (!urls || urls.length === 0) {
+    return { urls, error }
+  }
+  if (urls.some((entry) => entry.successful)) {
+    return { urls, error }
+  }
+
+  if (urls.length === 1) {
+    const updatedUrls = [{ ...urls[0], successful: true }]
+    await query(
+      `UPDATE track_bpm_cache
+       SET urls = $1::jsonb,
+           error = COALESCE($2, error),
+           updated_at = NOW()
+       WHERE spotify_track_id = $3`,
+      [JSON.stringify(updatedUrls), error ?? null, spotifyTrackId]
+    )
+    return { urls: updatedUrls, error }
+  }
+
+  if (!allowProbe) {
+    return { urls, error }
+  }
+
+  let updatedUrls: PreviewUrlEntry[] = urls.map((entry) => ({ ...entry }))
+  let successfulIndex = -1
+  for (let i = 0; i < updatedUrls.length; i += 1) {
+    const ok = await checkPreviewUrl(updatedUrls[i].url)
+    updatedUrls[i].successful = ok
+    if (ok) {
+      successfulIndex = i
+      break
     }
   }
-  return previewUrlToReturn
+
+  if (successfulIndex >= 0) {
+    updatedUrls = updatedUrls.map((entry, index) => ({
+      ...entry,
+      successful: index === successfulIndex,
+    }))
+    await query(
+      `UPDATE track_bpm_cache
+       SET urls = $1::jsonb,
+           error = COALESCE($2, error),
+           updated_at = NOW()
+       WHERE spotify_track_id = $3`,
+      [JSON.stringify(updatedUrls), error ?? null, spotifyTrackId]
+    )
+    return { urls: updatedUrls, error }
+  }
+
+  const finalError = error || 'No preview audio available from any source (iTunes, Deezer)'
+  await query(
+    `UPDATE track_bpm_cache
+     SET urls = $1::jsonb,
+         error = $2,
+         updated_at = NOW()
+     WHERE spotify_track_id = $3`,
+    [JSON.stringify(updatedUrls), finalError, spotifyTrackId]
+  )
+  return { urls: updatedUrls, error: finalError }
 }
 
 /**
@@ -297,14 +374,13 @@ async function resolvePreviewUrl(params: {
   
   console.log(`[BPM Module] Resolving preview URL for: "${title}" by "${artists}" (ISRC: ${isrc || 'none'}, Country: ${countryCode})`)
   
-  const urlsTried: string[] = []
+  const urls: PreviewUrlEntry[] = []
   
   // 1. Try Deezer ISRC lookup (most accurate)
   if (isrc) {
     try {
       console.log(`[BPM Module] Trying Deezer ISRC lookup for: ${isrc}`)
       const deezerIsrcUrl = `https://api.deezer.com/track/isrc:${encodeURIComponent(isrc)}`
-      urlsTried.push(deezerIsrcUrl)
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 5000)
       
@@ -318,11 +394,11 @@ async function resolvePreviewUrl(params: {
           const trackData = await response.json() as any
           if (trackData.id && trackData.preview) {
             console.log(`[BPM Module] Found Deezer preview URL via ISRC`)
+            urls.push({ url: trackData.preview, successful: true })
             return { 
               url: trackData.preview, 
               source: 'deezer_isrc', 
-              urlsTried,
-              successfulUrl: trackData.preview,
+              urls,
               isrcMismatch: false // ISRC lookup is always accurate
             }
           }
@@ -343,7 +419,7 @@ async function resolvePreviewUrl(params: {
     console.log(`[BPM Module] Trying iTunes search for: "${artists} ${title}"`)
     const searchTerm = `${artists} ${title}`
     const itunesSearchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(searchTerm)}&media=music&entity=song&country=${countryCode}&limit=20`
-    urlsTried.push(itunesSearchUrl)
+    // track iTunes search attempt only via preview URL if found
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 5000)
     
@@ -378,22 +454,26 @@ async function resolvePreviewUrl(params: {
                 console.log(`[BPM Module] No iTunes track with matching ISRC - treating as error`)
                 isrcMismatch = true
                 // Don't return the URL if ISRC doesn't match - treat as error
+                if (selectedTrack.previewUrl) {
+                  urls.push({ url: selectedTrack.previewUrl, successful: false })
+                }
                 return { 
                   url: null, 
                   source: 'computed_failed', 
-                  urlsTried,
-                  successfulUrl: null,
+                  urls,
                   isrcMismatch: true
                 }
               }
             }
             
             console.log(`[BPM Module] Found iTunes preview URL via search (ISRC mismatch: ${isrcMismatch})`)
+            if (selectedTrack.previewUrl) {
+              urls.push({ url: selectedTrack.previewUrl, successful: true })
+            }
             return { 
               url: selectedTrack.previewUrl, 
               source: 'itunes_search', 
-              urlsTried,
-              successfulUrl: selectedTrack.previewUrl,
+              urls,
               isrcMismatch
             }
           }
@@ -414,7 +494,7 @@ async function resolvePreviewUrl(params: {
     console.log(`[BPM Module] Trying Deezer search for: "${artists} ${title}"`)
     const deezerQuery = `${artists} ${title}`
     const deezerUrl = `https://api.deezer.com/search?q=${encodeURIComponent(deezerQuery)}&limit=10`
-    urlsTried.push(deezerUrl)
+    // track Deezer search attempt only via preview URL if found
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 5000)
     
@@ -446,22 +526,26 @@ async function resolvePreviewUrl(params: {
                 console.log(`[BPM Module] No Deezer track with matching ISRC - treating as error`)
                 isrcMismatch = true
                 // Don't return the URL if ISRC doesn't match - treat as error
+                if (selectedTrack.preview) {
+                  urls.push({ url: selectedTrack.preview, successful: false })
+                }
                 return { 
                   url: null, 
                   source: 'computed_failed', 
-                  urlsTried,
-                  successfulUrl: null,
+                  urls,
                   isrcMismatch: true
                 }
               }
             }
             
             console.log(`[BPM Module] Found Deezer preview URL (ISRC mismatch: ${isrcMismatch})`)
+            if (selectedTrack.preview) {
+              urls.push({ url: selectedTrack.preview, successful: true })
+            }
             return { 
               url: selectedTrack.preview, 
               source: 'deezer_search', 
-              urlsTried,
-              successfulUrl: selectedTrack.preview,
+              urls,
               isrcMismatch
             }
           }
@@ -479,7 +563,7 @@ async function resolvePreviewUrl(params: {
   
   // No preview URL found
   console.log(`[BPM Module] No preview URL found from any source`)
-  return { url: null, source: 'computed_failed', urlsTried, successfulUrl: null, isrcMismatch: false }
+  return { url: null, source: 'computed_failed', urls, isrcMismatch: false }
 }
 
 /**
@@ -762,8 +846,7 @@ async function storeInCache(params: {
   keyscaleConfidenceLibrosa?: number | null
   source: string
   error: string | null
-  urlsTried?: string[]
-  successfulUrl?: string | null
+  urls?: PreviewUrlEntry[]
   isrcMismatch?: boolean
   debugTxt?: string | null
   bpmSelected?: 'essentia' | 'librosa' | 'manual' | null
@@ -778,7 +861,7 @@ async function storeInCache(params: {
     bpmLibrosa, bpmRawLibrosa, bpmConfidenceLibrosa,
     keyEssentia, scaleEssentia, keyscaleConfidenceEssentia,
     keyLibrosa, scaleLibrosa, keyscaleConfidenceLibrosa,
-    source, error, urlsTried, successfulUrl, isrcMismatch = false,
+    source, error, urls, isrcMismatch = false,
     debugTxt,
     bpmSelected, bpmManual, keySelected, keyManual, scaleManual
   } = params
@@ -797,8 +880,8 @@ async function storeInCache(params: {
     [spotifyTrackId]
   )
   
-  // Convert urlsTried array to JSON for storage
-  const urlsTriedJson = urlsTried && urlsTried.length > 0 ? JSON.stringify(urlsTried) : null
+  // Convert urls array to JSON for storage
+  const urlsJson = urls && urls.length > 0 ? JSON.stringify(urls) : null
 
   if (existing.length > 0) {
     // Update existing record - preserve manual overrides and selected values unless explicitly updating
@@ -823,12 +906,11 @@ async function storeInCache(params: {
            key_selected = COALESCE($17, key_selected, 'essentia'),
            source = $18, 
            error = $19,
-           urls_tried = COALESCE($20::jsonb, urls_tried),
-           successful_url = COALESCE($21, successful_url),
-           isrc_mismatch = $22,
-           debug_txt = COALESCE($23, debug_txt),
+           urls = COALESCE($20::jsonb, urls),
+           isrc_mismatch = $21,
+           debug_txt = COALESCE($22, debug_txt),
            updated_at = NOW()
-       WHERE spotify_track_id = $24`,
+       WHERE spotify_track_id = $23`,
       [
         isrc, artist, title,
         bpmEssentia, bpmRawEssentia, bpmConfidenceEssentia,
@@ -836,7 +918,7 @@ async function storeInCache(params: {
         keyEssentia, scaleEssentia, keyscaleConfidenceEssentia,
         keyLibrosa, scaleLibrosa, keyscaleConfidenceLibrosa,
         finalBpmSelected, finalKeySelected,
-        source, error, urlsTriedJson, successfulUrl, isrcMismatch,
+        source, error, urlsJson, isrcMismatch,
         debugTxt,
         spotifyTrackId
       ]
@@ -851,9 +933,9 @@ async function storeInCache(params: {
         key_essentia, scale_essentia, keyscale_confidence_essentia,
         key_librosa, scale_librosa, keyscale_confidence_librosa,
         bpm_selected, bpm_manual, key_selected, key_manual, scale_manual,
-        source, error, urls_tried, successful_url, isrc_mismatch, 
+        source, error, urls, isrc_mismatch, 
         debug_txt, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24::jsonb, $25, $26, $27, NOW())
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24::jsonb, $25, $26, NOW())
        ON CONFLICT (spotify_track_id) DO UPDATE SET
          isrc = COALESCE(EXCLUDED.isrc, track_bpm_cache.isrc),
          artist = EXCLUDED.artist,
@@ -874,8 +956,7 @@ async function storeInCache(params: {
          key_selected = COALESCE(EXCLUDED.key_selected, track_bpm_cache.key_selected, 'essentia'),
          source = EXCLUDED.source,
          error = EXCLUDED.error,
-         urls_tried = COALESCE(EXCLUDED.urls_tried, track_bpm_cache.urls_tried),
-         successful_url = COALESCE(EXCLUDED.successful_url, track_bpm_cache.successful_url),
+         urls = COALESCE(EXCLUDED.urls, track_bpm_cache.urls),
          isrc_mismatch = EXCLUDED.isrc_mismatch,
          debug_txt = COALESCE(EXCLUDED.debug_txt, track_bpm_cache.debug_txt),
          updated_at = NOW()`,
@@ -886,7 +967,7 @@ async function storeInCache(params: {
         keyEssentia, scaleEssentia, keyscaleConfidenceEssentia,
         keyLibrosa, scaleLibrosa, keyscaleConfidenceLibrosa,
         finalBpmSelected, bpmManual, finalKeySelected, keyManual, scaleManual,
-        source, error, urlsTriedJson, successfulUrl, isrcMismatch,
+        source, error, urlsJson, isrcMismatch,
         debugTxt
       ]
     )
@@ -904,8 +985,7 @@ export async function prepareBpmStreamingBatch(params: {
   immediateResults: Record<string, {
     source: string
     error: string
-    urlsTried?: string[]
-    successfulUrl?: string | null
+    urls?: PreviewUrlEntry[]
     isrcMismatch?: boolean
   }>
 }> {
@@ -917,8 +997,7 @@ export async function prepareBpmStreamingBatch(params: {
   const immediateResults: Record<string, {
     source: string
     error: string
-    urlsTried?: string[]
-    successfulUrl?: string | null
+    urls?: PreviewUrlEntry[]
     isrcMismatch?: boolean
   }> = {}
 
@@ -956,10 +1035,7 @@ export async function prepareBpmStreamingBatch(params: {
               errorMessage = 'No preview available on Deezer'
             }
 
-            const previewUrlToReturn = getPreviewUrlToReturn(
-              previewResult.successfulUrl,
-              previewResult.urlsTried
-            )
+            const previewUrlToReturn = getSuccessfulPreviewUrl(previewResult.urls)
 
             await storeInCache({
               spotifyTrackId,
@@ -968,8 +1044,7 @@ export async function prepareBpmStreamingBatch(params: {
               title: identifiers.title,
               source: previewResult.source,
               error: errorMessage,
-              urlsTried: previewResult.urlsTried,
-              successfulUrl: previewUrlToReturn ?? null,
+              urls: previewResult.urls,
               isrcMismatch: previewResult.isrcMismatch || false,
             })
 
@@ -977,24 +1052,19 @@ export async function prepareBpmStreamingBatch(params: {
               spotifyTrackId,
               error: errorMessage,
               source: previewResult.source,
-              urlsTried: previewResult.urlsTried,
-              successfulUrl: previewUrlToReturn ?? null,
+              urls: previewResult.urls,
               isrcMismatch: previewResult.isrcMismatch,
             }
           }
 
-          const previewUrlToReturn = getPreviewUrlToReturn(
-            previewResult.successfulUrl,
-            previewResult.urlsTried
-          )
+          const previewUrlToReturn = getSuccessfulPreviewUrl(previewResult.urls)
 
           return {
             spotifyTrackId,
             previewUrl: previewResult.url,
             previewMeta: {
               source: previewResult.source,
-              urlsTried: previewResult.urlsTried,
-              successfulUrl: previewUrlToReturn ?? null,
+              urls: previewResult.urls,
               isrcMismatch: previewResult.isrcMismatch,
             },
           }
@@ -1019,8 +1089,7 @@ export async function prepareBpmStreamingBatch(params: {
         immediateResults[result.spotifyTrackId] = {
           source: result.source || 'computed_failed',
           error: result.error,
-          urlsTried: 'urlsTried' in result ? result.urlsTried : undefined,
-          successfulUrl: 'successfulUrl' in result ? result.successfulUrl : undefined,
+          urls: 'urls' in result ? result.urls : undefined,
           isrcMismatch: 'isrcMismatch' in result ? result.isrcMismatch : undefined,
         }
       }
@@ -1071,8 +1140,7 @@ export async function storeStreamingBpmResult(params: {
     keyscaleConfidenceLibrosa: result.keyscale_confidence_librosa ?? null,
     source: previewMeta.source,
     error: null,
-    urlsTried: previewMeta.urlsTried,
-    successfulUrl: previewMeta.successfulUrl ?? null,
+    urls: previewMeta.urls,
     isrcMismatch: previewMeta.isrcMismatch || false,
     debugTxt: result.debug_txt ?? null,
   })
@@ -1131,13 +1199,13 @@ export async function getBpmForSpotifyTrack(
       const selectedBpm = cached ? getSelectedBpm(cached) : null
       if (cached && selectedBpm !== null) {
         console.log(`[BPM Module] Cache hit! Returning cached BPM: ${selectedBpm} (source: ${cached.source})`)
-        // Parse urls_tried from JSONB if present
-        let urlsTried: string[] | undefined
-        if (cached.urls_tried) {
+        // Parse urls JSONB if present
+        let urls: PreviewUrlEntry[] | undefined
+        if (cached.urls) {
           try {
-            urlsTried = Array.isArray(cached.urls_tried) ? cached.urls_tried : JSON.parse(cached.urls_tried as any)
+            urls = Array.isArray(cached.urls) ? cached.urls : JSON.parse(cached.urls as any)
           } catch (e) {
-            console.warn('[BPM Module] Error parsing urls_tried:', e)
+            console.warn('[BPM Module] Error parsing urls:', e)
           }
         }
         
@@ -1160,7 +1228,7 @@ export async function getBpmForSpotifyTrack(
               const bpmResult = await computeBpmFromService(previewResult.url)
               console.log(`[BPM Module] Key/scale fetched: key=${bpmResult.keyEssentia || bpmResult.keyLibrosa}, scale=${bpmResult.scaleEssentia || bpmResult.scaleLibrosa}`)
               
-              // Update cache with key/scale and potentially new successful_url
+              // Update cache with key/scale and new preview URLs
               await storeInCache({
                 spotifyTrackId,
                 isrc: identifiers.isrc,
@@ -1180,8 +1248,7 @@ export async function getBpmForSpotifyTrack(
                 keyscaleConfidenceLibrosa: bpmResult.keyscaleConfidenceLibrosa || cached.keyscale_confidence_librosa,
                 source: cached.source,
                 error: cached.error,
-                urlsTried: previewResult.urlsTried,
-                successfulUrl: previewResult.successfulUrl || cached.successful_url,
+                urls: previewResult.urls,
                 isrcMismatch: previewResult.isrcMismatch || cached.isrc_mismatch,
                 debugTxt: bpmResult.debugTxt || cached.debug_txt,
                 bpmSelected: cached.bpm_selected as 'essentia' | 'librosa' | 'manual' | null,
@@ -1200,27 +1267,14 @@ export async function getBpmForSpotifyTrack(
                   : { key: bpmResult.keyEssentia, scale: bpmResult.scaleEssentia }
                 : getSelectedKey(cached)
               
-              // For Deezer URLs, prefer a URL from urls_tried instead of successful_url
-              let previewUrlToReturn = previewResult.successfulUrl || cached.successful_url || undefined
-              if (previewResult.urlsTried && Array.isArray(previewResult.urlsTried) && previewResult.urlsTried.length > 0) {
-                const deezerPreviewUrls = previewResult.urlsTried.filter((url: string) => {
-                  const isDeezerUrl = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
-                  const isAudioFile = url.includes('.mp3') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('/preview')
-                  const isNotApiEndpoint = !url.includes('api.deezer.com/search') && !url.includes('api.deezer.com/album') && !url.includes('api.deezer.com/track')
-                  return isDeezerUrl && isAudioFile && isNotApiEndpoint
-                })
-                if (deezerPreviewUrls.length > 0) {
-                  previewUrlToReturn = deezerPreviewUrls[deezerPreviewUrls.length - 1]
-                  console.log(`[BPM Module] Using Deezer preview URL from urls_tried for key/scale backfill: ${previewUrlToReturn.substring(0, 100)}...`)
-                }
-              }
+              const previewUrlToReturn =
+                getSuccessfulPreviewUrl(previewResult.urls) || getSuccessfulPreviewUrl(urls) || undefined
               
               return {
                 bpm: updatedSelectedBpm,
                 source: cached.source,
                 bpmRaw: (cached.bpm_selected === 'librosa' && cached.bpm_raw_librosa) ? cached.bpm_raw_librosa : (cached.bpm_raw_essentia || undefined),
-                urlsTried: previewResult.urlsTried,
-                successfulUrl: previewUrlToReturn,
+                urls: previewResult.urls,
                 key: updatedSelectedKey.key || undefined,
                 scale: updatedSelectedKey.scale || undefined,
                 keyConfidence: (cached.key_selected === 'librosa' && cached.keyscale_confidence_librosa) ? cached.keyscale_confidence_librosa : (cached.keyscale_confidence_essentia || undefined),
@@ -1256,56 +1310,32 @@ export async function getBpmForSpotifyTrack(
         
         // If cached record has ISRC mismatch, treat as error
         if (cached.isrc_mismatch) {
-        // For Deezer URLs, prefer a URL from urls_tried instead of successful_url
-        let previewUrlToReturn = cached.successful_url || undefined
-        if (urlsTried && Array.isArray(urlsTried) && urlsTried.length > 0) {
-          const deezerPreviewUrls = urlsTried.filter((url: string) => {
-            const isDeezerUrl = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
-            const isAudioFile = url.includes('.mp3') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('/preview')
-            const isNotApiEndpoint = !url.includes('api.deezer.com/search') && !url.includes('api.deezer.com/album') && !url.includes('api.deezer.com/track')
-            return isDeezerUrl && isAudioFile && isNotApiEndpoint
+          const ensured = await ensureSuccessfulPreviewUrlForTrack({
+            spotifyTrackId,
+            urls,
+            error: cached.error,
           })
-          if (deezerPreviewUrls.length > 0) {
-            previewUrlToReturn = deezerPreviewUrls[deezerPreviewUrls.length - 1]
+          return {
+            bpm: null,
+            source: cached.source,
+            error: ensured.error || 'ISRC mismatch: Found preview URL but ISRC does not match Spotify track (wrong audio file)',
+            urls: ensured.urls,
           }
-        }
-        
-        return {
-          bpm: null,
-          source: cached.source,
-          error: cached.error || 'ISRC mismatch: Found preview URL but ISRC does not match Spotify track (wrong audio file)',
-          urlsTried,
-          successfulUrl: previewUrlToReturn,
-        }
         }
         
         const finalSelectedBpm = getSelectedBpm(cached)
         const finalSelectedKey = getSelectedKey(cached)
         
-        // For Deezer URLs, prefer a URL from urls_tried instead of successful_url
-        // because successful_url might be expired (403 error)
-        let previewUrlToReturn = cached.successful_url || undefined
-        if (urlsTried && Array.isArray(urlsTried) && urlsTried.length > 0) {
-          // Find Deezer preview URLs in urls_tried (not API endpoints)
-          const deezerPreviewUrls = urlsTried.filter((url: string) => {
-            const isDeezerUrl = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
-            const isAudioFile = url.includes('.mp3') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('/preview')
-            const isNotApiEndpoint = !url.includes('api.deezer.com/search') && !url.includes('api.deezer.com/album') && !url.includes('api.deezer.com/track')
-            return isDeezerUrl && isAudioFile && isNotApiEndpoint
-          })
-          if (deezerPreviewUrls.length > 0) {
-            // Use the last Deezer preview URL from urls_tried (most recent)
-            previewUrlToReturn = deezerPreviewUrls[deezerPreviewUrls.length - 1]
-            console.log(`[BPM Module] Using Deezer preview URL from urls_tried instead of successful_url: ${previewUrlToReturn.substring(0, 100)}...`)
-          }
-        }
-        
+        const ensured = await ensureSuccessfulPreviewUrlForTrack({
+          spotifyTrackId,
+          urls,
+          error: cached.error,
+        })
         return {
           bpm: finalSelectedBpm,
           source: cached.source,
           bpmRaw: (cached.bpm_selected === 'librosa' && cached.bpm_raw_librosa) ? cached.bpm_raw_librosa : (cached.bpm_raw_essentia || undefined),
-          urlsTried,
-          successfulUrl: previewUrlToReturn,
+          urls: ensured.urls,
           key: finalSelectedKey.key || undefined,
           scale: finalSelectedKey.scale || undefined,
           keyConfidence: (cached.key_selected === 'librosa' && cached.keyscale_confidence_librosa) ? cached.keyscale_confidence_librosa : (cached.keyscale_confidence_essentia || undefined),
@@ -1334,35 +1364,25 @@ export async function getBpmForSpotifyTrack(
       // If cached but bpm is null, return the error if available
       if (cached && selectedBpm === null) {
         console.log(`[BPM Module] Cache hit with null BPM. Source: ${cached.source}, Error: ${cached.error}`)
-        // Parse urls_tried from JSONB if present
-        let urlsTried: string[] | undefined
-        if (cached.urls_tried) {
+        let urls: PreviewUrlEntry[] | undefined
+        if (cached.urls) {
           try {
-            urlsTried = Array.isArray(cached.urls_tried) ? cached.urls_tried : JSON.parse(cached.urls_tried as any)
+            urls = Array.isArray(cached.urls) ? cached.urls : JSON.parse(cached.urls as any)
           } catch (e) {
-            console.warn('[BPM Module] Error parsing urls_tried:', e)
+            console.warn('[BPM Module] Error parsing urls:', e)
           }
         }
-        // For Deezer URLs, prefer a URL from urls_tried instead of successful_url
-        let previewUrlToReturn = cached.successful_url || undefined
-        if (urlsTried && Array.isArray(urlsTried) && urlsTried.length > 0) {
-          const deezerPreviewUrls = urlsTried.filter((url: string) => {
-            const isDeezerUrl = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
-            const isAudioFile = url.includes('.mp3') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('/preview')
-            const isNotApiEndpoint = !url.includes('api.deezer.com/search') && !url.includes('api.deezer.com/album') && !url.includes('api.deezer.com/track')
-            return isDeezerUrl && isAudioFile && isNotApiEndpoint
-          })
-          if (deezerPreviewUrls.length > 0) {
-            previewUrlToReturn = deezerPreviewUrls[deezerPreviewUrls.length - 1]
-          }
-        }
+        const ensured = await ensureSuccessfulPreviewUrlForTrack({
+          spotifyTrackId,
+          urls,
+          error: cached.error,
+        })
         
         return {
           bpm: null,
           source: cached.source,
-          error: cached.error || undefined,
-          urlsTried,
-          successfulUrl: previewUrlToReturn,
+          error: ensured.error || undefined,
+          urls: ensured.urls,
         }
       }
       console.log(`[BPM Module] Cache miss. Cached record:`, cached)
@@ -1405,31 +1425,15 @@ export async function getBpmForSpotifyTrack(
           title: identifiers.title,
           source: previewResult.source,
           error: errorMessage,
-          urlsTried: previewResult.urlsTried,
-          successfulUrl: previewResult.successfulUrl,
+          urls: previewResult.urls,
           isrcMismatch: previewResult.isrcMismatch || false,
         })
-        
-        // For Deezer URLs, prefer a URL from urls_tried instead of successful_url
-        let previewUrlToReturn = previewResult.successfulUrl
-        if (previewResult.urlsTried && Array.isArray(previewResult.urlsTried) && previewResult.urlsTried.length > 0) {
-          const deezerPreviewUrls = previewResult.urlsTried.filter((url: string) => {
-            const isDeezerUrl = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
-            const isAudioFile = url.includes('.mp3') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('/preview')
-            const isNotApiEndpoint = !url.includes('api.deezer.com/search') && !url.includes('api.deezer.com/album') && !url.includes('api.deezer.com/track')
-            return isDeezerUrl && isAudioFile && isNotApiEndpoint
-          })
-          if (deezerPreviewUrls.length > 0) {
-            previewUrlToReturn = deezerPreviewUrls[deezerPreviewUrls.length - 1]
-          }
-        }
-        
+
         return {
           bpm: null,
           source: previewResult.source,
           error: errorMessage,
-          urlsTried: previewResult.urlsTried,
-          successfulUrl: previewUrlToReturn,
+          urls: previewResult.urls,
         }
       }
       
@@ -1460,8 +1464,7 @@ export async function getBpmForSpotifyTrack(
           keyscaleConfidenceLibrosa: bpmResult.keyscaleConfidenceLibrosa || null,
           source: previewResult.source,
           error: null,
-          urlsTried: previewResult.urlsTried,
-          successfulUrl: previewResult.successfulUrl,
+          urls: previewResult.urls,
           isrcMismatch: previewResult.isrcMismatch || false,
           debugTxt: bpmResult.debugTxt || null,
         })
@@ -1493,27 +1496,11 @@ export async function getBpmForSpotifyTrack(
           ? bpmResult.keyscaleConfidenceLibrosa
           : (bpmResult.keyscaleConfidenceEssentia || null)
         
-        // For Deezer URLs, prefer a URL from urls_tried instead of successful_url
-        let previewUrlToReturn = previewResult.successfulUrl
-        if (previewResult.urlsTried && Array.isArray(previewResult.urlsTried) && previewResult.urlsTried.length > 0) {
-          const deezerPreviewUrls = previewResult.urlsTried.filter((url: string) => {
-            const isDeezerUrl = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
-            const isAudioFile = url.includes('.mp3') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('/preview')
-            const isNotApiEndpoint = !url.includes('api.deezer.com/search') && !url.includes('api.deezer.com/album') && !url.includes('api.deezer.com/track')
-            return isDeezerUrl && isAudioFile && isNotApiEndpoint
-          })
-          if (deezerPreviewUrls.length > 0) {
-            previewUrlToReturn = deezerPreviewUrls[deezerPreviewUrls.length - 1]
-            console.log(`[BPM Module] Using Deezer preview URL from urls_tried for new computation: ${previewUrlToReturn.substring(0, 100)}...`)
-          }
-        }
-        
         return {
           bpm: finalBpm,
           source: previewResult.source,
           bpmRaw: finalBpmRaw || undefined,
-          urlsTried: previewResult.urlsTried,
-          successfulUrl: previewUrlToReturn,
+          urls: previewResult.urls,
           key: finalKey || undefined,
           scale: finalScale || undefined,
           keyConfidence: finalKeyConfidence || undefined,
@@ -1557,8 +1544,7 @@ export async function getBpmForSpotifyTrack(
           title: identifiers.title,
           source: previewResult.source,
           error: errorMessage,
-          urlsTried: previewResult.urlsTried,
-          successfulUrl: previewResult.successfulUrl,
+          urls: previewResult.urls,
           isrcMismatch: previewResult.isrcMismatch || false,
         })
         

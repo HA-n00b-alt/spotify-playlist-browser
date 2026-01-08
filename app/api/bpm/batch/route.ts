@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { query } from '@/lib/db'
+import { ensureSuccessfulPreviewUrlForTrack } from '@/lib/bpm'
 import { trackApiRequest, getCurrentUserId } from '@/lib/analytics'
 import { logError, logInfo } from '@/lib/logger'
 
@@ -28,8 +29,7 @@ interface CacheRecord {
   source: string
   error: string | null
   updated_at: Date
-  urls_tried?: string[] | null
-  successful_url?: string | null
+  urls?: Array<{ url: string; successful?: boolean }> | null
   isrc_mismatch: boolean
   debug_txt: string | null
 }
@@ -99,7 +99,7 @@ export async function POST(request: Request) {
         key_essentia, scale_essentia, keyscale_confidence_essentia,
         key_librosa, scale_librosa, keyscale_confidence_librosa,
         bpm_selected, bpm_manual, key_selected, key_manual, scale_manual,
-        source, error, updated_at, urls_tried, successful_url, isrc_mismatch,
+        source, error, updated_at, urls, isrc_mismatch,
         debug_txt
        FROM track_bpm_cache 
        WHERE spotify_track_id = ANY($1)`,
@@ -134,8 +134,7 @@ export async function POST(request: Request) {
       source?: string
       bpmRaw?: number
       error?: string
-      urlsTried?: string[]
-      successfulUrl?: string | null
+      urls?: Array<{ url: string; successful?: boolean }>
       cached: boolean
       key?: string
       scale?: string
@@ -164,14 +163,30 @@ export async function POST(request: Request) {
       debugTxt?: string | null
     }> = {}
 
-    // Helper to parse urls_tried from JSONB
-    const parseUrlsTried = (urlsTried: any): string[] | undefined => {
-      if (!urlsTried) return undefined
+    // Helper to parse urls from JSONB
+    const parseUrls = (urls: any): Array<{ url: string; successful?: boolean }> | undefined => {
+      if (!urls) return undefined
       try {
-        return Array.isArray(urlsTried) ? urlsTried : JSON.parse(urlsTried)
+        return Array.isArray(urls) ? urls : JSON.parse(urls)
       } catch (e) {
         return undefined
       }
+    }
+
+    const ensureUrls = async (
+      trackId: string,
+      urls: Array<{ url: string; successful?: boolean }> | undefined,
+      errorMessage?: string | null
+    ) => {
+      if (!urls || urls.length === 0 || urls.some((entry) => entry.successful)) {
+        return { urls, error: errorMessage }
+      }
+      return await ensureSuccessfulPreviewUrlForTrack({
+        spotifyTrackId: trackId,
+        urls,
+        error: errorMessage,
+        allowProbe: false,
+      })
     }
 
     for (const trackId of limitedTrackIds) {
@@ -194,13 +209,14 @@ export async function POST(request: Request) {
         const selectedBpmConfidence = (cached.bpm_selected === 'librosa' && cached.bpm_confidence_librosa) 
           ? cached.bpm_confidence_librosa 
           : cached.bpm_confidence_essentia
+        const parsedUrls = parseUrls(cached.urls)
+        const ensured = await ensureUrls(trackId, parsedUrls, null)
         
         results[trackId] = {
           bpm: selectedBpm,
           source: cached.source,
           bpmRaw: selectedBpmRaw || undefined,
-          urlsTried: parseUrlsTried(cached.urls_tried),
-          successfulUrl: cached.successful_url || undefined,
+          urls: ensured.urls,
           cached: true,
           key: selectedKey.key || undefined,
           scale: selectedKey.scale || undefined,
@@ -235,15 +251,16 @@ export async function POST(request: Request) {
         }
         const selectedBpm = getSelectedBpm(errorRecord)
         const selectedKey = getSelectedKey(errorRecord)
+        const parsedUrls = parseUrls(errorRecord.urls)
+        const ensured = await ensureUrls(trackId, parsedUrls, errorMessage || null)
         results[trackId] = {
           bpm: selectedBpm,
           source: errorRecord.source,
           bpmRaw: (errorRecord.bpm_selected === 'librosa' && errorRecord.bpm_raw_librosa) 
             ? errorRecord.bpm_raw_librosa 
             : errorRecord.bpm_raw_essentia || undefined,
-          error: errorMessage || undefined,
-          urlsTried: parseUrlsTried(errorRecord.urls_tried),
-          successfulUrl: errorRecord.successful_url || undefined,
+          error: ensured.error || errorMessage || undefined,
+          urls: ensured.urls,
           cached: false, // Not valid cache, will need recalculation
           key: selectedKey.key || undefined,
           scale: selectedKey.scale || undefined,
@@ -282,15 +299,16 @@ export async function POST(request: Request) {
         }
         const selectedBpm = allCached.isrc_mismatch ? null : getSelectedBpm(allCached)
         const selectedKey = getSelectedKey(allCached)
+        const parsedUrls = parseUrls(allCached.urls)
+        const ensured = await ensureUrls(trackId, parsedUrls, errorMessage || null)
         results[trackId] = {
           bpm: selectedBpm, // Treat ISRC mismatch as null BPM
           source: allCached.source,
           bpmRaw: (allCached.bpm_selected === 'librosa' && allCached.bpm_raw_librosa) 
             ? allCached.bpm_raw_librosa 
             : allCached.bpm_raw_essentia || undefined,
-          error: errorMessage || undefined,
-          urlsTried: parseUrlsTried(allCached.urls_tried),
-          successfulUrl: allCached.successful_url || undefined,
+          error: ensured.error || errorMessage || undefined,
+          urls: ensured.urls,
           cached: false, // Not valid cache, will need recalculation
           key: selectedKey.key || undefined,
           scale: selectedKey.scale || undefined,
@@ -353,5 +371,3 @@ export async function POST(request: Request) {
     )
   }
 }
-
-
