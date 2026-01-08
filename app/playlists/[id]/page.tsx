@@ -178,7 +178,17 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       currentCache.clear()
     }
     
+    const handlePageHide = () => {
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.currentTime = 0
+      }
+      setPlayingTrackId(null)
+      audioRef.current = null
+    }
+
     window.addEventListener('beforeunload', handleBeforeUnload)
+    window.addEventListener('pagehide', handlePageHide)
     
     return () => {
       if (audioElement) {
@@ -193,6 +203,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       })
       cache.clear()
       window.removeEventListener('beforeunload', handleBeforeUnload)
+      window.removeEventListener('pagehide', handlePageHide)
     }
   }, [])
 
@@ -1626,6 +1637,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             previewUrl,
             trackName: track.name
           })
+          setPlayingTrackId(null)
+          audioRef.current = null
         })
       } catch (error) {
         console.error('[Preview Debug] handleTrackClick - Error loading audio:', error)
@@ -1639,6 +1652,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     } else {
       // No preview available from DB
       console.log('[Preview Debug] handleTrackClick - No preview URL available for track:', track.name)
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.currentTime = 0
+      }
+      setPlayingTrackId(null)
+      audioRef.current = null
     }
   }
 
@@ -1752,6 +1771,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             previewUrl,
             trackName: track.name
           })
+          setPlayingTrackId(null)
+          audioRef.current = null
           
           // If it's a Deezer URL that failed, clear it from previewUrls so we can try to refresh it
           if (previewUrl && (previewUrl.includes('deezer.com') || previewUrl.includes('cdn-preview') || previewUrl.includes('cdnt-preview'))) {
@@ -1775,6 +1796,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     } else {
       // No preview available from DB
       console.log('[Preview Debug] handleTrackTitleClick - No preview URL available for track:', track.name)
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.currentTime = 0
+      }
+      setPlayingTrackId(null)
+      audioRef.current = null
     }
   }
   
@@ -3120,6 +3147,27 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         <div className="mt-4 text-xs sm:text-sm text-gray-600">
           Showing {paginatedTracks.length} of {tracks.length} tracks
         </div>
+        {pageSize !== 'all' && totalPages > 1 && (
+          <div className="mt-3 flex items-center justify-end gap-2 text-xs sm:text-sm text-gray-600">
+            <button
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              disabled={safePage <= 1}
+              className="px-2 py-1 border border-gray-300 rounded disabled:text-gray-400 disabled:border-gray-200"
+            >
+              Prev
+            </button>
+            <span>
+              Page {safePage} of {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={safePage >= totalPages}
+              className="px-2 py-1 border border-gray-300 rounded disabled:text-gray-400 disabled:border-gray-200"
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
 
       {/* BPM More Info Modal */}
