@@ -59,6 +59,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [trackKeys, setTrackKeys] = useState<Record<string, string | null>>({})
   const [trackScales, setTrackScales] = useState<Record<string, string | null>>({})
   const [loadingBpms, setLoadingBpms] = useState<Set<string>>(new Set())
+  const [bpmStreamStatus, setBpmStreamStatus] = useState<Record<string, 'partial' | 'final' | 'error'>>({})
+  const streamAbortRef = useRef<AbortController | null>(null)
   const [showBpmDebug, setShowBpmDebug] = useState(false)
   const [bpmDebugInfo, setBpmDebugInfo] = useState<Record<string, any>>({})
   const [bpmDetails, setBpmDetails] = useState<Record<string, { source?: string; error?: string }>>({})
@@ -91,6 +93,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [bpmTracksCalculated, setBpmTracksCalculated] = useState<number>(0) // Track how many were actually calculated (not cached)
   const [retryStatus, setRetryStatus] = useState<{ loading: boolean; success?: boolean; error?: string } | null>(null)
   const [retryAttempted, setRetryAttempted] = useState(false)
+  const [retryTrackId, setRetryTrackId] = useState<string | null>(null)
   // State for manual override in modal
   const [manualBpm, setManualBpm] = useState<string>('')
   const [manualKey, setManualKey] = useState<string>('')
@@ -182,6 +185,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       })
       cache.clear()
       window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      streamAbortRef.current?.abort()
     }
   }, [])
   
@@ -328,6 +337,46 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     }
   }
 
+  const getPreviewUrlFromMeta = (meta: { successfulUrl?: string | null; urlsTried?: string[] }) => {
+    if (!meta) return null
+    const previewUrlFromTried = meta.urlsTried?.filter((url: string) => {
+      const isDeezerUrl = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
+      const isAudioFile = url.includes('.mp3') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('/preview')
+      const isNotApiEndpoint = !url.includes('api.deezer.com/search') && !url.includes('api.deezer.com/album') && !url.includes('api.deezer.com/track')
+      return isDeezerUrl && isAudioFile && isNotApiEndpoint
+    })
+    if (previewUrlFromTried && previewUrlFromTried.length > 0) {
+      return previewUrlFromTried[previewUrlFromTried.length - 1]
+    }
+    return meta.successfulUrl || null
+  }
+
+  const selectBestBpm = (
+    bpmEssentia: number | null | undefined,
+    bpmConfidenceEssentia: number | null | undefined,
+    bpmLibrosa: number | null | undefined,
+    bpmConfidenceLibrosa: number | null | undefined
+  ): 'essentia' | 'librosa' => {
+    if (bpmLibrosa == null) return 'essentia'
+    if (bpmEssentia == null) return 'librosa'
+    const essentiaConf = bpmConfidenceEssentia ?? 0
+    const librosaConf = bpmConfidenceLibrosa ?? 0
+    return librosaConf > essentiaConf ? 'librosa' : 'essentia'
+  }
+
+  const selectBestKey = (
+    keyEssentia: string | null | undefined,
+    keyscaleConfidenceEssentia: number | null | undefined,
+    keyLibrosa: string | null | undefined,
+    keyscaleConfidenceLibrosa: number | null | undefined
+  ): 'essentia' | 'librosa' => {
+    if (keyLibrosa == null) return 'essentia'
+    if (keyEssentia == null) return 'librosa'
+    const essentiaConf = keyscaleConfidenceEssentia ?? 0
+    const librosaConf = keyscaleConfidenceLibrosa ?? 0
+    return librosaConf > essentiaConf ? 'librosa' : 'essentia'
+  }
+
   // Fetch BPM for all tracks using batch endpoint
   useEffect(() => {
     if (tracks.length > 0 && Object.keys(trackBpms).length === 0) {
@@ -365,8 +414,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     const trackIds = tracks.map(t => t.id)
     if (trackIds.length === 0) return
 
-    // Mark all as loading
-    setLoadingBpms(new Set(trackIds))
+    // Reset loading before selectively streaming uncached tracks
+    setLoadingBpms(new Set())
+    setBpmStreamStatus({})
 
     try {
       console.log(`[BPM Client] Fetching BPM batch for ${trackIds.length} tracks`)
@@ -512,8 +562,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         // For tracks not in cache, fetch individually (but don't block UI)
         const uncachedTracks = tracks.filter(t => !data.results?.[t.id]?.cached)
         if (uncachedTracks.length > 0) {
-          console.log(`[BPM Client] Fetching ${uncachedTracks.length} uncached tracks individually`)
-          fetchBpmsForTracks(uncachedTracks)
+          console.log(`[BPM Client] Streaming ${uncachedTracks.length} uncached tracks`)
+          streamBpmsForTracks(uncachedTracks)
         } else if (uncachedTracks.length === 0 && cachedCount === tracks.length) {
           // All tracks were cached, no processing happened
           setBpmProcessingStartTime(null)
@@ -527,8 +577,296 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       console.error(`[BPM Client] Batch fetch error:`, error)
       // Fallback to individual fetching
       fetchBpmsForTracks(tracks)
+    }
+  }
+
+  const streamBpmsForTracks = async (tracksToFetch: Track[]) => {
+    const trackIds = tracksToFetch.map(track => track.id)
+    if (trackIds.length === 0) return
+
+    setLoadingBpms(prev => {
+      const next = new Set(prev)
+      trackIds.forEach(id => next.add(id))
+      return next
+    })
+
+    try {
+      const res = await fetch('/api/bpm/stream-batch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ trackIds, country: countryCode }),
+      })
+
+      if (!res.ok) {
+        console.error(`[BPM Client] Stream batch failed:`, res.status)
+        fetchBpmsForTracks(tracksToFetch)
+        return
+      }
+
+      const data = await res.json()
+      const immediateResults = data.immediateResults || {}
+      const previewMeta = data.previewMeta || {}
+
+      for (const [trackId, result] of Object.entries(immediateResults)) {
+        const r = result as any
+        setTrackBpms(prev => ({ ...prev, [trackId]: null }))
+        setBpmDetails(prev => ({
+          ...prev,
+          [trackId]: { source: r.source, error: r.error },
+        }))
+        setBpmDebugInfo(prev => ({
+          ...prev,
+          [trackId]: {
+            ...r,
+            urlsTried: r.urlsTried || [],
+            successfulUrl: r.successfulUrl || null,
+          },
+        }))
+        const previewUrl = getPreviewUrlFromMeta(r)
+        if (previewUrl) {
+          setPreviewUrls(prev => ({ ...prev, [trackId]: previewUrl }))
+        }
+        setBpmStreamStatus(prev => ({ ...prev, [trackId]: 'error' }))
+        setLoadingBpms(prev => {
+          const next = new Set(prev)
+          next.delete(trackId)
+          return next
+        })
+        setTracksInDb(prev => new Set(prev).add(trackId))
+        if (retryTrackId === trackId) {
+          setRetryStatus({ loading: false, success: false, error: r.error || 'BPM calculation failed' })
+          setRetryTrackId(null)
+        }
+      }
+
+      for (const [trackId, meta] of Object.entries(previewMeta)) {
+        const previewUrl = getPreviewUrlFromMeta(meta as any)
+        if (previewUrl) {
+          setPreviewUrls(prev => ({ ...prev, [trackId]: previewUrl }))
+        }
+      }
+
+      const indexToTrackIdEntries = Object.entries(data.indexToTrackId || {})
+      if (!data.batchId || indexToTrackIdEntries.length === 0) {
+        const fallbackTracks = tracksToFetch.filter(track => !immediateResults[track.id])
+        if (fallbackTracks.length > 0) {
+          fetchBpmsForTracks(fallbackTracks)
+        }
+        return
+      }
+
+      const indexToTrackId = new Map<number, string>()
+      for (const [indexStr, trackId] of indexToTrackIdEntries) {
+        indexToTrackId.set(Number(indexStr), trackId as string)
+      }
+
+      await streamBatchResults(data.batchId, indexToTrackId, previewMeta)
+    } catch (error) {
+      console.error('[BPM Client] Stream batch error:', error)
+      fetchBpmsForTracks(tracksToFetch)
+    }
+  }
+
+  const streamBatchResults = async (
+    batchId: string,
+    indexToTrackId: Map<number, string>,
+    previewMeta: Record<string, any>
+  ) => {
+    if (streamAbortRef.current) {
+      streamAbortRef.current.abort()
+    }
+
+    const abortController = new AbortController()
+    streamAbortRef.current = abortController
+    const finalizedTracks = new Set<string>()
+
+    try {
+      const response = await fetch(`/api/stream/${batchId}`, {
+        signal: abortController.signal,
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+        throw new Error(errorData.error || `HTTP ${response.status}`)
+      }
+
+      if (!response.body) {
+        throw new Error('No response body')
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      const handleStreamResult = async (data: any) => {
+        if (typeof data.index !== 'number') return
+        const trackId = indexToTrackId.get(data.index)
+        if (!trackId) return
+
+        const meta = previewMeta[trackId]
+        const bpmSelected = selectBestBpm(
+          data.bpm_essentia,
+          data.bpm_confidence_essentia,
+          data.bpm_librosa,
+          data.bpm_confidence_librosa
+        )
+        const keySelected = selectBestKey(
+          data.key_essentia,
+          data.keyscale_confidence_essentia,
+          data.key_librosa,
+          data.keyscale_confidence_librosa
+        )
+
+        const selectedBpm =
+          bpmSelected === 'librosa'
+            ? data.bpm_librosa ?? data.bpm_essentia ?? null
+            : data.bpm_essentia ?? data.bpm_librosa ?? null
+
+        const selectedKey =
+          keySelected === 'librosa'
+            ? data.key_librosa ?? data.key_essentia ?? null
+            : data.key_essentia ?? data.key_librosa ?? null
+
+        const selectedScale =
+          keySelected === 'librosa'
+            ? data.scale_librosa ?? data.scale_essentia ?? null
+            : data.scale_essentia ?? data.scale_librosa ?? null
+
+        setTrackBpms(prev => ({ ...prev, [trackId]: selectedBpm }))
+        if (selectedKey != null) {
+          setTrackKeys(prev => ({ ...prev, [trackId]: selectedKey }))
+        }
+        if (selectedScale != null) {
+          setTrackScales(prev => ({ ...prev, [trackId]: selectedScale }))
+        }
+
+        setBpmFullData(prev => ({
+          ...prev,
+          [trackId]: {
+            ...prev[trackId],
+            bpmEssentia: data.bpm_essentia !== undefined ? data.bpm_essentia : prev[trackId]?.bpmEssentia,
+            bpmRawEssentia: data.bpm_raw_essentia !== undefined ? data.bpm_raw_essentia : prev[trackId]?.bpmRawEssentia,
+            bpmConfidenceEssentia: data.bpm_confidence_essentia !== undefined ? data.bpm_confidence_essentia : prev[trackId]?.bpmConfidenceEssentia,
+            bpmLibrosa: data.bpm_librosa !== undefined ? data.bpm_librosa : prev[trackId]?.bpmLibrosa,
+            bpmRawLibrosa: data.bpm_raw_librosa !== undefined ? data.bpm_raw_librosa : prev[trackId]?.bpmRawLibrosa,
+            bpmConfidenceLibrosa: data.bpm_confidence_librosa !== undefined ? data.bpm_confidence_librosa : prev[trackId]?.bpmConfidenceLibrosa,
+            keyEssentia: data.key_essentia !== undefined ? data.key_essentia : prev[trackId]?.keyEssentia,
+            scaleEssentia: data.scale_essentia !== undefined ? data.scale_essentia : prev[trackId]?.scaleEssentia,
+            keyscaleConfidenceEssentia: data.keyscale_confidence_essentia !== undefined ? data.keyscale_confidence_essentia : prev[trackId]?.keyscaleConfidenceEssentia,
+            keyLibrosa: data.key_librosa !== undefined ? data.key_librosa : prev[trackId]?.keyLibrosa,
+            scaleLibrosa: data.scale_librosa !== undefined ? data.scale_librosa : prev[trackId]?.scaleLibrosa,
+            keyscaleConfidenceLibrosa: data.keyscale_confidence_librosa !== undefined ? data.keyscale_confidence_librosa : prev[trackId]?.keyscaleConfidenceLibrosa,
+            bpmSelected: bpmSelected,
+            keySelected: keySelected,
+            debugTxt: data.debug_txt !== undefined ? data.debug_txt : prev[trackId]?.debugTxt,
+          },
+        }))
+
+        if (meta) {
+          setBpmDetails(prev => ({
+            ...prev,
+            [trackId]: { source: meta.source, error: undefined },
+          }))
+          setBpmDebugInfo(prev => ({
+            ...prev,
+            [trackId]: {
+              ...data,
+              source: meta.source,
+              urlsTried: meta.urlsTried || [],
+              successfulUrl: meta.successfulUrl || null,
+            },
+          }))
+          const previewUrl = getPreviewUrlFromMeta(meta)
+          if (previewUrl) {
+            setPreviewUrls(prev => ({ ...prev, [trackId]: previewUrl }))
+          }
+        }
+
+        const status = data.status === 'partial' || data.status === 'final' ? data.status : 'final'
+        setBpmStreamStatus(prev => ({ ...prev, [trackId]: status }))
+
+        if (status === 'final') {
+          if (!finalizedTracks.has(trackId)) {
+            finalizedTracks.add(trackId)
+            setLoadingBpms(prev => {
+              const next = new Set(prev)
+              next.delete(trackId)
+              return next
+            })
+            setTracksInDb(prev => new Set(prev).add(trackId))
+            if (meta) {
+              setBpmTracksCalculated(prev => prev + 1)
+              fetch('/api/bpm/ingest', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  trackId,
+                  result: data,
+                  previewMeta: meta,
+                }),
+              }).catch((error) => {
+                console.warn('[BPM Client] Failed to ingest BPM result:', error)
+              })
+            }
+            if (retryTrackId === trackId) {
+              setRetryStatus({ loading: false, success: true })
+              setRetryTrackId(null)
+            }
+          }
+        }
+      }
+
+      while (true) {
+        const { done, value } = await reader.read()
+
+        if (done) {
+          break
+        }
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (line.trim() === '') continue
+          try {
+            const data = JSON.parse(line)
+            if (data?.type === 'result') {
+              await handleStreamResult(data)
+            } else if (data?.type === 'error') {
+              console.warn('[BPM Client] Stream error:', data.message)
+            }
+          } catch (parseError) {
+            console.error('[BPM Client] Failed to parse stream line:', parseError)
+          }
+        }
+      }
+
+      if (buffer.trim()) {
+        try {
+          const data = JSON.parse(buffer.trim())
+          if (data?.type === 'result') {
+            await handleStreamResult(data)
+          }
+        } catch (parseError) {
+          console.error('[BPM Client] Failed to parse stream buffer:', parseError)
+        }
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        return
+      }
+      console.error('[BPM Client] Stream processing error:', error)
     } finally {
-      setLoadingBpms(new Set())
+      const remainingTracks = Array.from(indexToTrackId.values()).filter(
+        (trackId) => !finalizedTracks.has(trackId)
+      )
+      if (remainingTracks.length > 0) {
+        const fallbackTracks = tracks.filter(track => remainingTracks.includes(track.id))
+        fetchBpmsForTracks(fallbackTracks)
+      }
     }
   }
 
@@ -541,7 +879,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       
       await Promise.all(
         batch.map(async (track) => {
-          if (trackBpms[track.id] !== undefined || loadingBpms.has(track.id)) {
+          if (loadingBpms.has(track.id)) {
+            return
+          }
+
+          if (trackBpms[track.id] !== undefined && bpmStreamStatus[track.id] !== 'partial') {
             return // Already fetched or in progress
           }
           
@@ -622,6 +964,15 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               setTracksInDb(prev => new Set(prev).add(track.id))
               // Increment calculated count (this track was just calculated, not cached)
               setBpmTracksCalculated(prev => prev + 1)
+              setBpmStreamStatus(prev => ({ ...prev, [track.id]: 'final' }))
+              if (retryTrackId === track.id) {
+                setRetryStatus({
+                  loading: false,
+                  success: data.bpm != null,
+                  error: data.bpm != null ? undefined : data.error || 'BPM calculation failed',
+                })
+                setRetryTrackId(null)
+              }
             } else {
               const errorData = await res.json().catch(() => ({}))
               setTrackBpms(prev => ({
@@ -642,6 +993,15 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   successfulUrl: errorData.successfulUrl || null,
                 },
               }))
+              setBpmStreamStatus(prev => ({ ...prev, [track.id]: 'error' }))
+              if (retryTrackId === track.id) {
+                setRetryStatus({
+                  loading: false,
+                  success: false,
+                  error: errorData.error || 'Failed to fetch BPM',
+                })
+                setRetryTrackId(null)
+              }
             }
           } catch (error) {
             console.error(`[BPM Client] Error fetching BPM for ${track.id}:`, error)
@@ -649,6 +1009,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               ...prev,
               [track.id]: null,
             }))
+            setBpmStreamStatus(prev => ({ ...prev, [track.id]: 'error' }))
+            if (retryTrackId === track.id) {
+              setRetryStatus({ loading: false, success: false, error: 'Network error. Please try again.' })
+              setRetryTrackId(null)
+            }
           } finally {
             setLoadingBpms(prev => {
               const next = new Set(prev)
@@ -2234,7 +2599,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         {getYearString(track.album.release_date)}
                         {' • '}
                         {formatDuration(track.duration_ms)}
-                                    {loadingBpms.has(track.id) ? (
+                                    {loadingBpms.has(track.id) && trackBpms[track.id] == null ? (
                                       <span className="text-gray-400"> • BPM...</span>
                                     ) : trackBpms[track.id] != null 
                                       ? (
@@ -2248,6 +2613,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                           className="text-blue-600 hover:text-blue-700 hover:underline"
                                         >
                                           {` • ${Math.round(trackBpms[track.id]!)} BPM`}
+                                          {bpmStreamStatus[track.id] === 'partial' && (
+                                            <span className="ml-1 text-xs text-yellow-600">(partial)</span>
+                                          )}
                                         </button>
                                       )
                                       : track.tempo != null 
@@ -2470,7 +2838,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         {formatDuration(track.duration_ms)}
                       </td>
                                   <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden md:table-cell" onClick={(e) => e.stopPropagation()}>
-                                    {loadingBpms.has(track.id) ? (
+                                    {loadingBpms.has(track.id) && trackBpms[track.id] == null ? (
                                       <div className="flex items-center gap-1">
                                         <svg className="animate-spin h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -2491,6 +2859,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                           title="Click for BPM details"
                                         >
                                           {Math.round(trackBpms[track.id]!)}
+                                          {bpmStreamStatus[track.id] === 'partial' && (
+                                            <span className="ml-1 text-xs text-yellow-600">partial</span>
+                                          )}
                                         </button>
                                       )
                                       : track.tempo != null 
@@ -2639,6 +3010,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               setShowBpmModal(false)
               setRetryStatus(null)
               setRetryAttempted(false)
+              setRetryTrackId(null)
               setManualBpm('')
               setManualKey('')
               setManualScale('major')
@@ -2655,6 +3027,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     setShowBpmModal(false)
                     setRetryStatus(null)
                     setRetryAttempted(false)
+                    setRetryTrackId(null)
                     setManualBpm('')
                     setManualKey('')
                     setManualScale('major')
@@ -2670,6 +3043,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 <p className="text-sm text-gray-600">
                   {selectedBpmTrack.artists.map(a => a.name).join(', ')}
                 </p>
+                {bpmStreamStatus[bpmModalData.trackId] === 'partial' && (
+                  <div className="mt-2 inline-flex items-center text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 px-2 py-1 rounded">
+                    Partial results streaming...
+                  </div>
+                )}
               </div>
 
               {!bpmModalData.hasEssentiaBpm && !bpmModalData.hasLibrosaBpm && bpmModalData.currentBpm == null ? (
@@ -2691,80 +3069,19 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       </span>
                     </div>
                   )}
+                  {loadingBpms.has(bpmModalData.trackId) && trackBpms[bpmModalData.trackId] == null && (
+                    <div className="text-xs text-gray-500">
+                      Waiting for first partial result...
+                    </div>
+                  )}
                   {trackBpms[bpmModalData.trackId] == null && !retryAttempted && (
                     <button
-                      onClick={async () => {
+                      onClick={() => {
+                        if (!selectedBpmTrack) return
                         setRetryStatus({ loading: true })
                         setRetryAttempted(true)
-                        setLoadingBpms(prev => new Set(prev).add(bpmModalData.trackId))
-                        try {
-                          const res = await fetch(`/api/bpm?spotifyTrackId=${bpmModalData.trackId}&country=${countryCode}`)
-                          if (res.ok) {
-                            const data = await res.json()
-                            if (data.successfulUrl) {
-                              setPreviewUrls(prev => ({ ...prev, [bpmModalData.trackId]: data.successfulUrl }))
-                            }
-                            setTracksInDb(prev => new Set(prev).add(bpmModalData.trackId))
-                            if (data.bpm != null) {
-                              setTrackBpms(prev => ({ ...prev, [bpmModalData.trackId]: data.bpm }))
-                              if (data.key !== undefined) {
-                                setTrackKeys(prev => ({ ...prev, [bpmModalData.trackId]: data.key || null }))
-                              }
-                              if (data.scale !== undefined) {
-                                setTrackScales(prev => ({ ...prev, [bpmModalData.trackId]: data.scale || null }))
-                              }
-                              // Store full BPM data for modal
-                              if (data.bpmEssentia !== undefined || data.bpmLibrosa !== undefined || data.bpmSelected || 
-                                  data.keyEssentia !== undefined || data.keyLibrosa !== undefined || data.keySelected) {
-                                setBpmFullData(prev => ({
-                                  ...prev,
-                                  [bpmModalData.trackId]: {
-                                    bpmEssentia: data.bpmEssentia,
-                                    bpmRawEssentia: data.bpmRawEssentia,
-                                    bpmConfidenceEssentia: data.bpmConfidenceEssentia,
-                                    bpmLibrosa: data.bpmLibrosa,
-                                    bpmRawLibrosa: data.bpmRawLibrosa,
-                                    bpmConfidenceLibrosa: data.bpmConfidenceLibrosa,
-                                    keyEssentia: data.keyEssentia,
-                                    scaleEssentia: data.scaleEssentia,
-                                    keyscaleConfidenceEssentia: data.keyscaleConfidenceEssentia,
-                                    keyLibrosa: data.keyLibrosa,
-                                    scaleLibrosa: data.scaleLibrosa,
-                                    keyscaleConfidenceLibrosa: data.keyscaleConfidenceLibrosa,
-                                    bpmSelected: data.bpmSelected || 'essentia',
-                                    keySelected: data.keySelected || 'essentia',
-                                    bpmManual: data.bpmManual,
-                                    keyManual: data.keyManual,
-                                    scaleManual: data.scaleManual,
-                                    debugTxt: data.debugTxt,
-                                  },
-                                }))
-                              }
-                              setBpmDetails(prev => ({
-                                ...prev,
-                                [bpmModalData.trackId]: { source: data.source, error: data.error },
-                              }))
-                              setRetryStatus({ loading: false, success: true })
-                            } else {
-                              setBpmDetails(prev => ({
-                                ...prev,
-                                [bpmModalData.trackId]: { source: data.source, error: data.error || 'BPM calculation failed' },
-                              }))
-                              setRetryStatus({ loading: false, success: false, error: data.error || 'BPM calculation failed' })
-                            }
-                          } else {
-                            const errorData = await res.json().catch(() => ({}))
-                            setRetryStatus({ loading: false, success: false, error: errorData.error || 'Failed to fetch BPM' })
-                          }
-                        } catch (error) {
-                          setRetryStatus({ loading: false, success: false, error: 'Network error. Please try again.' })
-                        } finally {
-                          setLoadingBpms(prev => {
-                            const next = new Set(prev)
-                            next.delete(bpmModalData.trackId)
-                            return next
-                          })
-                        }
+                        setRetryTrackId(bpmModalData.trackId)
+                        streamBpmsForTracks([selectedBpmTrack])
                       }}
                       disabled={retryStatus?.loading}
                       className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded transition-colors"
@@ -3142,6 +3459,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     setShowBpmModal(false)
                     setRetryStatus(null)
                     setRetryAttempted(false)
+                    setRetryTrackId(null)
                     setManualBpm('')
                     setManualKey('')
                     setManualScale('major')
@@ -3276,4 +3594,3 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     </div>
   )
 }
-

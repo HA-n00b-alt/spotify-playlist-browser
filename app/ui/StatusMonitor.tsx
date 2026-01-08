@@ -4,7 +4,8 @@ import { useEffect, useState, useRef } from 'react'
 
 interface StreamStatus {
   type: 'status' | 'result' | 'progress' | 'complete' | 'error'
-  status?: 'processing' | 'completed'
+  status?: 'processing' | 'completed' | 'partial' | 'final'
+  result_status?: 'partial' | 'final'
   total?: number
   processed?: number
   index?: number
@@ -73,7 +74,9 @@ export default function StatusMonitor({ batchId, onComplete, onError }: StatusMo
         const decoder = new TextDecoder()
         let buffer = ''
 
-        const allResults: StreamStatus[] = []
+        const resultsByIndex = new Map<number, StreamStatus>()
+        const sortedResults = () =>
+          Array.from(resultsByIndex.values()).sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
 
         while (true) {
           const { done, value } = await reader.read()
@@ -114,6 +117,7 @@ export default function StatusMonitor({ batchId, onComplete, onError }: StatusMo
                     type: 'result',
                     index: data.index,
                     url: typeof data.url === 'string' ? data.url : undefined,
+                    result_status: data.status === 'partial' || data.status === 'final' ? data.status : undefined,
                     bpm_essentia: typeof data.bpm_essentia === 'number' ? data.bpm_essentia : (data.bpm_essentia === null ? null : undefined),
                     bpm_raw_essentia: typeof data.bpm_raw_essentia === 'number' ? data.bpm_raw_essentia : (data.bpm_raw_essentia === null ? null : undefined),
                     bpm_confidence_essentia: typeof data.bpm_confidence_essentia === 'number' ? data.bpm_confidence_essentia : (data.bpm_confidence_essentia === null ? null : undefined),
@@ -128,12 +132,19 @@ export default function StatusMonitor({ batchId, onComplete, onError }: StatusMo
                     keyscale_confidence_librosa: typeof data.keyscale_confidence_librosa === 'number' ? data.keyscale_confidence_librosa : (data.keyscale_confidence_librosa === null ? null : undefined),
                     debug_txt: typeof data.debug_txt === 'string' ? data.debug_txt : (data.debug_txt === null ? null : undefined),
                   }
-                  allResults.push(validResult)
-                  // Only update state with valid results
-                  const validResults = allResults.filter((r): r is StreamStatus => 
-                    r != null && typeof r === 'object' && r.type === 'result' && typeof r.index === 'number'
-                  )
-                  setResults(validResults)
+                  const existing = resultsByIndex.get(validResult.index)
+                  const shouldIgnore =
+                    existing?.result_status === 'final' && validResult.result_status === 'partial'
+                  if (!shouldIgnore) {
+                    const mergedResult = {
+                      ...existing,
+                      ...validResult,
+                      type: 'result',
+                      index: validResult.index,
+                    }
+                    resultsByIndex.set(validResult.index, mergedResult)
+                  }
+                  setResults(sortedResults())
                 } else {
                   console.warn('[StatusMonitor] Invalid result data:', data, 'Type:', typeof data, 'Has index:', data?.index)
                 }
@@ -153,7 +164,7 @@ export default function StatusMonitor({ batchId, onComplete, onError }: StatusMo
                 })
                 setIsStreaming(false)
                 // Filter out any invalid results before calling onComplete
-                const validResults = allResults.filter((r): r is StreamStatus => 
+                const validResults = sortedResults().filter((r): r is StreamStatus =>
                   r != null && typeof r === 'object' && r.type === 'result'
                 )
                 onComplete?.(validResults)
@@ -184,7 +195,7 @@ export default function StatusMonitor({ batchId, onComplete, onError }: StatusMo
               })
               setIsStreaming(false)
               // Filter out any invalid results before calling onComplete
-              const validResults = allResults.filter((r): r is StreamStatus => 
+              const validResults = sortedResults().filter((r): r is StreamStatus =>
                 r != null && typeof r === 'object' && r.type === 'result'
               )
               onComplete?.(validResults)
@@ -195,8 +206,8 @@ export default function StatusMonitor({ batchId, onComplete, onError }: StatusMo
         }
         
         // If stream ended without complete message, still call onComplete with valid results
-        if (allResults.length > 0) {
-          const validResults = allResults.filter((r): r is StreamStatus => 
+        if (resultsByIndex.size > 0) {
+          const validResults = sortedResults().filter((r): r is StreamStatus =>
             r != null && typeof r === 'object' && r.type === 'result'
           )
           if (validResults.length > 0) {
@@ -300,6 +311,15 @@ export default function StatusMonitor({ batchId, onComplete, onError }: StatusMo
                       <span className="text-sm font-medium">
                         #{result.index ?? idx + 1}
                       </span>
+                      {result.result_status && (
+                        <span className={`text-xs px-2 py-1 rounded ${
+                          result.result_status === 'final'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {result.result_status}
+                        </span>
+                      )}
                       {result.bpm_essentia != null && typeof result.bpm_essentia === 'number' && (
                         <span className="text-lg font-bold text-blue-600">
                           {result.bpm_essentia} BPM
@@ -337,4 +357,3 @@ export default function StatusMonitor({ batchId, onComplete, onError }: StatusMo
     </div>
   )
 }
-

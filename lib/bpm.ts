@@ -11,6 +11,13 @@ interface PreviewUrlResult {
   isrcMismatch?: boolean // True when ISRC from search results doesn't match Spotify ISRC
 }
 
+export interface StreamingPreviewMeta {
+  source: string
+  urlsTried?: string[]
+  successfulUrl?: string | null
+  isrcMismatch?: boolean
+}
+
 interface BpmResult {
   bpm: number | null
   source: string
@@ -205,8 +212,27 @@ async function checkCache(
 function getCountryCodeFromRequest(request?: Request): string {
   if (!request) {
     console.log('[BPM Module] No request provided, defaulting to US')
-    return 'us'
+  return 'us'
+}
+
+function getPreviewUrlToReturn(
+  successfulUrl: string | null | undefined,
+  urlsTried: string[] | undefined
+): string | null | undefined {
+  let previewUrlToReturn = successfulUrl || undefined
+  if (urlsTried && Array.isArray(urlsTried) && urlsTried.length > 0) {
+    const deezerPreviewUrls = urlsTried.filter((url: string) => {
+      const isDeezerUrl = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
+      const isAudioFile = url.includes('.mp3') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('/preview')
+      const isNotApiEndpoint = !url.includes('api.deezer.com/search') && !url.includes('api.deezer.com/album') && !url.includes('api.deezer.com/track')
+      return isDeezerUrl && isAudioFile && isNotApiEndpoint
+    })
+    if (deezerPreviewUrls.length > 0) {
+      previewUrlToReturn = deezerPreviewUrls[deezerPreviewUrls.length - 1]
+    }
   }
+  return previewUrlToReturn
+}
   
   try {
     // Check for manual override first (this is set by the API route when country param is provided)
@@ -865,6 +891,191 @@ async function storeInCache(params: {
       ]
     )
   }
+}
+
+export async function prepareBpmStreamingBatch(params: {
+  spotifyTrackIds: string[]
+  request?: Request
+  countryCode?: string
+}): Promise<{
+  urls: string[]
+  indexToTrackId: Record<number, string>
+  previewMeta: Record<string, StreamingPreviewMeta>
+  immediateResults: Record<string, {
+    source: string
+    error: string
+    urlsTried?: string[]
+    successfulUrl?: string | null
+    isrcMismatch?: boolean
+  }>
+}> {
+  const { spotifyTrackIds, request, countryCode } = params
+  const resolvedCountryCode = countryCode || getCountryCodeFromRequest(request)
+  const urls: string[] = []
+  const indexToTrackId: Record<number, string> = {}
+  const previewMeta: Record<string, StreamingPreviewMeta> = {}
+  const immediateResults: Record<string, {
+    source: string
+    error: string
+    urlsTried?: string[]
+    successfulUrl?: string | null
+    isrcMismatch?: boolean
+  }> = {}
+
+  const batchSize = 5
+  for (let i = 0; i < spotifyTrackIds.length; i += batchSize) {
+    const batch = spotifyTrackIds.slice(i, i + batchSize)
+    const batchResults = await Promise.all(
+      batch.map(async (spotifyTrackId) => {
+        if (!isValidSpotifyTrackId(spotifyTrackId)) {
+          return {
+            spotifyTrackId,
+            error: `Invalid Spotify track ID format: ${spotifyTrackId}`,
+            source: 'computed_failed',
+          }
+        }
+
+        try {
+          const identifiers = await extractSpotifyIdentifiers(spotifyTrackId)
+          const previewResult = await resolvePreviewUrl({
+            isrc: identifiers.isrc,
+            title: identifiers.title,
+            artists: identifiers.artists,
+            countryCode: resolvedCountryCode,
+          })
+
+          if (!previewResult.url) {
+            let errorMessage = 'No preview URL found'
+            if (previewResult.isrcMismatch) {
+              errorMessage = 'ISRC mismatch: Found preview URL but ISRC does not match Spotify track (wrong audio file)'
+            } else if (previewResult.source === 'computed_failed') {
+              errorMessage = 'No preview audio available from any source (iTunes, Deezer)'
+            } else if (previewResult.source === 'itunes_search') {
+              errorMessage = 'No preview available on iTunes/Apple Music'
+            } else if (previewResult.source === 'deezer_isrc' || previewResult.source === 'deezer_search') {
+              errorMessage = 'No preview available on Deezer'
+            }
+
+            const previewUrlToReturn = getPreviewUrlToReturn(
+              previewResult.successfulUrl,
+              previewResult.urlsTried
+            )
+
+            await storeInCache({
+              spotifyTrackId,
+              isrc: identifiers.isrc,
+              artist: identifiers.artists,
+              title: identifiers.title,
+              source: previewResult.source,
+              error: errorMessage,
+              urlsTried: previewResult.urlsTried,
+              successfulUrl: previewUrlToReturn ?? null,
+              isrcMismatch: previewResult.isrcMismatch || false,
+            })
+
+            return {
+              spotifyTrackId,
+              error: errorMessage,
+              source: previewResult.source,
+              urlsTried: previewResult.urlsTried,
+              successfulUrl: previewUrlToReturn ?? null,
+              isrcMismatch: previewResult.isrcMismatch,
+            }
+          }
+
+          const previewUrlToReturn = getPreviewUrlToReturn(
+            previewResult.successfulUrl,
+            previewResult.urlsTried
+          )
+
+          return {
+            spotifyTrackId,
+            previewUrl: previewResult.url,
+            previewMeta: {
+              source: previewResult.source,
+              urlsTried: previewResult.urlsTried,
+              successfulUrl: previewUrlToReturn ?? null,
+              isrcMismatch: previewResult.isrcMismatch,
+            },
+          }
+        } catch (error) {
+          return {
+            spotifyTrackId,
+            error: error instanceof Error ? error.message : 'Failed to resolve preview URL',
+            source: 'computed_failed',
+          }
+        }
+      })
+    )
+
+    for (const result of batchResults) {
+      if ('previewUrl' in result && result.previewUrl) {
+        indexToTrackId[urls.length] = result.spotifyTrackId
+        urls.push(result.previewUrl)
+        if (result.previewMeta) {
+          previewMeta[result.spotifyTrackId] = result.previewMeta
+        }
+      } else if (result.error) {
+        immediateResults[result.spotifyTrackId] = {
+          source: result.source || 'computed_failed',
+          error: result.error,
+          urlsTried: 'urlsTried' in result ? result.urlsTried : undefined,
+          successfulUrl: 'successfulUrl' in result ? result.successfulUrl : undefined,
+          isrcMismatch: 'isrcMismatch' in result ? result.isrcMismatch : undefined,
+        }
+      }
+    }
+  }
+
+  return { urls, indexToTrackId, previewMeta, immediateResults }
+}
+
+export async function storeStreamingBpmResult(params: {
+  spotifyTrackId: string
+  previewMeta: StreamingPreviewMeta
+  result: {
+    bpm_essentia?: number | null
+    bpm_raw_essentia?: number | null
+    bpm_confidence_essentia?: number | null
+    bpm_librosa?: number | null
+    bpm_raw_librosa?: number | null
+    bpm_confidence_librosa?: number | null
+    key_essentia?: string | null
+    scale_essentia?: string | null
+    keyscale_confidence_essentia?: number | null
+    key_librosa?: string | null
+    scale_librosa?: string | null
+    keyscale_confidence_librosa?: number | null
+    debug_txt?: string | null
+  }
+}): Promise<void> {
+  const { spotifyTrackId, previewMeta, result } = params
+  const identifiers = await extractSpotifyIdentifiers(spotifyTrackId)
+
+  await storeInCache({
+    spotifyTrackId,
+    isrc: identifiers.isrc,
+    artist: identifiers.artists,
+    title: identifiers.title,
+    bpmEssentia: result.bpm_essentia ?? null,
+    bpmRawEssentia: result.bpm_raw_essentia ?? null,
+    bpmConfidenceEssentia: result.bpm_confidence_essentia ?? null,
+    bpmLibrosa: result.bpm_librosa ?? null,
+    bpmRawLibrosa: result.bpm_raw_librosa ?? null,
+    bpmConfidenceLibrosa: result.bpm_confidence_librosa ?? null,
+    keyEssentia: result.key_essentia ?? null,
+    scaleEssentia: result.scale_essentia ?? null,
+    keyscaleConfidenceEssentia: result.keyscale_confidence_essentia ?? null,
+    keyLibrosa: result.key_librosa ?? null,
+    scaleLibrosa: result.scale_librosa ?? null,
+    keyscaleConfidenceLibrosa: result.keyscale_confidence_librosa ?? null,
+    source: previewMeta.source,
+    error: null,
+    urlsTried: previewMeta.urlsTried,
+    successfulUrl: previewMeta.successfulUrl ?? null,
+    isrcMismatch: previewMeta.isrcMismatch || false,
+    debugTxt: result.debug_txt ?? null,
+  })
 }
 
 /**
