@@ -137,7 +137,7 @@ export default function StatusMonitor({ batchId, onComplete, onError }: StatusMo
                   const shouldIgnore =
                     existing?.result_status === 'final' && validResult.result_status === 'partial'
                   if (!shouldIgnore) {
-                    const mergedResult = {
+                    const mergedResult: StreamStatus = {
                       ...existing,
                       ...validResult,
                       type: 'result',
