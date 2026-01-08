@@ -100,6 +100,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [retryStatus, setRetryStatus] = useState<{ loading: boolean; success?: boolean; error?: string } | null>(null)
   const [retryAttempted, setRetryAttempted] = useState(false)
   const [retryTrackId, setRetryTrackId] = useState<string | null>(null)
+  const [recalcStatus, setRecalcStatus] = useState<{ loading: boolean; success?: boolean; error?: string } | null>(null)
+  const [creditsByTrackId, setCreditsByTrackId] = useState<Record<string, string[]>>({})
+  const [creditsOpenIds, setCreditsOpenIds] = useState<Set<string>>(new Set())
+  const [creditsLoadingIds, setCreditsLoadingIds] = useState<Set<string>>(new Set())
+  const [creditsErrorByTrackId, setCreditsErrorByTrackId] = useState<Record<string, string>>({})
   const [pageSize, setPageSize] = useState<number | 'all'>(50)
   const [currentPage, setCurrentPage] = useState(1)
   // State for manual override in modal
@@ -1376,7 +1381,58 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   /**
    * Load audio with CORS support and caching
    */
-  const loadAudioWithCache = async (url: string): Promise<string> => {
+  const refreshPreviewForTrack = async (trackId: string): Promise<string | null> => {
+    try {
+      const res = await fetch(`/api/bpm/preview-refresh?spotifyTrackId=${trackId}&country=${countryCode}`)
+      if (!res.ok) {
+        return null
+      }
+      const data = await res.json()
+      const previewUrl = getPreviewUrlFromMeta({ urls: data.urls })
+      if (previewUrl) {
+        setPreviewUrls(prev => ({ ...prev, [trackId]: previewUrl }))
+      }
+      return previewUrl
+    } catch {
+      return null
+    }
+  }
+
+  const fetchCreditsForTrack = async (track: Track) => {
+    if (creditsByTrackId[track.id]) {
+      setCreditsOpenIds(prev => new Set(prev).add(track.id))
+      return
+    }
+    setCreditsLoadingIds(prev => new Set(prev).add(track.id))
+    try {
+      const artistNames = track.artists.map(a => a.name).join(', ')
+      const res = await fetch(`/api/musicbrainz/credits?title=${encodeURIComponent(track.name)}&artist=${encodeURIComponent(artistNames)}`)
+      if (!res.ok) {
+        throw new Error('Failed to fetch credits')
+      }
+      const data = await res.json()
+      setCreditsByTrackId(prev => ({ ...prev, [track.id]: data.credits || [] }))
+      setCreditsOpenIds(prev => new Set(prev).add(track.id))
+      setCreditsErrorByTrackId(prev => {
+        const next = { ...prev }
+        delete next[track.id]
+        return next
+      })
+    } catch (error) {
+      setCreditsErrorByTrackId(prev => ({
+        ...prev,
+        [track.id]: error instanceof Error ? error.message : 'Failed to fetch credits',
+      }))
+    } finally {
+      setCreditsLoadingIds(prev => {
+        const next = new Set(prev)
+        next.delete(track.id)
+        return next
+      })
+    }
+  }
+
+  const loadAudioWithCache = async (url: string, trackId?: string, allowRefresh = true): Promise<string> => {
     console.log('[Preview Debug] loadAudioWithCache called with URL:', url)
     
     const originalUrl = url // Keep original for cache key if it's an API URL
@@ -1465,6 +1521,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           if (!response.ok) {
             const errorText = await response.text()
             console.error('[Preview Debug] Proxy fetch failed:', response.status, errorText)
+            if (response.status === 403 && trackId && allowRefresh) {
+              const refreshed = await refreshPreviewForTrack(trackId)
+              if (refreshed && refreshed !== url) {
+                return await loadAudioWithCache(refreshed, trackId, false)
+              }
+            }
             // If proxy also fails, try direct URL as last resort (might work in some browsers)
             console.log('[Preview Debug] Proxy failed, trying direct URL as last resort...')
             audioCache.current.set(url, url)
@@ -1593,7 +1655,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       try {
         // Load audio with caching and CORS handling
         console.log('[Preview Debug] handleTrackClick - Loading audio with cache...')
-        const audioUrl = await loadAudioWithCache(previewUrl)
+        const audioUrl = await loadAudioWithCache(previewUrl, track.id)
         console.log('[Preview Debug] handleTrackClick - Audio URL loaded:', audioUrl)
         
         const audio = new Audio(audioUrl)
@@ -1727,7 +1789,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       try {
         // Load audio with caching and CORS handling
         console.log('[Preview Debug] handleTrackTitleClick - Loading audio with cache...')
-        const audioUrl = await loadAudioWithCache(previewUrl)
+        const audioUrl = await loadAudioWithCache(previewUrl, track.id)
         console.log('[Preview Debug] handleTrackTitleClick - Audio URL loaded:', audioUrl)
         
         const audio = new Audio(audioUrl)
@@ -2754,6 +2816,38 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                               <span className="ml-1 text-xs bg-gray-200 text-gray-700 px-1 py-0.5 rounded">E</span>
                             )}
                           </a>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              if (creditsOpenIds.has(track.id)) {
+                                setCreditsOpenIds(prev => {
+                                  const next = new Set(prev)
+                                  next.delete(track.id)
+                                  return next
+                                })
+                                return
+                              }
+                              fetchCreditsForTrack(track)
+                            }}
+                            className="mt-1 text-xs text-blue-600 hover:text-blue-700 hover:underline"
+                          >
+                            {creditsLoadingIds.has(track.id)
+                              ? 'Loading credits...'
+                              : creditsOpenIds.has(track.id)
+                                ? 'Hide credits'
+                                : 'Show credits'}
+                          </button>
+                          {creditsOpenIds.has(track.id) && (
+                            <div className="mt-1 text-xs text-gray-600">
+                              {creditsErrorByTrackId[track.id] ? (
+                                <span className="text-red-500">{creditsErrorByTrackId[track.id]}</span>
+                              ) : creditsByTrackId[track.id]?.length ? (
+                                <span>{creditsByTrackId[track.id].join(', ')}</span>
+                              ) : (
+                                <span className="text-gray-400">No credits found</span>
+                              )}
+                            </div>
+                          )}
                       <div className="text-xs text-gray-600 mt-1">
                         {track.artists.map((artist, index) => (
                           <span key={artist.id || index}>
@@ -3004,6 +3098,40 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           </a>
                           {track.explicit && (
                             <span className="ml-1 text-xs bg-gray-200 text-gray-700 px-1 py-0.5 rounded">E</span>
+                          )}
+                        </div>
+                        <div className="mt-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              if (creditsOpenIds.has(track.id)) {
+                                setCreditsOpenIds(prev => {
+                                  const next = new Set(prev)
+                                  next.delete(track.id)
+                                  return next
+                                })
+                                return
+                              }
+                              fetchCreditsForTrack(track)
+                            }}
+                            className="text-[11px] text-blue-600 hover:text-blue-700 hover:underline"
+                          >
+                            {creditsLoadingIds.has(track.id)
+                              ? 'Loading credits...'
+                              : creditsOpenIds.has(track.id)
+                                ? 'Hide credits'
+                                : 'Show credits'}
+                          </button>
+                          {creditsOpenIds.has(track.id) && (
+                            <div className="mt-1 text-[11px] text-gray-600">
+                              {creditsErrorByTrackId[track.id] ? (
+                                <span className="text-red-500">{creditsErrorByTrackId[track.id]}</span>
+                              ) : creditsByTrackId[track.id]?.length ? (
+                                <span>{creditsByTrackId[track.id].join(', ')}</span>
+                              ) : (
+                                <span className="text-gray-400">No credits found</span>
+                              )}
+                            </div>
                           )}
                         </div>
                       </td>
@@ -3308,6 +3436,37 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     Partial results streaming...
                   </div>
                 )}
+                <div className="mt-2">
+                  <button
+                    onClick={async () => {
+                      if (!selectedBpmTrack) return
+                      setRecalcStatus({ loading: true })
+                      try {
+                        await fetch('/api/bpm/recalculate', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ trackIds: [bpmModalData.trackId] }),
+                        })
+                        const targetIds = new Set([bpmModalData.trackId])
+                        streamBpmsForTracks([selectedBpmTrack], targetIds, targetIds)
+                        setRecalcStatus({ loading: false, success: true })
+                      } catch (error) {
+                        setRecalcStatus({
+                          loading: false,
+                          success: false,
+                          error: error instanceof Error ? error.message : 'Failed to recalculate BPM/key',
+                        })
+                      }
+                    }}
+                    disabled={recalcStatus?.loading}
+                    className="bg-gray-200 hover:bg-gray-300 disabled:bg-gray-200 disabled:text-gray-400 text-gray-800 text-xs font-semibold py-1.5 px-3 rounded"
+                  >
+                    {recalcStatus?.loading ? 'Recalculating...' : 'Recalculate BPM/Key'}
+                  </button>
+                  {recalcStatus?.error && (
+                    <div className="mt-1 text-xs text-red-600">{recalcStatus.error}</div>
+                  )}
+                </div>
               </div>
 
               {!bpmModalData.hasEssentiaBpm && !bpmModalData.hasLibrosaBpm && bpmModalData.currentBpm == null ? (

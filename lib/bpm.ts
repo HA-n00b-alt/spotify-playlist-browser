@@ -1628,3 +1628,47 @@ export async function getBpmForSpotifyTrack(
   
   return computationPromise
 }
+
+export async function refreshPreviewUrlsForTrack(
+  spotifyTrackId: string,
+  request?: Request
+): Promise<{ urls?: PreviewUrlEntry[]; error?: string | null }> {
+  const identifiers = await extractSpotifyIdentifiers(spotifyTrackId)
+  const countryCode = getCountryCodeFromRequest(request)
+  const previewResult = await resolvePreviewUrl({
+    isrc: identifiers.isrc,
+    title: identifiers.title,
+    artists: identifiers.artists,
+    countryCode,
+  })
+
+  if (!previewResult.url) {
+    const errorMessage = previewResult.isrcMismatch
+      ? 'ISRC mismatch: Found preview URL but ISRC does not match Spotify track (wrong audio file)'
+      : 'No preview audio available from any source (iTunes, Deezer)'
+    await storeInCache({
+      spotifyTrackId,
+      isrc: identifiers.isrc,
+      artist: identifiers.artists,
+      title: identifiers.title,
+      source: previewResult.source,
+      error: errorMessage,
+      urls: previewResult.urls,
+      isrcMismatch: previewResult.isrcMismatch || false,
+    })
+    return { urls: previewResult.urls, error: errorMessage }
+  }
+
+  await storeInCache({
+    spotifyTrackId,
+    isrc: identifiers.isrc,
+    artist: identifiers.artists,
+    title: identifiers.title,
+    source: previewResult.source,
+    error: null,
+    urls: previewResult.urls,
+    isrcMismatch: previewResult.isrcMismatch || false,
+  })
+
+  return { urls: previewResult.urls, error: null }
+}
