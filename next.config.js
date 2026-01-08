@@ -6,6 +6,7 @@ const { withSentryConfig } = require('@sentry/nextjs')
 const nextConfig = {
   reactStrictMode: true,
   images: {
+    minimumCacheTTL: 60 * 60 * 24 * 7,
     remotePatterns: [
       {
         protocol: 'https',
@@ -49,4 +50,3 @@ module.exports = withSentryConfig(
     hideSourceMaps: true,
   }
 )
-

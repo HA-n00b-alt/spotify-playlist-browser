@@ -58,7 +58,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [trackBpms, setTrackBpms] = useState<Record<string, number | null>>({})
   const [trackKeys, setTrackKeys] = useState<Record<string, string | null>>({})
   const [trackScales, setTrackScales] = useState<Record<string, string | null>>({})
-  const [loadingBpms, setLoadingBpms] = useState<Set<string>>(new Set())
+  const [loadingBpmFields, setLoadingBpmFields] = useState<Set<string>>(new Set())
+  const [loadingKeyFields, setLoadingKeyFields] = useState<Set<string>>(new Set())
+  const [tracksNeedingBpm, setTracksNeedingBpm] = useState<Set<string>>(new Set())
+  const [tracksNeedingKey, setTracksNeedingKey] = useState<Set<string>>(new Set())
+  const [tracksNeedingCalc, setTracksNeedingCalc] = useState<Set<string>>(new Set())
+  const [loadingPreviewIds, setLoadingPreviewIds] = useState<Set<string>>(new Set())
   const [bpmStreamStatus, setBpmStreamStatus] = useState<Record<string, 'partial' | 'final' | 'error'>>({})
   const streamAbortRef = useRef<AbortController | null>(null)
   const [showBpmDebug, setShowBpmDebug] = useState(false)
@@ -377,6 +382,15 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     return librosaConf > essentiaConf ? 'librosa' : 'essentia'
   }
 
+  const loadingTrackIds = useMemo(() => {
+    const ids = new Set<string>()
+    loadingBpmFields.forEach(id => ids.add(id))
+    loadingKeyFields.forEach(id => ids.add(id))
+    return ids
+  }, [loadingBpmFields, loadingKeyFields])
+
+  const isTrackLoading = (trackId: string) => loadingTrackIds.has(trackId)
+
   // Fetch BPM for all tracks using batch endpoint
   useEffect(() => {
     if (tracks.length > 0 && Object.keys(trackBpms).length === 0) {
@@ -398,7 +412,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       const tracksWithoutBpm = tracks.filter(t => 
         trackBpms[t.id] === undefined || trackBpms[t.id] === null
       ).length
-      const tracksLoading = loadingBpms.size
+      const tracksLoading = loadingTrackIds.size
       
       // Processing is complete when no tracks are loading and all tracks have been attempted
       // Only set end time if at least one track was calculated (not just all cached)
@@ -407,7 +421,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trackBpms, loadingBpms, tracks.length, bpmProcessingStartTime, bpmProcessingEndTime])
+  }, [trackBpms, loadingTrackIds, tracks.length, bpmProcessingStartTime, bpmProcessingEndTime])
 
   // Batch fetch BPMs from cache
   const fetchBpmsBatch = async () => {
@@ -415,7 +429,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     if (trackIds.length === 0) return
 
     // Reset loading before selectively streaming uncached tracks
-    setLoadingBpms(new Set())
+    setLoadingBpmFields(new Set())
+    setLoadingKeyFields(new Set())
+    setTracksNeedingBpm(new Set())
+    setTracksNeedingKey(new Set())
+    setTracksNeedingCalc(new Set())
     setBpmStreamStatus({})
 
     try {
@@ -437,6 +455,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         const newScales: Record<string, string | null> = {}
         const newDetails: Record<string, { source?: string; error?: string }> = {}
         const newPreviewUrls: Record<string, string | null> = {}
+        const needsBpm = new Set<string>()
+        const needsKey = new Set<string>()
+        const needsCalc = new Set<string>()
+        const nextStreamStatus: Record<string, 'partial' | 'final' | 'error'> = {}
 
         for (const [trackId, result] of Object.entries(data.results || {})) {
           const r = result as any
@@ -529,6 +551,34 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               },
             }))
           }
+
+          const hasError = Boolean(r.error)
+          const hasBpm = r.bpm != null
+          const hasKey = r.key != null
+          const hasScale = r.scale != null
+          const needsBpmValue = !hasBpm
+          const needsKeyValue = !hasKey || !hasScale
+
+          if (hasError) {
+            nextStreamStatus[trackId] = 'error'
+            newBpms[trackId] = r.bpm ?? null
+            if (r.key === undefined) {
+              newKeys[trackId] = null
+            }
+            if (r.scale === undefined) {
+              newScales[trackId] = null
+            }
+          } else {
+            if (needsBpmValue) {
+              needsBpm.add(trackId)
+            }
+            if (needsKeyValue) {
+              needsKey.add(trackId)
+            }
+            if (needsBpmValue || needsKeyValue) {
+              needsCalc.add(trackId)
+            }
+          }
         }
 
         setTrackBpms(newBpms)
@@ -536,6 +586,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         setTrackScales(prev => ({ ...prev, ...newScales }))
         setBpmDetails(newDetails)
         setPreviewUrls(prev => ({ ...prev, ...newPreviewUrls }))
+        setTracksNeedingBpm(needsBpm)
+        setTracksNeedingKey(needsKey)
+        setTracksNeedingCalc(needsCalc)
+        setLoadingBpmFields(new Set(needsBpm))
+        setLoadingKeyFields(new Set(needsKey))
+        if (Object.keys(nextStreamStatus).length > 0) {
+          setBpmStreamStatus(prev => ({ ...prev, ...nextStreamStatus }))
+        }
 
         // Track which tracks are in DB: if spotify_track_id exists in track_bpm_cache table
         // The batch API returns results with source/error/bpmRaw for tracks in DB
@@ -555,17 +613,16 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         })
 
         // Count how many were cached (not calculated)
-        const cachedCount = Object.values(data.results || {}).filter((r: any) => r.cached).length
         const calculatedFromBatch = Object.values(data.results || {}).filter((r: any) => r.bpm !== null && !r.cached).length
         setBpmTracksCalculated(prev => prev + calculatedFromBatch)
 
         // For tracks not in cache, fetch individually (but don't block UI)
-        const uncachedTracks = tracks.filter(t => !data.results?.[t.id]?.cached)
+        const uncachedTracks = tracks.filter(t => needsCalc.has(t.id))
         if (uncachedTracks.length > 0) {
           console.log(`[BPM Client] Streaming ${uncachedTracks.length} uncached tracks`)
-          streamBpmsForTracks(uncachedTracks)
-        } else if (uncachedTracks.length === 0 && cachedCount === tracks.length) {
-          // All tracks were cached, no processing happened
+          streamBpmsForTracks(uncachedTracks, needsBpm, needsKey)
+        } else if (uncachedTracks.length === 0) {
+          // No processing needed
           setBpmProcessingStartTime(null)
         }
       } else {
@@ -580,92 +637,143 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     }
   }
 
-  const streamBpmsForTracks = async (tracksToFetch: Track[]) => {
-    const trackIds = tracksToFetch.map(track => track.id)
-    if (trackIds.length === 0) return
+  const streamBpmsForTracks = async (
+    tracksToFetch: Track[],
+    needsBpm?: Set<string>,
+    needsKey?: Set<string>
+  ) => {
+    if (tracksToFetch.length === 0) return
 
-    setLoadingBpms(prev => {
+    const batchSize = 20
+    const fallbackNeedsBpm = needsBpm || new Set(tracksToFetch.map(track => track.id))
+    const fallbackNeedsKey = needsKey || new Set(tracksToFetch.map(track => track.id))
+
+    setTracksNeedingBpm(prev => {
       const next = new Set(prev)
-      trackIds.forEach(id => next.add(id))
+      fallbackNeedsBpm.forEach(id => next.add(id))
+      return next
+    })
+    setTracksNeedingKey(prev => {
+      const next = new Set(prev)
+      fallbackNeedsKey.forEach(id => next.add(id))
+      return next
+    })
+    setTracksNeedingCalc(prev => {
+      const next = new Set(prev)
+      tracksToFetch.forEach(track => next.add(track.id))
       return next
     })
 
-    try {
-      const res = await fetch('/api/bpm/stream-batch', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ trackIds, country: countryCode }),
+    for (let i = 0; i < tracksToFetch.length; i += batchSize) {
+      const batch = tracksToFetch.slice(i, i + batchSize)
+      const trackIds = batch.map(track => track.id)
+
+      setLoadingBpmFields(prev => {
+        const next = new Set(prev)
+        trackIds.forEach(id => {
+          if (fallbackNeedsBpm.has(id)) {
+            next.add(id)
+          }
+        })
+        return next
+      })
+      setLoadingKeyFields(prev => {
+        const next = new Set(prev)
+        trackIds.forEach(id => {
+          if (fallbackNeedsKey.has(id)) {
+            next.add(id)
+          }
+        })
+        return next
       })
 
-      if (!res.ok) {
-        console.error(`[BPM Client] Stream batch failed:`, res.status)
-        fetchBpmsForTracks(tracksToFetch)
-        return
-      }
-
-      const data = await res.json()
-      const immediateResults = data.immediateResults || {}
-      const previewMeta = data.previewMeta || {}
-
-      for (const [trackId, result] of Object.entries(immediateResults)) {
-        const r = result as any
-        setTrackBpms(prev => ({ ...prev, [trackId]: null }))
-        setBpmDetails(prev => ({
-          ...prev,
-          [trackId]: { source: r.source, error: r.error },
-        }))
-        setBpmDebugInfo(prev => ({
-          ...prev,
-          [trackId]: {
-            ...r,
-            urlsTried: r.urlsTried || [],
-            successfulUrl: r.successfulUrl || null,
+      try {
+        const res = await fetch('/api/bpm/stream-batch', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
           },
-        }))
-        const previewUrl = getPreviewUrlFromMeta(r)
-        if (previewUrl) {
-          setPreviewUrls(prev => ({ ...prev, [trackId]: previewUrl }))
-        }
-        setBpmStreamStatus(prev => ({ ...prev, [trackId]: 'error' }))
-        setLoadingBpms(prev => {
-          const next = new Set(prev)
-          next.delete(trackId)
-          return next
+          body: JSON.stringify({ trackIds, country: countryCode }),
         })
-        setTracksInDb(prev => new Set(prev).add(trackId))
-        if (retryTrackId === trackId) {
-          setRetryStatus({ loading: false, success: false, error: r.error || 'BPM calculation failed' })
-          setRetryTrackId(null)
+
+        if (!res.ok) {
+          console.error(`[BPM Client] Stream batch failed:`, res.status)
+          fetchBpmsForTracks(batch)
+          continue
         }
-      }
 
-      for (const [trackId, meta] of Object.entries(previewMeta)) {
-        const previewUrl = getPreviewUrlFromMeta(meta as any)
-        if (previewUrl) {
-          setPreviewUrls(prev => ({ ...prev, [trackId]: previewUrl }))
+        const data = await res.json()
+        const immediateResults = data.immediateResults || {}
+        const previewMeta = data.previewMeta || {}
+
+        for (const [trackId, result] of Object.entries(immediateResults)) {
+          const r = result as any
+          setTrackBpms(prev => ({ ...prev, [trackId]: null }))
+          setTrackKeys(prev => ({ ...prev, [trackId]: null }))
+          setTrackScales(prev => ({ ...prev, [trackId]: null }))
+          setBpmDetails(prev => ({
+            ...prev,
+            [trackId]: { source: r.source, error: r.error },
+          }))
+          setBpmDebugInfo(prev => ({
+            ...prev,
+            [trackId]: {
+              ...r,
+              urlsTried: r.urlsTried || [],
+              successfulUrl: r.successfulUrl || null,
+            },
+          }))
+          const previewUrl = getPreviewUrlFromMeta(r)
+          if (previewUrl) {
+            setPreviewUrls(prev => ({ ...prev, [trackId]: previewUrl }))
+          }
+          setBpmStreamStatus(prev => ({ ...prev, [trackId]: 'error' }))
+          setLoadingBpmFields(prev => {
+            const next = new Set(prev)
+            next.delete(trackId)
+            return next
+          })
+          setLoadingKeyFields(prev => {
+            const next = new Set(prev)
+            next.delete(trackId)
+            return next
+          })
+          setTracksInDb(prev => new Set(prev).add(trackId))
+          if (retryTrackId === trackId) {
+            setRetryStatus({ loading: false, success: false, error: r.error || 'BPM calculation failed' })
+            setRetryTrackId(null)
+          }
         }
-      }
 
-      const indexToTrackIdEntries = Object.entries(data.indexToTrackId || {})
-      if (!data.batchId || indexToTrackIdEntries.length === 0) {
-        const fallbackTracks = tracksToFetch.filter(track => !immediateResults[track.id])
-        if (fallbackTracks.length > 0) {
-          fetchBpmsForTracks(fallbackTracks)
+        for (const [trackId, meta] of Object.entries(previewMeta)) {
+          const previewUrl = getPreviewUrlFromMeta(meta as any)
+          if (previewUrl) {
+            setPreviewUrls(prev => ({ ...prev, [trackId]: previewUrl }))
+          }
         }
-        return
+
+        const indexToTrackIdEntries = Object.entries(data.indexToTrackId || {})
+        if (!data.batchId || indexToTrackIdEntries.length === 0) {
+          const fallbackTracks = batch.filter(track => !immediateResults[track.id])
+          if (fallbackTracks.length > 0) {
+            fetchBpmsForTracks(fallbackTracks)
+          }
+        } else {
+          const indexToTrackId = new Map<number, string>()
+          for (const [indexStr, trackId] of indexToTrackIdEntries) {
+            indexToTrackId.set(Number(indexStr), trackId as string)
+          }
+
+          await streamBatchResults(data.batchId, indexToTrackId, previewMeta)
+        }
+      } catch (error) {
+        console.error('[BPM Client] Stream batch error:', error)
+        fetchBpmsForTracks(batch)
       }
 
-      const indexToTrackId = new Map<number, string>()
-      for (const [indexStr, trackId] of indexToTrackIdEntries) {
-        indexToTrackId.set(Number(indexStr), trackId as string)
+      if (i + batchSize < tracksToFetch.length) {
+        await new Promise(resolve => setTimeout(resolve, 200))
       }
-
-      await streamBatchResults(data.batchId, indexToTrackId, previewMeta)
-    } catch (error) {
-      console.error('[BPM Client] Stream batch error:', error)
-      fetchBpmsForTracks(tracksToFetch)
     }
   }
 
@@ -699,13 +807,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
-      let processedResults = 0
-
       const maybeYield = async () => {
-        processedResults += 1
-        if (processedResults % 5 === 0) {
-          await new Promise(resolve => setTimeout(resolve, 0))
-        }
+        await new Promise(resolve => setTimeout(resolve, 0))
       }
 
       const handleStreamResult = async (data: any) => {
@@ -748,6 +851,20 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         }
         if (selectedScale != null) {
           setTrackScales(prev => ({ ...prev, [trackId]: selectedScale }))
+        }
+        if (selectedBpm != null) {
+          setLoadingBpmFields(prev => {
+            const next = new Set(prev)
+            next.delete(trackId)
+            return next
+          })
+        }
+        if (selectedKey != null || selectedScale != null) {
+          setLoadingKeyFields(prev => {
+            const next = new Set(prev)
+            next.delete(trackId)
+            return next
+          })
         }
 
         setBpmFullData(prev => ({
@@ -801,13 +918,25 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         setBpmStreamStatus(prev => ({ ...prev, [trackId]: status }))
 
         if (status === 'final') {
-          if (!finalizedTracks.has(trackId)) {
-            finalizedTracks.add(trackId)
-            setLoadingBpms(prev => {
+          if (selectedBpm == null) {
+            setTrackBpms(prev => ({ ...prev, [trackId]: null }))
+            setLoadingBpmFields(prev => {
               const next = new Set(prev)
               next.delete(trackId)
               return next
             })
+          }
+          if (selectedKey == null || selectedScale == null) {
+            setTrackKeys(prev => ({ ...prev, [trackId]: selectedKey ?? null }))
+            setTrackScales(prev => ({ ...prev, [trackId]: selectedScale ?? null }))
+            setLoadingKeyFields(prev => {
+              const next = new Set(prev)
+              next.delete(trackId)
+              return next
+            })
+          }
+          if (!finalizedTracks.has(trackId)) {
+            finalizedTracks.add(trackId)
             setTracksInDb(prev => new Set(prev).add(trackId))
             if (meta) {
               setBpmTracksCalculated(prev => prev + 1)
@@ -894,15 +1023,18 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       
       await Promise.all(
         batch.map(async (track) => {
-          if (loadingBpms.has(track.id)) {
+          if (isTrackLoading(track.id)) {
             return
           }
 
-          if (trackBpms[track.id] !== undefined && bpmStreamStatus[track.id] !== 'partial') {
+          const hasBpm = trackBpms[track.id] !== undefined
+          const hasKey = trackKeys[track.id] != null && trackScales[track.id] != null
+          if (hasBpm && hasKey && bpmStreamStatus[track.id] !== 'partial') {
             return // Already fetched or in progress
           }
           
-          setLoadingBpms(prev => new Set(prev).add(track.id))
+          setLoadingBpmFields(prev => new Set(prev).add(track.id))
+          setLoadingKeyFields(prev => new Set(prev).add(track.id))
           
           try {
             const res = await fetch(`/api/bpm?spotifyTrackId=${track.id}&country=${countryCode}`)
@@ -980,6 +1112,16 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               // Increment calculated count (this track was just calculated, not cached)
               setBpmTracksCalculated(prev => prev + 1)
               setBpmStreamStatus(prev => ({ ...prev, [track.id]: 'final' }))
+              setLoadingBpmFields(prev => {
+                const next = new Set(prev)
+                next.delete(track.id)
+                return next
+              })
+              setLoadingKeyFields(prev => {
+                const next = new Set(prev)
+                next.delete(track.id)
+                return next
+              })
               if (retryTrackId === track.id) {
                 setRetryStatus({
                   loading: false,
@@ -991,6 +1133,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             } else {
               const errorData = await res.json().catch(() => ({}))
               setTrackBpms(prev => ({
+                ...prev,
+                [track.id]: null,
+              }))
+              setTrackKeys(prev => ({
+                ...prev,
+                [track.id]: null,
+              }))
+              setTrackScales(prev => ({
                 ...prev,
                 [track.id]: null,
               }))
@@ -1009,6 +1159,16 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 },
               }))
               setBpmStreamStatus(prev => ({ ...prev, [track.id]: 'error' }))
+              setLoadingBpmFields(prev => {
+                const next = new Set(prev)
+                next.delete(track.id)
+                return next
+              })
+              setLoadingKeyFields(prev => {
+                const next = new Set(prev)
+                next.delete(track.id)
+                return next
+              })
               if (retryTrackId === track.id) {
                 setRetryStatus({
                   loading: false,
@@ -1024,13 +1184,36 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               ...prev,
               [track.id]: null,
             }))
+            setTrackKeys(prev => ({
+              ...prev,
+              [track.id]: null,
+            }))
+            setTrackScales(prev => ({
+              ...prev,
+              [track.id]: null,
+            }))
             setBpmStreamStatus(prev => ({ ...prev, [track.id]: 'error' }))
+            setLoadingBpmFields(prev => {
+              const next = new Set(prev)
+              next.delete(track.id)
+              return next
+            })
+            setLoadingKeyFields(prev => {
+              const next = new Set(prev)
+              next.delete(track.id)
+              return next
+            })
             if (retryTrackId === track.id) {
               setRetryStatus({ loading: false, success: false, error: 'Network error. Please try again.' })
               setRetryTrackId(null)
             }
           } finally {
-            setLoadingBpms(prev => {
+            setLoadingBpmFields(prev => {
+              const next = new Set(prev)
+              next.delete(track.id)
+              return next
+            })
+            setLoadingKeyFields(prev => {
               const next = new Set(prev)
               next.delete(track.id)
               return next
@@ -1073,6 +1256,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         setTrackBpms({})
         setTrackKeys({})
         setTrackScales({})
+        setLoadingBpmFields(new Set())
+        setLoadingKeyFields(new Set())
+        setTracksNeedingBpm(new Set())
+        setTracksNeedingKey(new Set())
+        setTracksNeedingCalc(new Set())
         setTracksInDb(new Set())
         setBpmDebugInfo({})
         setBpmDetails({})
@@ -1358,7 +1546,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
    * Get preview tooltip text
    */
   const getPreviewTooltip = (trackId: string): string => {
-    if (loadingBpms.has(trackId)) {
+    if (loadingPreviewIds.has(trackId)) {
       return 'Loading preview...'
     }
     if (hasPreview(trackId)) {
@@ -1383,9 +1571,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     let previewUrl = previewUrls[track.id] || null
 
     // If no preview URL available in DB, try to fetch from BPM API (which will search and update DB)
-    if (!previewUrl && !loadingBpms.has(track.id)) {
+    if (!previewUrl && !loadingPreviewIds.has(track.id)) {
       try {
-        setLoadingBpms(prev => new Set(prev).add(track.id))
+        setLoadingPreviewIds(prev => new Set(prev).add(track.id))
         const res = await fetch(`/api/bpm?spotifyTrackId=${track.id}&country=${countryCode}`)
         if (res.ok) {
           const data = await res.json()
@@ -1444,7 +1632,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       } catch (error) {
         console.error('Error fetching preview URL:', error)
       } finally {
-        setLoadingBpms(prev => {
+        setLoadingPreviewIds(prev => {
           const next = new Set(prev)
           next.delete(track.id)
           return next
@@ -1551,9 +1739,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     let previewUrl = previewUrls[track.id] || null
 
     // If no preview URL available in DB, try to fetch from BPM API (which will search and update DB)
-    if (!previewUrl && !loadingBpms.has(track.id)) {
+    if (!previewUrl && !loadingPreviewIds.has(track.id)) {
       try {
-        setLoadingBpms(prev => new Set(prev).add(track.id))
+        setLoadingPreviewIds(prev => new Set(prev).add(track.id))
         const res = await fetch(`/api/bpm?spotifyTrackId=${track.id}&country=${countryCode}`)
         if (res.ok) {
           const data = await res.json()
@@ -1612,7 +1800,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       } catch (error) {
         console.error('Error fetching preview URL:', error)
       } finally {
-        setLoadingBpms(prev => {
+        setLoadingPreviewIds(prev => {
           const next = new Set(prev)
           next.delete(track.id)
           return next
@@ -2140,19 +2328,19 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             <div className="space-y-2">
               {(() => {
                 const totalTracks = tracks.length
-                const songsInDb = tracks.filter(t => tracksInDb.has(t.id)).length
-                const tracksToSearch = totalTracks - songsInDb
+                const tracksToSearch = tracksNeedingCalc.size
+                const songsInDb = Math.max(0, totalTracks - tracksToSearch)
                 return (
                   <div className="mb-3 pb-3 border-b border-gray-300">
                     <p><strong>Playlist:</strong> {totalTracks} songs</p>
-                    <p><strong>In DB:</strong> {songsInDb} songs (with BPM or N/A)</p>
-                    <p><strong>To search:</strong> {tracksToSearch} songs</p>
+                    <p><strong>In DB:</strong> {songsInDb} songs</p>
+                    <p><strong>To calculate:</strong> {tracksToSearch} songs</p>
                   </div>
                 )
               })()}
               <p><strong>Total tracks:</strong> {tracks.length}</p>
               <p><strong>Tracks with BPM:</strong> {Object.values(trackBpms).filter(bpm => bpm !== null && bpm !== undefined).length}</p>
-              <p><strong>Tracks loading:</strong> {loadingBpms.size}</p>
+              <p><strong>Tracks loading:</strong> {loadingTrackIds.size}</p>
               <details className="mt-2">
                 <summary className="cursor-pointer font-semibold">BPM Results (first 10)</summary>
                 <pre className="mt-2 text-xs bg-white p-2 rounded overflow-auto max-h-48">
@@ -2217,7 +2405,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       id: t.id,
                       name: t.name,
                       bpm: trackBpms[t.id],
-                      loading: loadingBpms.has(t.id),
+                      loading: isTrackLoading(t.id),
                       debug: bpmDebugInfo[t.id],
                     })),
                     null,
@@ -2330,19 +2518,16 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           const totalTracks = tracks.length
           if (totalTracks === 0) return null
 
-          // Calculate songs already in DB (tracks that have spotify_track_id in database)
-          const songsInDb = tracks.filter(t => tracksInDb.has(t.id)).length
-          
-          // Tracks to search = total - tracks in DB
-          const tracksToSearch = totalTracks - songsInDb
+          // Tracks to search = tracks missing BPM and/or key data
+          const tracksToSearch = tracksNeedingCalc.size
           
           // Tracks currently being processed (loading)
-          const tracksLoading = loadingBpms.size
+          const tracksLoading = loadingTrackIds.size
           
           // Tracks that were NOT in DB but have been processed in this session (have a result, not loading)
           // X = number of tracks from "to search" that have been processed
           const tracksProcessedFromSearch = tracks.filter(t => 
-            !tracksInDb.has(t.id) && trackBpms[t.id] !== undefined && !loadingBpms.has(t.id)
+            tracksNeedingCalc.has(t.id) && !loadingTrackIds.has(t.id)
           ).length
           
           // Remaining = total to search - processed (only subtract completed ones, not loading ones)
@@ -2367,7 +2552,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             <div className="mb-4 sm:mb-6 text-sm text-gray-600 space-y-1">
               {shouldShowProgress ? (
                 <div>
-                  BPM information processing ongoing ({tracksToSearch} remaining){' '}
+                  BPM information processing ongoing ({tracksRemainingToSearch} remaining){' '}
                   <button
                     onClick={() => setShowBpmMoreInfo(true)}
                     className="text-blue-600 hover:text-blue-700 hover:underline"
@@ -2614,7 +2799,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         {getYearString(track.album.release_date)}
                         {' • '}
                         {formatDuration(track.duration_ms)}
-                                    {loadingBpms.has(track.id) && trackBpms[track.id] == null ? (
+                                    {loadingBpmFields.has(track.id) ? (
                                       <span className="text-gray-400"> • BPM...</span>
                                     ) : trackBpms[track.id] != null 
                                       ? (
@@ -2633,9 +2818,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                           )}
                                         </button>
                                       )
-                                      : track.tempo != null 
-                                        ? ` • ${Math.round(track.tempo)} BPM`
-                                        : (
+                                      : (tracksNeedingBpm.has(track.id) || bpmStreamStatus[track.id] === 'error')
+                                        ? (
                                             <button
                                               onClick={(e) => {
                                                 e.stopPropagation()
@@ -2646,7 +2830,21 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                             >
                                               {' • BPM N/A'}
                                             </button>
-                                          )}
+                                          )
+                                        : track.tempo != null 
+                                          ? ` • ${Math.round(track.tempo)} BPM`
+                                          : (
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation()
+                                                  setSelectedBpmTrack(track)
+                                                  setShowBpmModal(true)
+                                                }}
+                                                className="text-red-500 hover:text-red-600 hover:underline"
+                                              >
+                                                {' • BPM N/A'}
+                                              </button>
+                                            )}
                         {track.popularity != null && ` • Popularity: ${track.popularity}`}
                       </div>
                     </div>
@@ -2853,7 +3051,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         {formatDuration(track.duration_ms)}
                       </td>
                                   <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden md:table-cell" onClick={(e) => e.stopPropagation()}>
-                                    {loadingBpms.has(track.id) && trackBpms[track.id] == null ? (
+                                    {loadingBpmFields.has(track.id) ? (
                                       <div className="flex items-center gap-1">
                                         <svg className="animate-spin h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -2879,9 +3077,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                           )}
                                         </button>
                                       )
-                                      : track.tempo != null 
-                                        ? Math.round(track.tempo)
-                                        : (
+                                      : (tracksNeedingBpm.has(track.id) || bpmStreamStatus[track.id] === 'error')
+                                        ? (
                                             <button
                                               onClick={() => {
                                                 setSelectedBpmTrack(track)
@@ -2894,10 +3091,37 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                             >
                                               N/A
                                             </button>
-                                          )}
+                                          )
+                                        : track.tempo != null 
+                                          ? Math.round(track.tempo)
+                                          : (
+                                              <button
+                                                onClick={() => {
+                                                  setSelectedBpmTrack(track)
+                                                  setRetryStatus(null)
+                                                  setRetryAttempted(false)
+                                                  setShowBpmModal(true)
+                                                }}
+                                                className="text-red-500 hover:text-red-600 hover:underline cursor-pointer"
+                                                title="Click to see why BPM is not available"
+                                              >
+                                                N/A
+                                              </button>
+                                            )}
                                   </td>
                       <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden md:table-cell">
                         {(() => {
+                          if (loadingKeyFields.has(track.id)) {
+                            return (
+                              <span className="inline-flex items-center gap-1 text-gray-400">
+                                <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span>...</span>
+                              </span>
+                            )
+                          }
                           const key = trackKeys[track.id]
                           const scale = trackScales[track.id]
                           if (key && scale) {
@@ -2906,6 +3130,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             return key
                           } else if (scale) {
                             return scale
+                          }
+                          if (tracksNeedingKey.has(track.id) || bpmStreamStatus[track.id] === 'error') {
+                            return 'N/A'
                           }
                           return '-'
                         })()}
@@ -3084,7 +3311,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       </span>
                     </div>
                   )}
-                  {loadingBpms.has(bpmModalData.trackId) && trackBpms[bpmModalData.trackId] == null && (
+                  {loadingBpmFields.has(bpmModalData.trackId) && trackBpms[bpmModalData.trackId] == null && (
                     <div className="text-xs text-gray-500">
                       Waiting for first partial result...
                     </div>
@@ -3096,7 +3323,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         setRetryStatus({ loading: true })
                         setRetryAttempted(true)
                         setRetryTrackId(bpmModalData.trackId)
-                        streamBpmsForTracks([selectedBpmTrack])
+                        const targetIds = new Set([bpmModalData.trackId])
+                        streamBpmsForTracks([selectedBpmTrack], targetIds, targetIds)
                       }}
                       disabled={retryStatus?.loading}
                       className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded transition-colors"
