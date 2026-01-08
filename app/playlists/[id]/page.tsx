@@ -1369,7 +1369,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     const originalUrl = url // Keep original for cache key if it's an API URL
     
     // Check if it's a Deezer API URL - if so, fetch it to get the preview URL
-    if (url.includes('api.deezer.com/search') || url.includes('api.deezer.com/album')) {
+    if (url.includes('api.deezer.com')) {
       // Check cache first using the API URL as key
       if (audioCache.current.has(originalUrl)) {
         const cachedUrl = audioCache.current.get(originalUrl)!

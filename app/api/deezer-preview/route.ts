@@ -52,8 +52,13 @@ export async function GET(request: Request) {
     // Parse the response to find preview URL
     let previewUrl: string | null = null
 
+    if (data.preview) {
+      previewUrl = data.preview
+      console.log('[Deezer Preview API] Found preview URL from track response:', previewUrl)
+    }
+
     // Check search results (data.data array)
-    if (data.data && Array.isArray(data.data) && data.data.length > 0) {
+    if (!previewUrl && data.data && Array.isArray(data.data) && data.data.length > 0) {
       const track = data.data[0]
       if (track.preview) {
         previewUrl = track.preview
@@ -102,7 +107,6 @@ export async function GET(request: Request) {
     )
   }
 }
-
 
 
 

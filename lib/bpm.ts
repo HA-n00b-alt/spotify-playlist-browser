@@ -272,7 +272,43 @@ function getSuccessfulPreviewUrl(urls: PreviewUrlEntry[] | undefined): string | 
   return successful ? successful.url : null
 }
 
+async function resolveDeezerApiPreviewUrl(apiUrl: string): Promise<string | null> {
+  try {
+    const response = await fetch(apiUrl, {
+      headers: {
+        'User-Agent': 'python-requests/2.31.0',
+        'Accept': '*/*',
+      },
+    })
+    if (!response.ok) {
+      return null
+    }
+    const data = await response.json()
+    if (data?.preview) {
+      return data.preview
+    }
+    if (data?.data && Array.isArray(data.data) && data.data.length > 0) {
+      const track = data.data.find((t: any) => t.preview)
+      if (track?.preview) {
+        return track.preview
+      }
+    }
+    if (data?.tracks?.data && Array.isArray(data.tracks.data) && data.tracks.data.length > 0) {
+      const track = data.tracks.data.find((t: any) => t.preview)
+      if (track?.preview) {
+        return track.preview
+      }
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
 async function checkPreviewUrl(url: string): Promise<boolean> {
+  if (url.includes('api.deezer.com')) {
+    return false
+  }
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 4000)
   try {
@@ -281,6 +317,10 @@ async function checkPreviewUrl(url: string): Promise<boolean> {
       headers: { Range: 'bytes=0-1' },
       signal: controller.signal,
     })
+    const contentType = response.headers.get('content-type') || ''
+    if (contentType.includes('application/json')) {
+      return false
+    }
     return response.ok || response.status === 206
   } catch {
     return false
@@ -303,8 +343,32 @@ export async function ensureSuccessfulPreviewUrlForTrack(params: {
     return { urls, error }
   }
 
-  if (urls.length === 1) {
-    const updatedUrls = [{ ...urls[0], successful: true }]
+  const normalizedUrls: PreviewUrlEntry[] = []
+  for (const entry of urls) {
+    if (entry.url.includes('api.deezer.com')) {
+      const previewUrl = await resolveDeezerApiPreviewUrl(entry.url)
+      if (previewUrl) {
+        normalizedUrls.push({ ...entry, url: previewUrl })
+        continue
+      }
+    }
+    normalizedUrls.push({ ...entry })
+  }
+
+  if (normalizedUrls.length === 1) {
+    if (normalizedUrls[0].url.includes('api.deezer.com')) {
+      const finalError = error || 'No preview audio available from any source (iTunes, Deezer)'
+      await query(
+        `UPDATE track_bpm_cache
+         SET urls = $1::jsonb,
+             error = $2,
+             updated_at = NOW()
+         WHERE spotify_track_id = $3`,
+        [JSON.stringify(normalizedUrls), finalError, spotifyTrackId]
+      )
+      return { urls: normalizedUrls, error: finalError }
+    }
+    const updatedUrls = [{ ...normalizedUrls[0], successful: true }]
     await query(
       `UPDATE track_bpm_cache
        SET urls = $1::jsonb,
@@ -317,10 +381,10 @@ export async function ensureSuccessfulPreviewUrlForTrack(params: {
   }
 
   if (!allowProbe) {
-    return { urls, error }
+    return { urls: normalizedUrls, error }
   }
 
-  let updatedUrls: PreviewUrlEntry[] = urls.map((entry) => ({ ...entry }))
+  let updatedUrls: PreviewUrlEntry[] = normalizedUrls.map((entry) => ({ ...entry }))
   let successfulIndex = -1
   for (let i = 0; i < updatedUrls.length; i += 1) {
     const ok = await checkPreviewUrl(updatedUrls[i].url)
