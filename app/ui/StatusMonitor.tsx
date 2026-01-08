@@ -112,10 +112,11 @@ export default function StatusMonitor({ batchId, onComplete, onError }: StatusMo
               } else if (data.type === 'result') {
                 // Only push valid result objects with required fields
                 if (data && typeof data === 'object' && data.type === 'result' && typeof data.index === 'number') {
+                  const index = data.index
                   // Ensure we have a valid result object with all fields properly typed
                   const validResult: StreamStatus = {
                     type: 'result',
-                    index: data.index,
+                    index,
                     url: typeof data.url === 'string' ? data.url : undefined,
                     result_status: data.status === 'partial' || data.status === 'final' ? data.status : undefined,
                     bpm_essentia: typeof data.bpm_essentia === 'number' ? data.bpm_essentia : (data.bpm_essentia === null ? null : undefined),
@@ -132,7 +133,7 @@ export default function StatusMonitor({ batchId, onComplete, onError }: StatusMo
                     keyscale_confidence_librosa: typeof data.keyscale_confidence_librosa === 'number' ? data.keyscale_confidence_librosa : (data.keyscale_confidence_librosa === null ? null : undefined),
                     debug_txt: typeof data.debug_txt === 'string' ? data.debug_txt : (data.debug_txt === null ? null : undefined),
                   }
-                  const existing = resultsByIndex.get(validResult.index)
+                  const existing = resultsByIndex.get(index)
                   const shouldIgnore =
                     existing?.result_status === 'final' && validResult.result_status === 'partial'
                   if (!shouldIgnore) {
@@ -140,9 +141,9 @@ export default function StatusMonitor({ batchId, onComplete, onError }: StatusMo
                       ...existing,
                       ...validResult,
                       type: 'result',
-                      index: validResult.index,
+                      index,
                     }
-                    resultsByIndex.set(validResult.index, mergedResult)
+                    resultsByIndex.set(index, mergedResult)
                   }
                   setResults(sortedResults())
                 } else {
