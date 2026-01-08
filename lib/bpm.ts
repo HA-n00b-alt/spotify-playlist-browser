@@ -212,28 +212,9 @@ async function checkCache(
 function getCountryCodeFromRequest(request?: Request): string {
   if (!request) {
     console.log('[BPM Module] No request provided, defaulting to US')
-  return 'us'
-}
-
-function getPreviewUrlToReturn(
-  successfulUrl: string | null | undefined,
-  urlsTried: string[] | undefined
-): string | null | undefined {
-  let previewUrlToReturn = successfulUrl || undefined
-  if (urlsTried && Array.isArray(urlsTried) && urlsTried.length > 0) {
-    const deezerPreviewUrls = urlsTried.filter((url: string) => {
-      const isDeezerUrl = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
-      const isAudioFile = url.includes('.mp3') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('/preview')
-      const isNotApiEndpoint = !url.includes('api.deezer.com/search') && !url.includes('api.deezer.com/album') && !url.includes('api.deezer.com/track')
-      return isDeezerUrl && isAudioFile && isNotApiEndpoint
-    })
-    if (deezerPreviewUrls.length > 0) {
-      previewUrlToReturn = deezerPreviewUrls[deezerPreviewUrls.length - 1]
-    }
+    return 'us'
   }
-  return previewUrlToReturn
-}
-  
+
   try {
     // Check for manual override first (this is set by the API route when country param is provided)
     const override = request.headers.get('x-country-override')
@@ -280,6 +261,25 @@ function getPreviewUrlToReturn(
   }
   
   return 'us' // Default to US
+}
+
+function getPreviewUrlToReturn(
+  successfulUrl: string | null | undefined,
+  urlsTried: string[] | undefined
+): string | null | undefined {
+  let previewUrlToReturn = successfulUrl || undefined
+  if (urlsTried && Array.isArray(urlsTried) && urlsTried.length > 0) {
+    const deezerPreviewUrls = urlsTried.filter((url: string) => {
+      const isDeezerUrl = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
+      const isAudioFile = url.includes('.mp3') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('/preview')
+      const isNotApiEndpoint = !url.includes('api.deezer.com/search') && !url.includes('api.deezer.com/album') && !url.includes('api.deezer.com/track')
+      return isDeezerUrl && isAudioFile && isNotApiEndpoint
+    })
+    if (deezerPreviewUrls.length > 0) {
+      previewUrlToReturn = deezerPreviewUrls[deezerPreviewUrls.length - 1]
+    }
+  }
+  return previewUrlToReturn
 }
 
 /**
