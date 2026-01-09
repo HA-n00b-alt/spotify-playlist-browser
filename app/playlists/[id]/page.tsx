@@ -2288,7 +2288,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       <div className="min-h-screen flex flex-col bg-transparent p-4 sm:p-8">
         <div className="max-w-7xl mx-auto flex-1 w-full">
           <PageHeader
-            subtitle="[user] playlist"
+            subtitle=""
             breadcrumbs={[
               { label: 'Playlists', href: '/playlists' },
               { label: 'Playlist' },
@@ -2370,7 +2370,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-transparent">
       <div className="max-w-7xl mx-auto flex-1 w-full">
         <PageHeader
-          subtitle="[user] playlist"
+          subtitle=""
           breadcrumbs={[
             { label: 'Playlists', href: '/playlists' },
             { label: playlistInfo?.name ?? 'Playlist' },
@@ -2537,7 +2537,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       href={playlistInfo.external_urls.spotify}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="block text-[32px] font-bold tracking-tight text-[#171923] hover:text-emerald-600"
+                      className="block text-[32px] font-semibold tracking-tight text-[#171923] hover:text-emerald-600"
                       onClick={(e) => {
                         e.preventDefault()
                         const spotifyUri = `spotify:playlist:${playlistInfo.id}`
@@ -2550,7 +2550,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       {playlistInfo.name}
                     </a>
                   ) : (
-                    <h1 className="text-[32px] font-bold tracking-tight text-[#171923]">
+                    <h1 className="text-[32px] font-semibold tracking-tight text-[#171923]">
                       {playlistInfo.name}
                     </h1>
                   )}
@@ -2613,9 +2613,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       {isCached && cachedAt && (
                         <button
                           onClick={() => setShowCacheModal(true)}
-                          className="text-xs text-gray-400 hover:text-gray-600 hover:underline"
+                          className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-200 text-[11px] font-semibold text-blue-700"
+                          title="Using cached data"
+                          aria-label="Using cached data"
                         >
-                          Using cached data
+                          C
                         </button>
                       )}
                     </div>

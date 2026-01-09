@@ -178,7 +178,7 @@ export default function PageHeader({
                     onClick={() => setIsMenuOpen((prev) => !prev)}
                     aria-label="Open menu"
                     aria-expanded={isMenuOpen}
-                    className="inline-flex h-6 w-6 items-center justify-center rounded-full"
+                    className="inline-flex h-5 w-5 items-center justify-center"
                   >
                     <Image
                       src="/playlist-tools-logo.svg"
@@ -288,9 +288,11 @@ export default function PageHeader({
             </div>
           </header>
           <div className="h-16" />
-          <div className="mx-auto w-full max-w-7xl px-4 sm:px-8 pt-2">
-            <p className="text-[11px] text-gray-400">{displaySubtitle}</p>
-          </div>
+          {displaySubtitle ? (
+            <div className="mx-auto w-full max-w-7xl px-4 sm:px-8 pt-2">
+              <p className="text-[11px] text-gray-400">{displaySubtitle}</p>
+            </div>
+          ) : null}
         </div>
       )}
     </div>
