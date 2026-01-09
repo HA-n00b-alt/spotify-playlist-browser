@@ -161,7 +161,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [includeHalfDoubleBpm, setIncludeHalfDoubleBpm] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
   const [showBpmInfo, setShowBpmInfo] = useState(false)
-  const [showBpmToast, setShowBpmToast] = useState(true)
   const [playingTrackId, setPlayingTrackId] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const authErrorHandledRef = useRef(false) // Prevent infinite loops on auth errors
@@ -2219,13 +2218,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     }
   }, [tracks, tracksNeedingCalc, loadingTrackIds, trackBpms, bpmProcessingStartTime])
 
-  const tracksWithNaCount = bpmSummary?.tracksWithNa ?? 0
-
-  useEffect(() => {
-    if (tracksWithNaCount > 0) {
-      setShowBpmToast(true)
-    }
-  }, [tracksWithNaCount])
 
   // Load preferred page size from localStorage
   useEffect(() => {
@@ -2614,61 +2606,25 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           </div>
         )}
 
-        {/* BPM Processing Progress Indicator - Always visible */}
-        {bpmSummary && (
-          <div className="mb-4 sm:mb-6 text-sm text-gray-600 space-y-1">
-            {bpmSummary.shouldShowProgress ? (
-              <div>
-                BPM information processing ongoing ({bpmSummary.tracksRemainingToSearch} remaining){' '}
-                <button
-                  onClick={() => setShowBpmMoreInfo(true)}
-                  className="text-blue-600 hover:text-blue-700 hover:underline"
-                >
-                  (more info)
-                </button>
-              </div>
-            ) : bpmSummary.tracksWithNa > 0 ? (
-              <div>
-                {bpmSummary.tracksWithNa} of {bpmSummary.totalTracks} tracks have no BPM information available. You can retry by clicking on the N/A value.{' '}
-                <button
-                  onClick={() => setShowBpmMoreInfo(true)}
-                  className="text-blue-600 hover:text-blue-700 hover:underline"
-                >
-                  (more info)
-                </button>
-              </div>
-            ) : (
-              <div>
-                All {bpmSummary.totalTracks} tracks have BPM information available.{' '}
-                <button
-                  onClick={() => setShowBpmMoreInfo(true)}
-                  className="text-blue-600 hover:text-blue-700 hover:underline"
-                >
-                  (more info)
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-        
         <div className="mb-4 sm:mb-6 space-y-3 sm:space-y-4">
-          {tracksWithNaCount > 0 && showBpmToast && (
+          {bpmSummary && (
             <div className="flex items-start justify-between gap-3 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm">
               <div className="flex items-start gap-2">
-                <span className="mt-0.5 text-amber-500">
-                  ⚠
-                </span>
+                <span className="mt-0.5 text-amber-500">!</span>
                 <span>
-                  {tracksWithNaCount} of {bpmSummary?.totalTracks ?? tracks.length} tracks have no BPM yet.
+                  {bpmSummary.shouldShowProgress
+                    ? `BPM information processing ongoing (${bpmSummary.tracksRemainingToSearch} remaining).`
+                    : bpmSummary.tracksWithNa > 0
+                      ? `${bpmSummary.tracksWithNa} of ${bpmSummary.totalTracks} tracks have no BPM information available. You can retry by clicking on the N/A value.`
+                      : `All ${bpmSummary.totalTracks} tracks have BPM information available.`}
                 </span>
               </div>
               <button
                 type="button"
-                onClick={() => setShowBpmToast(false)}
+                onClick={() => setShowBpmMoreInfo(true)}
                 className="text-amber-700 hover:text-amber-900"
-                aria-label="Dismiss BPM notice"
               >
-                ×
+                More info
               </button>
             </div>
           )}
@@ -2686,6 +2642,16 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full rounded-lg bg-[#F3F4F6] py-3 pl-10 pr-4 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
             />
+          </div>
+
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="text-xs sm:text-sm text-gray-600 hover:text-gray-900 underline py-1"
+            >
+              {showAdvanced ? 'Hide' : 'Show'} Advanced Filters
+            </button>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -2730,95 +2696,85 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               </div>
             )}
           </div>
-          
-          <div>
-            <button
-              type="button"
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              className="text-xs sm:text-sm text-gray-600 hover:text-gray-900 underline py-2"
-            >
-              {showAdvanced ? 'Hide' : 'Show'} Advanced Filters
-            </button>
-            
-            {showAdvanced && (
-              <div className="mt-3 sm:mt-4 p-5 sm:p-6 bg-gray-100 rounded-lg border border-gray-200">
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 max-w-4xl">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-3">
-                      Year Range
-                    </label>
-                    <div className="flex gap-3 items-center">
-                      <input
-                        type="number"
-                        placeholder="From"
-                        value={yearFrom}
-                        onChange={(e) => setYearFrom(e.target.value)}
-                        className="w-24 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      />
-                      <span className="text-gray-500 text-sm whitespace-nowrap">to</span>
-                      <input
-                        type="number"
-                        placeholder="To"
-                        value={yearTo}
-                        onChange={(e) => setYearTo(e.target.value)}
-                        className="w-24 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-3">
-                      BPM Range
-                    </label>
-                    <div className="flex gap-3 items-center mb-3">
-                      <input
-                        type="number"
-                        placeholder="From"
-                        value={bpmFrom}
-                        onChange={(e) => setBpmFrom(e.target.value)}
-                        className="w-24 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      />
-                      <span className="text-gray-500 text-sm whitespace-nowrap">to</span>
-                      <input
-                        type="number"
-                        placeholder="To"
-                        value={bpmTo}
-                        onChange={(e) => setBpmTo(e.target.value)}
-                        className="w-24 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      />
-                    </div>
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={includeHalfDoubleBpm}
-                        onChange={(e) => setIncludeHalfDoubleBpm(e.target.checked)}
-                        className="mr-2 w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                      />
-                      <span className="text-sm text-gray-700">
-                        Include tracks with half/double BPM
-                      </span>
-                    </label>
+
+          {showAdvanced && (
+            <div className="mt-3 sm:mt-4 p-5 sm:p-6 bg-gray-100 rounded-lg border border-gray-200">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 max-w-4xl">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Year Range
+                  </label>
+                  <div className="flex gap-3 items-center">
+                    <input
+                      type="number"
+                      placeholder="From"
+                      value={yearFrom}
+                      onChange={(e) => setYearFrom(e.target.value)}
+                      className="w-24 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    />
+                    <span className="text-gray-500 text-sm whitespace-nowrap">to</span>
+                    <input
+                      type="number"
+                      placeholder="To"
+                      value={yearTo}
+                      onChange={(e) => setYearTo(e.target.value)}
+                      className="w-24 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    />
                   </div>
                 </div>
                 
-                {(yearFrom || yearTo || bpmFrom || bpmTo) && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setYearFrom('')
-                      setYearTo('')
-                      setBpmFrom('')
-                      setBpmTo('')
-                      setIncludeHalfDoubleBpm(false)
-                    }}
-                    className="mt-4 text-sm text-red-600 hover:text-red-700 underline"
-                  >
-                    Clear Filters
-                  </button>
-                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    BPM Range
+                  </label>
+                  <div className="flex gap-3 items-center mb-3">
+                    <input
+                      type="number"
+                      placeholder="From"
+                      value={bpmFrom}
+                      onChange={(e) => setBpmFrom(e.target.value)}
+                      className="w-24 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    />
+                    <span className="text-gray-500 text-sm whitespace-nowrap">to</span>
+                    <input
+                      type="number"
+                      placeholder="To"
+                      value={bpmTo}
+                      onChange={(e) => setBpmTo(e.target.value)}
+                      className="w-24 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    />
+                  </div>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={includeHalfDoubleBpm}
+                      onChange={(e) => setIncludeHalfDoubleBpm(e.target.checked)}
+                      className="mr-2 w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                    />
+                    <span className="text-sm text-gray-700">
+                      Include tracks with half/double BPM
+                    </span>
+                  </label>
+                </div>
               </div>
-            )}
-          </div>
+              
+              {(yearFrom || yearTo || bpmFrom || bpmTo) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setYearFrom('')
+                    setYearTo('')
+                    setBpmFrom('')
+                    setBpmTo('')
+                    setIncludeHalfDoubleBpm(false)
+                  }}
+                  className="mt-4 text-sm text-red-600 hover:text-red-700 underline"
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Cached Data Indicator - Discrete, just before table */}

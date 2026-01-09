@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getPlaylistsWithMetadata } from '@/lib/playlists'
-import { isAdminUser } from '@/lib/analytics'
 import PlaylistsTable from './PlaylistsTable'
 import PageHeader from '../components/PageHeader'
 import { logError } from '@/lib/logger'
@@ -42,8 +41,6 @@ interface Playlist {
 export default async function PlaylistsPage() {
   let playlists: Playlist[] = []
   let error: string | null = null
-  const isAdmin = await isAdminUser()
-
   try {
     playlists = await getPlaylistsWithMetadata() as Playlist[]
   } catch (e) {
@@ -228,16 +225,6 @@ export default async function PlaylistsPage() {
         <PageHeader
           subtitle="[user] playlists"
           breadcrumbs={[{ label: 'Playlists' }]}
-          settingsItems={
-            isAdmin ? (
-              <Link
-                href="/stats"
-                className="inline-flex items-center justify-between text-sm font-medium text-gray-700 hover:text-gray-900"
-              >
-                View Stats
-              </Link>
-            ) : undefined
-          }
         />
         
         {playlists.length === 0 ? (

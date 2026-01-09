@@ -5,6 +5,7 @@ import UserMenu from './UserMenu'
 import { useEffect, useRef, useState } from 'react'
 
 interface PageHeaderProps {
+  title?: string
   subtitle: string
   center?: boolean
   breadcrumbs?: Array<{
@@ -15,6 +16,7 @@ interface PageHeaderProps {
 }
 
 export default function PageHeader({
+  title = 'Spotify Playlist Tools',
   subtitle,
   center,
   breadcrumbs,
@@ -24,9 +26,9 @@ export default function PageHeader({
   const [bpmStatus, setBpmStatus] = useState<'checking' | 'ok' | 'error'>('checking')
   const [bpmStatusMessage, setBpmStatusMessage] = useState<string | null>(null)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [showBpmApi, setShowBpmApi] = useState(true)
-  const [showCreditSearch, setShowCreditSearch] = useState(true)
   const settingsRef = useRef<HTMLDivElement | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
 
   useEffect(() => {
     // Fetch user info for subtitle
@@ -65,6 +67,30 @@ export default function PageHeader({
       document.removeEventListener('keydown', handleEscape)
     }
   }, [isSettingsOpen])
+
+  useEffect(() => {
+    if (!isMenuOpen) return
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false)
+      }
+    }
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleEscape)
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [isMenuOpen])
 
   useEffect(() => {
     let isMounted = true
@@ -147,16 +173,47 @@ export default function PageHeader({
           <header className="fixed inset-x-0 top-0 z-40 h-16 border-b border-gray-200/80 bg-white/70 backdrop-blur">
             <div className="mx-auto flex h-full w-full max-w-7xl items-center justify-between px-4 sm:px-8">
               <nav className="flex items-center gap-2 text-xs sm:text-sm text-gray-500">
-                <Link
-                  href="/"
-                  aria-label="Home"
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="2">
-                    <path d="M3 10.5L12 3l9 7.5" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M5 9.5V20h14V9.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </Link>
+                <div className="relative" ref={menuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setIsMenuOpen((prev) => !prev)}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                    aria-label="Open menu"
+                    aria-expanded={isMenuOpen}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="2">
+                      <path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                  {isMenuOpen && (
+                    <div className="absolute left-0 mt-3 w-56 rounded-2xl border border-gray-200 bg-white p-2 text-sm shadow-xl">
+                      <Link
+                        href="/playlists"
+                        className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                      >
+                        Playlists
+                      </Link>
+                      <Link
+                        href="/credits"
+                        className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                      >
+                        Credit Search
+                      </Link>
+                      <Link
+                        href="/stats"
+                        className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                      >
+                        Stats
+                      </Link>
+                      <Link
+                        href="/docs"
+                        className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                      >
+                        Documentation
+                      </Link>
+                    </div>
+                  )}
+                </div>
                 {(breadcrumbs && breadcrumbs.length > 0 ? breadcrumbs : [{ label: 'Playlists' }]).map((crumb, index, list) => (
                   <div key={`${crumb.label}-${index}`} className="flex items-center gap-2">
                     <span className="text-gray-300">/</span>
@@ -195,60 +252,13 @@ export default function PageHeader({
                     <div className="absolute right-0 mt-3 w-72 rounded-2xl border border-gray-200 bg-white p-4 text-sm shadow-xl">
                       <div className="space-y-4">
                         <div className="space-y-2">
-                          <div className="flex items-center justify-between text-gray-700">
-                            <span className="font-medium">BPM API</span>
-                            <button
-                              type="button"
-                              role="switch"
-                              aria-checked={showBpmApi}
-                              onClick={() => setShowBpmApi((prev) => !prev)}
-                              className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${
-                                showBpmApi ? 'bg-emerald-500' : 'bg-gray-200'
-                              }`}
-                            >
-                              <span
-                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
-                                  showBpmApi ? 'translate-x-4' : 'translate-x-1'
-                                }`}
-                              />
-                            </button>
+                          <div className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-400">
+                            BPM API
                           </div>
-                          {showBpmApi && (
-                            <div className="flex items-center gap-2 text-xs text-gray-500">
-                              <span className={`h-2 w-2 rounded-full ${bpmStatusColor}`} />
-                              <span>{bpmStatusLabel}</span>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between text-gray-700">
-                            <span className="font-medium">Credit Search</span>
-                            <button
-                              type="button"
-                              role="switch"
-                              aria-checked={showCreditSearch}
-                              onClick={() => setShowCreditSearch((prev) => !prev)}
-                              className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${
-                                showCreditSearch ? 'bg-emerald-500' : 'bg-gray-200'
-                              }`}
-                            >
-                              <span
-                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
-                                  showCreditSearch ? 'translate-x-4' : 'translate-x-1'
-                                }`}
-                              />
-                            </button>
+                          <div className="flex items-center gap-2 text-xs text-gray-600">
+                            <span className={`h-2 w-2 rounded-full ${bpmStatusColor}`} />
+                            <span>{bpmStatusLabel}</span>
                           </div>
-                          {showCreditSearch && (
-                            <Link
-                              href="/credits"
-                              className="inline-flex items-center gap-2 text-xs font-medium text-gray-600 hover:text-gray-900"
-                            >
-                              <span className="text-sm">◎</span>
-                              Open Credit Search
-                            </Link>
-                          )}
                         </div>
 
                         {settingsItems && (
@@ -267,6 +277,12 @@ export default function PageHeader({
             </div>
           </header>
           <div className="h-16" />
+          <div className="mx-auto w-full max-w-7xl px-4 sm:px-8 pt-6">
+            <div className="space-y-1">
+              <h1 className="text-2xl font-semibold text-[#111827] sm:text-3xl">{title}</h1>
+              <p className="text-sm text-gray-500">{displaySubtitle}</p>
+            </div>
+          </div>
         </div>
       )}
     </div>
