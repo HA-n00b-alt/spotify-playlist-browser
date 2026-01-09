@@ -322,11 +322,11 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       {isCached && (
-                        <span
-                          className="text-[11px] text-blue-700 border border-blue-200 bg-[#F5F5F7] px-1.5 py-0.5 rounded-full font-semibold"
-                          title="Cached"
-                        >
+                        <span className="group relative inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-200 text-[11px] font-semibold text-blue-700">
                           C
+                          <span className="pointer-events-none absolute right-0 top-7 whitespace-nowrap rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+                            Using cached data
+                          </span>
                         </span>
                       )}
                       {isNew && (
@@ -474,11 +474,11 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                     <td className="px-2 py-4 text-center">
                       <div className="flex items-center justify-center gap-1">
                         {isCached && (
-                          <span
-                            className="text-[11px] text-blue-700 border border-blue-200 bg-[#F5F5F7] px-2 py-0.5 rounded-full"
-                            title="Cached"
-                          >
+                          <span className="group relative inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-200 text-[11px] font-semibold text-blue-700">
                             C
+                            <span className="pointer-events-none absolute right-0 top-7 whitespace-nowrap rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+                              Using cached data
+                            </span>
                           </span>
                         )}
                         {isNew && (
