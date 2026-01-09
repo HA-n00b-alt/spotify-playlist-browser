@@ -94,10 +94,8 @@ export async function GET(request: Request) {
     let releaseProducedBy: string[] = []
     let releaseMixedBy: string[] = []
     let releaseMasteredBy: string[] = []
-    if (
-      recording?.id &&
-      (producedBy.length === 0 || mixedBy.length === 0 || masteredBy.length === 0)
-    ) {
+    let releaseId: string | null = null
+    if (recording?.id) {
       const releaseUrl =
         `https://musicbrainz.org/ws/2/release?recording=${encodeURIComponent(recording.id)}` +
         `&fmt=json&inc=artist-rels&limit=1`
@@ -111,12 +109,16 @@ export async function GET(request: Request) {
         })
         if (releaseResponse.ok) {
           const releaseData = await releaseResponse.json()
-          const releaseRelations = Array.isArray(releaseData?.releases?.[0]?.relations)
-            ? releaseData.releases[0].relations
-            : []
-          releaseProducedBy = collectNamesForRoles(releaseRelations, producerRoles)
-          releaseMixedBy = collectNamesForRoles(releaseRelations, mixRoles)
-          releaseMasteredBy = collectNamesForRoles(releaseRelations, masterRoles)
+          const release = releaseData?.releases?.[0]
+          releaseId = typeof release?.id === 'string' ? release.id : null
+          if (producedBy.length === 0 || mixedBy.length === 0 || masteredBy.length === 0) {
+            const releaseRelations = Array.isArray(release?.relations)
+              ? release.relations
+              : []
+            releaseProducedBy = collectNamesForRoles(releaseRelations, producerRoles)
+            releaseMixedBy = collectNamesForRoles(releaseRelations, mixRoles)
+            releaseMasteredBy = collectNamesForRoles(releaseRelations, masterRoles)
+          }
         }
       } catch {
         releaseProducedBy = []
@@ -163,6 +165,7 @@ export async function GET(request: Request) {
       mixedBy: Array.from(new Set([...mixedBy, ...releaseMixedBy])),
       masteredBy: Array.from(new Set([...masteredBy, ...releaseMasteredBy])),
       writtenBy: uniqueComposition,
+      releaseId,
     })
   } catch (error) {
     return NextResponse.json(

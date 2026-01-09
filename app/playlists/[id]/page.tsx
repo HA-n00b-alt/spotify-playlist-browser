@@ -110,6 +110,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         producedBy: string[]
         mixedBy: string[]
         masteredBy: string[]
+        releaseId?: string | null
       }
     >
   >({})
@@ -1450,6 +1451,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           producedBy: data.producedBy || data.production || [],
           mixedBy: data.mixedBy || [],
           masteredBy: data.masteredBy || [],
+          releaseId: typeof data.releaseId === 'string' ? data.releaseId : null,
         },
       }))
       setCreditsErrorByTrackId(prev => {
@@ -3910,9 +3912,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               <p className="text-sm text-gray-600">
                 {selectedCreditsTrack.artists.map(a => a.name).join(', ')}
               </p>
-              {selectedCreditsTrack.external_ids?.isrc && (
+              {creditsByTrackId[selectedCreditsTrack.id]?.releaseId && (
                 <a
-                  href={`https://musicbrainz.org/isrc/${encodeURIComponent(selectedCreditsTrack.external_ids.isrc)}`}
+                  href={`https://musicbrainz.org/release/${encodeURIComponent(creditsByTrackId[selectedCreditsTrack.id].releaseId as string)}`}
                   className="text-xs text-gray-500 hover:text-gray-600"
                   target="_blank"
                   rel="noreferrer"

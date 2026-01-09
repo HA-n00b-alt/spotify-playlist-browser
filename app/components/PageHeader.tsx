@@ -17,6 +17,7 @@ interface PageHeaderProps {
 export default function PageHeader({ subtitle, backLink, rightButtons, center }: PageHeaderProps) {
   const [userName, setUserName] = useState<string | null>(null)
   const [bpmStatus, setBpmStatus] = useState<'checking' | 'ok' | 'error'>('checking')
+  const [bpmStatusMessage, setBpmStatusMessage] = useState<string | null>(null)
 
   useEffect(() => {
     // Fetch user info for subtitle
@@ -38,20 +39,41 @@ export default function PageHeader({ subtitle, backLink, rightButtons, center }:
     const timeoutId = setTimeout(() => controller.abort(), 30000)
 
     setBpmStatus('checking')
+    setBpmStatusMessage(null)
     fetch('/api/bpm/health', { signal: controller.signal })
-      .then((res) => {
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}))
         if (!res.ok) {
-          throw new Error(`BPM health check failed: ${res.status}`)
+          const message =
+            typeof data?.error === 'string' && data.error.trim()
+              ? data.error
+              : `BPM health check failed: ${res.status}`
+          throw new Error(message)
         }
-        return res.json().catch(() => ({}))
+        return data
       })
       .then((data) => {
         if (!isMounted) return
-        setBpmStatus(data?.ok ? 'ok' : 'error')
+        if (data?.ok) {
+          setBpmStatus('ok')
+          setBpmStatusMessage(null)
+          return
+        }
+        const message =
+          typeof data?.error === 'string' && data.error.trim()
+            ? data.error
+            : 'BPM API reported unhealthy'
+        setBpmStatus('error')
+        setBpmStatusMessage(message)
       })
-      .catch(() => {
+      .catch((err) => {
         if (!isMounted) return
         setBpmStatus('error')
+        const message =
+          err instanceof Error && err.message.trim()
+            ? err.message
+            : 'Unable to reach BPM API'
+        setBpmStatusMessage(message)
       })
       .finally(() => {
         clearTimeout(timeoutId)
@@ -67,7 +89,11 @@ export default function PageHeader({ subtitle, backLink, rightButtons, center }:
   const bpmStatusColor =
     bpmStatus === 'ok' ? 'bg-green-500' : bpmStatus === 'checking' ? 'bg-amber-400' : 'bg-red-500'
   const bpmStatusLabel =
-    bpmStatus === 'ok' ? 'BPM API healthy' : bpmStatus === 'checking' ? 'BPM API checking' : 'BPM API error'
+    bpmStatus === 'ok'
+      ? 'BPM API healthy'
+      : bpmStatus === 'checking'
+        ? 'BPM API checking'
+        : `BPM API error${bpmStatusMessage ? `: ${bpmStatusMessage}` : ''}`
 
   // Replace [user] placeholder with actual username if available
   const displaySubtitle = subtitle.includes('[user]') && userName
@@ -138,5 +164,4 @@ export default function PageHeader({ subtitle, backLink, rightButtons, center }:
     </div>
   )
 }
-
 
