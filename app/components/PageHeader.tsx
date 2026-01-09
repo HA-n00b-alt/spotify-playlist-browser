@@ -172,12 +172,10 @@ export default function PageHeader({
           <header className="fixed inset-x-0 top-0 z-40 h-16 border-b border-gray-200/80 bg-white/70 backdrop-blur">
             <div className="mx-auto flex h-full w-full max-w-7xl items-center justify-between px-4 sm:px-8">
               <nav className="flex items-center gap-2 text-xs sm:text-sm text-gray-500">
-                <div className="relative" ref={menuRef}>
-                  <button
-                    type="button"
-                    onClick={() => setIsMenuOpen((prev) => !prev)}
-                    aria-label="Open menu"
-                    aria-expanded={isMenuOpen}
+                <div className="relative flex items-center gap-2" ref={menuRef}>
+                  <Link
+                    href="/playlists"
+                    aria-label="Home"
                     className="inline-flex h-6 w-6 items-center justify-center rounded-full"
                   >
                     <Image
@@ -187,9 +185,26 @@ export default function PageHeader({
                       height={20}
                       className="h-5 w-5"
                     />
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => setIsMenuOpen((prev) => !prev)}
+                    aria-label="Open menu"
+                    aria-expanded={isMenuOpen}
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="2">
+                      <path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" />
+                    </svg>
                   </button>
                   {isMenuOpen && (
                     <div className="absolute left-0 mt-3 w-56 rounded-2xl border border-gray-200 bg-white p-2 text-sm shadow-xl">
+                      <Link
+                        href="/"
+                        className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                      >
+                        Home
+                      </Link>
                       <Link
                         href="/playlists"
                         className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"

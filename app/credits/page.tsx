@@ -45,10 +45,7 @@ export default async function CreditsSearchPage() {
       <div className="max-w-7xl mx-auto flex-1 w-full">
         <PageHeader
           subtitle="MusicBrainz credits search"
-          breadcrumbs={[
-            { label: 'Playlists', href: '/playlists' },
-            { label: 'Credit Search' },
-          ]}
+          breadcrumbs={[{ label: 'Credit Search' }]}
         />
         <CreditsSearchClient />
       </div>
