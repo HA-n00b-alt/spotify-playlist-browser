@@ -92,7 +92,7 @@ async function paginateSpotify<T>(
   return allItems
 }
 
-async function getAccessToken(): Promise<string | null> {
+export async function getAccessToken(): Promise<string | null> {
   const cookieStore = await cookies()
   const token = cookieStore.get('access_token')?.value || null
   // TEMPORARY DEBUG
@@ -213,7 +213,7 @@ async function refreshAccessToken(): Promise<string | null> {
   }
 }
 
-async function makeSpotifyRequest<T>(
+export async function makeSpotifyRequest<T>(
   endpoint: string,
   options: RequestInit = {},
   retryCount = 0
@@ -674,4 +674,3 @@ export async function getPlaylistTracks(playlistId: string, useCache = true): Pr
   // Fetch fresh tracks
   return await getPlaylistTracksInternal(playlistId)
 }
-
