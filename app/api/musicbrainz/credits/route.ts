@@ -36,6 +36,12 @@ export async function GET(request: Request) {
 
     const data = await response.json()
     const recording = data?.recordings?.[0]
+    if (!recording) {
+      return NextResponse.json(
+        { error: 'No MusicBrainz recording found for this ISRC' },
+        { status: 404 }
+      )
+    }
     const artistCredit = recording?.['artist-credit']
     const performers = Array.isArray(artistCredit)
       ? Array.from(

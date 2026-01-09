@@ -1428,7 +1428,18 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     try {
       const res = await fetch(`/api/musicbrainz/credits?isrc=${encodeURIComponent(isrc)}`)
       if (!res.ok) {
-        throw new Error('Failed to fetch credits')
+        let message = 'Unable to fetch credits'
+        try {
+          const errorPayload = await res.json()
+          if (typeof errorPayload?.error === 'string') {
+            message = errorPayload.error
+          } else if (typeof errorPayload?.details === 'string' && errorPayload.details.trim()) {
+            message = errorPayload.details
+          }
+        } catch {
+          // Keep fallback message when response is not JSON.
+        }
+        throw new Error(message)
       }
       const data = await res.json()
       setCreditsByTrackId(prev => ({
@@ -2849,7 +2860,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                               e.stopPropagation()
                               fetchCreditsForTrack(track)
                             }}
-                            className="mt-1 text-xs text-blue-600 hover:text-blue-700 hover:underline"
+                            className="mt-1 text-xs text-gray-500 hover:text-gray-600"
                           >
                             {creditsLoadingIds.has(track.id) ? 'Loading credits...' : 'Credits'}
                           </button>
@@ -3899,6 +3910,16 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               <p className="text-sm text-gray-600">
                 {selectedCreditsTrack.artists.map(a => a.name).join(', ')}
               </p>
+              {selectedCreditsTrack.external_ids?.isrc && (
+                <a
+                  href={`https://musicbrainz.org/isrc/${encodeURIComponent(selectedCreditsTrack.external_ids.isrc)}`}
+                  className="text-xs text-gray-500 hover:text-gray-600"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  View on MusicBrainz
+                </a>
+              )}
             </div>
             {creditsLoadingIds.has(selectedCreditsTrack.id) ? (
               <div className="text-sm text-gray-600">Loading credits...</div>
