@@ -198,7 +198,7 @@ export default function PageHeader({
                     </svg>
                   </button>
                   {isMenuOpen && (
-                    <div className="absolute left-0 mt-3 w-56 rounded-2xl border border-gray-200 bg-white p-2 text-sm shadow-xl">
+                    <div className="absolute left-0 top-full mt-2 w-56 rounded-2xl border border-gray-200 bg-white p-2 text-sm shadow-xl">
                       <Link
                         href="/"
                         className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
