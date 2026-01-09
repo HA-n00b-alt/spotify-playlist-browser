@@ -18,10 +18,7 @@ export default async function StatsPage() {
       <div className="max-w-7xl mx-auto flex-1 w-full">
         <PageHeader
           subtitle="Analytics dashboard"
-          breadcrumbs={[
-            { label: 'Playlists', href: '/playlists' },
-            { label: 'Stats' },
-          ]}
+          breadcrumbs={[{ label: 'Stats' }]}
         />
         
         <StatsClient />
@@ -40,6 +37,5 @@ export default async function StatsPage() {
     </div>
   )
 }
-
 
 
