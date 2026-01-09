@@ -2759,7 +2759,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         href={playlistInfo.external_urls.spotify}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex w-fit items-center rounded-full bg-[#18B45A] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#149A4C]"
+                        className="inline-flex w-fit items-center rounded-full bg-[#1ED760] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1BC457]"
                         onClick={(e) => {
                           e.preventDefault()
                           const spotifyUri = `spotify:playlist:${playlistInfo.id}`
@@ -3163,15 +3163,15 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-3 text-center text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none hidden md:table-cell"
+                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none hidden md:table-cell"
                     onClick={() => handleSort('tempo')}
                   >
-                    <div className="flex items-center justify-center">
+                    <div className="flex items-center justify-end">
                       BPM
                       <SortIcon field="tempo" />
                     </div>
                   </th>
-                  <th className="px-3 lg:px-4 py-3 text-center text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden md:table-cell min-w-[96px]">
+                  <th className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden md:table-cell min-w-[96px]">
                     Key
                   </th>
                   <th
@@ -3314,122 +3314,126 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       <td className="px-3 lg:px-4 py-4 text-gray-500 text-xs sm:text-sm hidden md:table-cell text-right">
                         {formatDuration(track.duration_ms)}
                       </td>
-                      <td className="px-3 lg:px-4 py-4 text-xs sm:text-sm hidden md:table-cell text-center" onClick={(e) => e.stopPropagation()}>
-                                    {loadingBpmFields.has(track.id) ? (
-                                      <div className="flex w-16 items-center justify-end gap-1 text-gray-400">
-                                        <svg className="animate-spin h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
-                                        <span className="text-gray-400">...</span>
-                                      </div>
-                                    ) : trackBpms[track.id] != null 
-                                      ? (
-                                        <button
-                                          onClick={() => {
-                                            setSelectedBpmTrack(track)
-                                            setRetryStatus(null)
-                                            setRetryAttempted(false)
-                                            setShowBpmModal(true)
-                                          }}
-                                          className="inline-flex w-16 items-center justify-center rounded-full border border-blue-200 bg-transparent px-2.5 py-1 text-xs font-medium text-blue-700"
-                                          title="Click for BPM details"
-                                        >
-                                          {Math.round(trackBpms[track.id]!)}
-                                          {bpmStreamStatus[track.id] === 'partial' && (
-                                            <span className="ml-1 text-[10px] text-blue-600">partial</span>
-                                          )}
-                                        </button>
-                                      )
-                                      : (tracksNeedingBpm.has(track.id) || bpmStreamStatus[track.id] === 'error')
-                                        ? (
-                                            <button
-                                              onClick={() => {
-                                                setSelectedBpmTrack(track)
-                                                setRetryStatus(null)
-                                                setRetryAttempted(false)
-                                                setShowBpmModal(true)
-                                              }}
-                                              className="inline-flex w-16 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-1 text-xs font-medium text-amber-700"
-                                              title="Click to see why BPM is not available"
-                                            >
-                                              N/A
-                                            </button>
-                                          )
-                                        : track.tempo != null 
-                                          ? (
-                                              <span className="inline-flex w-16 items-center justify-center rounded-full border border-blue-200 bg-transparent px-2.5 py-1 text-xs font-medium text-blue-700">
-                                                {Math.round(track.tempo)}
-                                              </span>
-                                            )
-                                          : (
-                                              <button
-                                                onClick={() => {
-                                                  setSelectedBpmTrack(track)
-                                                  setRetryStatus(null)
-                                                  setRetryAttempted(false)
-                                                  setShowBpmModal(true)
-                                                }}
-                                                className="inline-flex w-16 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-1 text-xs font-medium text-amber-700"
-                                                title="Click to see why BPM is not available"
-                                              >
-                                                N/A
-                                              </button>
-                                            )}
-                                  </td>
-                      <td className="px-3 lg:px-4 py-4 text-xs sm:text-sm hidden md:table-cell whitespace-nowrap min-w-[96px] text-center">
-                        {(() => {
-                          if (loadingKeyFields.has(track.id)) {
+                      <td className="px-3 lg:px-4 py-4 text-xs sm:text-sm hidden md:table-cell text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex justify-end">
+                          {loadingBpmFields.has(track.id) ? (
+                            <div className="flex w-16 items-center justify-end gap-1 text-gray-400">
+                              <svg className="animate-spin h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              <span className="text-gray-400">...</span>
+                            </div>
+                          ) : trackBpms[track.id] != null
+                            ? (
+                              <button
+                                onClick={() => {
+                                  setSelectedBpmTrack(track)
+                                  setRetryStatus(null)
+                                  setRetryAttempted(false)
+                                  setShowBpmModal(true)
+                                }}
+                                className="inline-flex w-16 items-center justify-center rounded-full border border-blue-200 bg-transparent px-2.5 py-1 text-xs font-medium text-blue-700"
+                                title="Click for BPM details"
+                              >
+                                {Math.round(trackBpms[track.id]!)}
+                                {bpmStreamStatus[track.id] === 'partial' && (
+                                  <span className="ml-1 text-[10px] text-blue-600">partial</span>
+                                )}
+                              </button>
+                            )
+                            : (tracksNeedingBpm.has(track.id) || bpmStreamStatus[track.id] === 'error')
+                              ? (
+                                <button
+                                  onClick={() => {
+                                    setSelectedBpmTrack(track)
+                                    setRetryStatus(null)
+                                    setRetryAttempted(false)
+                                    setShowBpmModal(true)
+                                  }}
+                                  className="inline-flex w-16 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-1 text-xs font-medium text-amber-700"
+                                  title="Click to see why BPM is not available"
+                                >
+                                  N/A
+                                </button>
+                              )
+                              : track.tempo != null
+                                ? (
+                                  <span className="inline-flex w-16 items-center justify-center rounded-full border border-blue-200 bg-transparent px-2.5 py-1 text-xs font-medium text-blue-700">
+                                    {Math.round(track.tempo)}
+                                  </span>
+                                )
+                                : (
+                                  <button
+                                    onClick={() => {
+                                      setSelectedBpmTrack(track)
+                                      setRetryStatus(null)
+                                      setRetryAttempted(false)
+                                      setShowBpmModal(true)
+                                    }}
+                                    className="inline-flex w-16 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-1 text-xs font-medium text-amber-700"
+                                    title="Click to see why BPM is not available"
+                                  >
+                                    N/A
+                                  </button>
+                                )}
+                        </div>
+                      </td>
+                      <td className="px-3 lg:px-4 py-4 text-xs sm:text-sm hidden md:table-cell whitespace-nowrap min-w-[96px] text-right">
+                        <div className="flex justify-end">
+                          {(() => {
+                            if (loadingKeyFields.has(track.id)) {
+                              return (
+                                <span className="inline-flex w-24 items-center justify-center gap-1 text-gray-400">
+                                  <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                  <span>...</span>
+                                </span>
+                              )
+                            }
+                            const key = trackKeys[track.id]
+                            const scale = trackScales[track.id]
+                            if (key || scale) {
+                              return (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setSelectedBpmTrack(track)
+                                    setRetryStatus(null)
+                                    setRetryAttempted(false)
+                                    setShowBpmModal(true)
+                                  }}
+                                  className="inline-flex w-24 items-center justify-center rounded-full border border-slate-200 bg-transparent px-2.5 py-1 text-xs font-medium text-slate-700 whitespace-nowrap"
+                                >
+                                  {key && scale ? `${key} ${scale}` : key || scale}
+                                </button>
+                              )
+                            }
+                            if (tracksNeedingKey.has(track.id) || bpmStreamStatus[track.id] === 'error') {
+                              return (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setSelectedBpmTrack(track)
+                                    setRetryStatus(null)
+                                    setRetryAttempted(false)
+                                    setShowBpmModal(true)
+                                  }}
+                                  className="inline-flex w-24 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-1 text-xs font-medium text-amber-700"
+                                >
+                                  N/A
+                                </button>
+                              )
+                            }
                             return (
-                              <span className="inline-flex w-24 items-center justify-center gap-1 text-gray-400">
-                                <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                <span>...</span>
+                              <span className="inline-flex w-24 items-center justify-center rounded-full border border-gray-200 bg-transparent px-2.5 py-1 text-xs font-medium text-gray-500">
+                                -
                               </span>
                             )
-                          }
-                          const key = trackKeys[track.id]
-                          const scale = trackScales[track.id]
-                          if (key || scale) {
-                            return (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setSelectedBpmTrack(track)
-                                  setRetryStatus(null)
-                                  setRetryAttempted(false)
-                                  setShowBpmModal(true)
-                                }}
-                                className="inline-flex w-24 items-center justify-center rounded-full border border-slate-200 bg-transparent px-2.5 py-1 text-xs font-medium text-slate-700 whitespace-nowrap"
-                              >
-                                {key && scale ? `${key} ${scale}` : key || scale}
-                              </button>
-                            )
-                          }
-                          if (tracksNeedingKey.has(track.id) || bpmStreamStatus[track.id] === 'error') {
-                            return (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setSelectedBpmTrack(track)
-                                  setRetryStatus(null)
-                                  setRetryAttempted(false)
-                                  setShowBpmModal(true)
-                                }}
-                                className="inline-flex w-24 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-1 text-xs font-medium text-amber-700"
-                              >
-                                N/A
-                              </button>
-                            )
-                          }
-                          return (
-                            <span className="inline-flex w-24 items-center justify-center rounded-full border border-gray-200 bg-transparent px-2.5 py-1 text-xs font-medium text-gray-500">
-                              -
-                            </span>
-                          )
-                        })()}
+                          })()}
+                        </div>
                       </td>
                       <td className="px-3 lg:px-4 py-4 text-gray-500 text-xs sm:text-sm text-right">
                         {getYearString(track.album.release_date)}
