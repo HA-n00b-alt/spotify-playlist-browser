@@ -117,35 +117,57 @@ export default function PageHeader({
         </div>
       ) : (
         /* Default layout for authenticated pages */
-        <div className="bg-white border border-gray-200 rounded-xl shadow-sm px-4 sm:px-6 py-4 sm:py-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Spotify Playlist Tools</h1>
-              <p className="text-sm text-gray-500 mt-1">{displaySubtitle}</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              <div
-                className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-gray-200 bg-gray-50 text-xs text-gray-600"
-                title={bpmStatusLabel}
-              >
-                <span className={`h-2.5 w-2.5 rounded-full ${bpmStatusColor}`} />
-                <span>BPM API</span>
+        <div className="bg-white/80 border border-gray-200 rounded-2xl shadow-sm px-4 sm:px-6 py-4 sm:py-5 backdrop-blur">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between">
+              <div className="min-w-0">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
+                  Spotify Playlist Tools
+                </h1>
+                <p className="text-xs sm:text-sm text-gray-500 mt-1 font-medium">
+                  {displaySubtitle}
+                </p>
               </div>
-              {showCreditsLink && (
+              {backLink && (
                 <Link
-                  href="/credits"
-                  className="inline-flex items-center px-3 py-1 rounded-full border border-green-200 text-xs text-green-700 hover:text-green-800 hover:border-green-300 hover:bg-green-50"
+                  href={backLink.href}
+                  className="inline-flex items-center gap-2 text-sm font-semibold text-gray-700 hover:text-gray-900"
                 >
-                  Credit Search
+                  <span className="text-lg">←</span>
+                  {backLink.text.replace(/^←\s*/, '')}
                 </Link>
               )}
-              {rightButtons}
-              <UserMenu />
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-2">
+                <div
+                  className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full border border-gray-200 bg-gray-50 text-xs font-medium text-gray-600"
+                  title={bpmStatusLabel}
+                >
+                  <span className={`h-2.5 w-2.5 rounded-full ${bpmStatusColor}`} />
+                  <span>BPM API</span>
+                </div>
+                {showCreditsLink && (
+                  <Link
+                    href="/credits"
+                    className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full border border-gray-200 text-xs font-medium text-gray-700 hover:text-gray-900 hover:border-gray-300 hover:bg-gray-50"
+                  >
+                    <span className="text-sm">◎</span>
+                    Credit Search
+                  </Link>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {rightButtons}
+                <UserMenu />
+              </div>
             </div>
           </div>
         </div>
       )}
-      {backLink && (
+      {backLink && center && (
         <Link
           href={backLink.href}
           className="text-blue-600 hover:text-blue-700 inline-block text-sm sm:text-base"
