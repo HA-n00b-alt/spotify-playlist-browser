@@ -183,6 +183,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     y: number
     spotifyUrl: string
     spotifyUri: string
+    track: Track
   } | null>(null)
 
   // Cleanup audio on unmount and clear cache on page unload
@@ -2048,6 +2049,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         y: e.clientY,
         spotifyUrl: track.external_urls.spotify,
         spotifyUri: `spotify:track:${track.id}`,
+        track,
       })
     }
   }
@@ -2771,44 +2773,44 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       >
                         Open in Spotify
                       </a>
-                      {bpmSummary && showBpmNotice && (
-                        <div className="mt-2 flex w-full items-start justify-between gap-3 rounded-lg border border-amber-100 bg-amber-50 px-4 py-2 text-xs text-amber-900">
-                          <div className="flex items-start gap-2">
-                            <span className="mt-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full border border-amber-200 text-[10px] font-semibold text-amber-700">
-                              i
-                            </span>
-                            <span>
-                              {bpmSummary.shouldShowProgress
-                                ? `BPM information processing ongoing (${bpmSummary.tracksRemainingToSearch} remaining).`
-                                : bpmSummary.tracksWithNa > 0
-                                  ? `${bpmSummary.tracksWithNa} of ${bpmSummary.totalTracks} tracks have no BPM information available. You can retry by clicking on the N/A value.`
-                                  : `All ${bpmSummary.totalTracks} tracks have BPM information available.`}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setShowBpmMoreInfo(true)}
-                              className="text-amber-700 underline-offset-2 hover:text-amber-900 hover:underline"
-                            >
-                              Details
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setShowBpmNotice(false)}
-                              className="text-amber-700 hover:text-amber-900"
-                              aria-label="Dismiss notice"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
               </div>
             </div>
+            {bpmSummary && showBpmNotice && (
+              <div className="mt-6 flex w-full items-start justify-between gap-3 rounded-lg border border-amber-100 bg-amber-50 px-4 py-2 text-xs text-amber-900">
+                <div className="flex items-start gap-2">
+                  <span className="mt-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full border border-amber-200 text-[10px] font-semibold text-amber-700">
+                    i
+                  </span>
+                  <span>
+                    {bpmSummary.shouldShowProgress
+                      ? `BPM information processing ongoing (${bpmSummary.tracksRemainingToSearch} remaining).`
+                      : bpmSummary.tracksWithNa > 0
+                        ? `${bpmSummary.tracksWithNa} of ${bpmSummary.totalTracks} tracks have no BPM information available. You can retry by clicking on the N/A value.`
+                        : `All ${bpmSummary.totalTracks} tracks have BPM information available.`}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowBpmMoreInfo(true)}
+                    className="text-amber-700 underline-offset-2 hover:text-amber-900 hover:underline"
+                  >
+                    Details
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowBpmNotice(false)}
+                    className="text-amber-700 hover:text-amber-900"
+                    aria-label="Dismiss notice"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -4302,6 +4304,15 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           onClick={(e) => e.stopPropagation()}
           onContextMenu={(e) => e.preventDefault()}
         >
+          <button
+            onClick={() => {
+              fetchCreditsForTrack(contextMenu.track)
+              setContextMenu(null)
+            }}
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+          >
+            Show credits
+          </button>
           <button
             onClick={() => {
               openSpotifyApp(contextMenu.spotifyUri, contextMenu.spotifyUrl)
