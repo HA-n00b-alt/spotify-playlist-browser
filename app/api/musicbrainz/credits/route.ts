@@ -13,7 +13,7 @@ export async function GET(request: Request) {
 
   const url =
     `https://musicbrainz.org/ws/2/isrc/${encodeURIComponent(isrc)}` +
-    `?fmt=json&inc=artist-credits+recording-rels+work-rels`
+    `?fmt=json&inc=artist-credits+artist-rels+recording-rels+work-rels`
   const userAgent =
     process.env.MUSICBRAINZ_USER_AGENT ?? 'spotify-playlist-browser/1.0 (https://example.com)'
 
@@ -52,13 +52,27 @@ export async function GET(request: Request) {
       : []
 
     const recordingRelations = Array.isArray(recording?.relations) ? recording.relations : []
-    const productionRoles = new Set(['producer', 'mixer', 'engineer'])
+    const productionRoles = new Set([
+      'producer',
+      'co-producer',
+      'assistant producer',
+      'executive producer',
+      'engineer',
+      'recording engineer',
+      'mixer',
+      'mixing',
+    ])
     const compositionRoles = new Set(['composer', 'lyricist'])
 
     const production = Array.from(
       new Set(
         recordingRelations
-          .filter((rel: any) => productionRoles.has(String(rel?.type).toLowerCase()))
+          .filter((rel: any) => {
+            const role = String(rel?.type).toLowerCase()
+            if (productionRoles.has(role)) return true
+            const attributes = Array.isArray(rel?.attributes) ? rel.attributes : []
+            return attributes.some((attr: any) => productionRoles.has(String(attr).toLowerCase()))
+          })
           .map((rel: any) => {
             if (typeof rel?.artist?.name === 'string') return rel.artist.name
             if (typeof rel?.name === 'string') return rel.name
