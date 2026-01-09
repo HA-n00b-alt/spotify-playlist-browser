@@ -1,11 +1,11 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import UserMenu from './UserMenu'
 import { useEffect, useRef, useState } from 'react'
 
 interface PageHeaderProps {
-  title?: string
   subtitle: string
   center?: boolean
   breadcrumbs?: Array<{
@@ -16,7 +16,6 @@ interface PageHeaderProps {
 }
 
 export default function PageHeader({
-  title = 'Spotify Playlist Tools',
   subtitle,
   center,
   breadcrumbs,
@@ -27,8 +26,6 @@ export default function PageHeader({
   const [bpmStatusMessage, setBpmStatusMessage] = useState<string | null>(null)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const settingsRef = useRef<HTMLDivElement | null>(null)
-  const menuRef = useRef<HTMLDivElement | null>(null)
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
 
   useEffect(() => {
     // Fetch user info for subtitle
@@ -67,30 +64,6 @@ export default function PageHeader({
       document.removeEventListener('keydown', handleEscape)
     }
   }, [isSettingsOpen])
-
-  useEffect(() => {
-    if (!isMenuOpen) return
-
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsMenuOpen(false)
-      }
-    }
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setIsMenuOpen(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    document.addEventListener('keydown', handleEscape)
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-      document.removeEventListener('keydown', handleEscape)
-    }
-  }, [isMenuOpen])
 
   useEffect(() => {
     let isMounted = true
@@ -160,7 +133,7 @@ export default function PageHeader({
     : subtitle
 
   return (
-    <div className="mb-6 sm:mb-8">
+    <div className="mb-4 sm:mb-6">
       {center ? (
         /* Centered layout for login/error pages */
         <div className="text-center">
@@ -173,47 +146,19 @@ export default function PageHeader({
           <header className="fixed inset-x-0 top-0 z-40 h-16 border-b border-gray-200/80 bg-white/70 backdrop-blur">
             <div className="mx-auto flex h-full w-full max-w-7xl items-center justify-between px-4 sm:px-8">
               <nav className="flex items-center gap-2 text-xs sm:text-sm text-gray-500">
-                <div className="relative" ref={menuRef}>
-                  <button
-                    type="button"
-                    onClick={() => setIsMenuOpen((prev) => !prev)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-                    aria-label="Open menu"
-                    aria-expanded={isMenuOpen}
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="2">
-                      <path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" />
-                    </svg>
-                  </button>
-                  {isMenuOpen && (
-                    <div className="absolute left-0 mt-3 w-56 rounded-2xl border border-gray-200 bg-white p-2 text-sm shadow-xl">
-                      <Link
-                        href="/playlists"
-                        className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-                      >
-                        Playlists
-                      </Link>
-                      <Link
-                        href="/credits"
-                        className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-                      >
-                        Credit Search
-                      </Link>
-                      <Link
-                        href="/stats"
-                        className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-                      >
-                        Stats
-                      </Link>
-                      <Link
-                        href="/docs"
-                        className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-                      >
-                        Documentation
-                      </Link>
-                    </div>
-                  )}
-                </div>
+                <Link
+                  href="/playlists"
+                  aria-label="Home"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-full"
+                >
+                  <Image
+                    src="/playlist-tools-logo.svg"
+                    alt="Spotify Playlist Tools"
+                    width={20}
+                    height={20}
+                    className="h-5 w-5"
+                  />
+                </Link>
                 {(breadcrumbs && breadcrumbs.length > 0 ? breadcrumbs : [{ label: 'Playlists' }]).map((crumb, index, list) => (
                   <div key={`${crumb.label}-${index}`} className="flex items-center gap-2">
                     <span className="text-gray-300">&gt;</span>
@@ -279,11 +224,8 @@ export default function PageHeader({
             </div>
           </header>
           <div className="h-16" />
-          <div className="mx-auto w-full max-w-7xl px-4 sm:px-8 pt-6">
-            <div className="space-y-1">
-              <h1 className="text-2xl font-semibold text-[#171923] sm:text-3xl">{title}</h1>
-              <p className="text-sm text-gray-500">{displaySubtitle}</p>
-            </div>
+          <div className="mx-auto w-full max-w-7xl px-4 sm:px-8 pt-2">
+            <p className="text-[11px] text-gray-400">{displaySubtitle}</p>
           </div>
         </div>
       )}

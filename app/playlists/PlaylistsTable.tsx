@@ -303,15 +303,15 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                 className="flex items-start gap-3"
               >
                 {playlist.images[0] ? (
-                  <Image
-                    src={playlist.images[0].url}
-                    alt={playlist.name}
-                    width={60}
-                    height={60}
-                    className="w-15 h-15 sm:w-12 sm:h-12 object-cover rounded-lg flex-shrink-0"
-                  />
-                ) : (
-                  <div className="w-15 h-15 sm:w-12 sm:h-12 bg-gray-200 rounded-lg flex-shrink-0 flex items-center justify-center">
+                    <Image
+                      src={playlist.images[0].url}
+                      alt={playlist.name}
+                      width={60}
+                      height={60}
+                      className="w-15 h-15 sm:w-12 sm:h-12 object-cover rounded-xl flex-shrink-0"
+                    />
+                  ) : (
+                  <div className="w-15 h-15 sm:w-12 sm:h-12 bg-gray-200 rounded-xl flex-shrink-0 flex items-center justify-center">
                     <span className="text-gray-400 text-xs">No image</span>
                   </div>
                 )}
@@ -457,10 +457,10 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                             alt={playlist.name}
                             width={50}
                             height={50}
-                            className="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded-lg flex-shrink-0"
+                            className="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded-xl flex-shrink-0"
                           />
                         ) : (
-                          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 rounded-lg flex-shrink-0 flex items-center justify-center">
+                          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 rounded-xl flex-shrink-0 flex items-center justify-center">
                             <span className="text-gray-400 text-xs">No image</span>
                           </div>
                         )}

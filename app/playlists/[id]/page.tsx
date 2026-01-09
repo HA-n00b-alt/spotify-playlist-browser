@@ -2594,7 +2594,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       href={playlistInfo.external_urls.spotify}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex w-fit items-center rounded-full bg-[#1ED760] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1BC457]"
+                      className="inline-flex w-fit items-center rounded-full bg-[#18B45A] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#149A4C]"
                       onClick={(e) => {
                         e.preventDefault()
                         const spotifyUri = `spotify:playlist:${playlistInfo.id}`
@@ -2850,10 +2850,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     alt={track.album.name}
                     width={60}
                     height={60}
-                    className="w-15 h-15 object-cover rounded-lg flex-shrink-0"
+                    className="w-15 h-15 object-cover rounded-xl flex-shrink-0"
                   />
                 ) : (
-                  <div className="w-15 h-15 bg-gray-200 rounded-lg flex-shrink-0 flex items-center justify-center">
+                  <div className="w-15 h-15 bg-gray-200 rounded-xl flex-shrink-0 flex items-center justify-center">
                     <span className="text-gray-400 text-xs">No image</span>
                   </div>
                 )}
@@ -2961,7 +2961,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         <div className="hidden sm:block overflow-hidden rounded-2xl bg-white shadow-[0_4px_24px_rgba(0,0,0,0.06)] border-t border-gray-100">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-white/70 border-b border-gray-100">
+              <thead className="bg-white/70">
                 <tr>
                   <th className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] w-12">
                     #
@@ -3099,10 +3099,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             alt={track.album.name}
                             width={40}
                             height={40}
-                            className="w-8 h-8 sm:w-10 sm:h-10 object-cover rounded-lg flex-shrink-0"
+                            className="w-8 h-8 sm:w-10 sm:h-10 object-cover rounded-xl flex-shrink-0"
                           />
                         ) : (
-                          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 rounded-lg flex-shrink-0 flex items-center justify-center">
+                          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 rounded-xl flex-shrink-0 flex items-center justify-center">
                             <span className="text-gray-400 text-xs">No image</span>
                           </div>
                         )}

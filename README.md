@@ -366,8 +366,9 @@ spotify-playlist-browser/
 ├── next.config.js               # Next.js configuration
 ├── package.json                 # Dependencies and scripts
 └── public/
-    ├── favicon-16x16.png        # Favicon
-    ├── favicon-32x32.png        # Favicon
+    ├── favicon-16.png           # Favicon
+    ├── favicon-32.png           # Favicon
+    ├── apple-touch-180.png      # Apple touch icon
     └── login_picture.png        # Login page image
 ```
 
