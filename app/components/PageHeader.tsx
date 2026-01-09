@@ -12,9 +12,16 @@ interface PageHeaderProps {
   }
   rightButtons?: React.ReactNode
   center?: boolean
+  showCreditsLink?: boolean
 }
 
-export default function PageHeader({ subtitle, backLink, rightButtons, center }: PageHeaderProps) {
+export default function PageHeader({
+  subtitle,
+  backLink,
+  rightButtons,
+  center,
+  showCreditsLink = true,
+}: PageHeaderProps) {
   const [userName, setUserName] = useState<string | null>(null)
   const [bpmStatus, setBpmStatus] = useState<'checking' | 'ok' | 'error'>('checking')
   const [bpmStatusMessage, setBpmStatusMessage] = useState<string | null>(null)
@@ -126,6 +133,14 @@ export default function PageHeader({ subtitle, backLink, rightButtons, center }:
                     <span className={`h-2.5 w-2.5 rounded-full ${bpmStatusColor}`} />
                     <span>BPM API</span>
                   </div>
+                  {showCreditsLink && (
+                    <Link
+                      href="/credits"
+                      className="text-xs text-green-700 hover:text-green-800 hover:underline whitespace-nowrap"
+                    >
+                      Credit Search
+                    </Link>
+                  )}
                   <UserMenu />
                 </div>
               </div>
@@ -147,6 +162,14 @@ export default function PageHeader({ subtitle, backLink, rightButtons, center }:
                 <span className={`h-2.5 w-2.5 rounded-full ${bpmStatusColor}`} />
                 <span>BPM API</span>
               </div>
+              {showCreditsLink && (
+                <Link
+                  href="/credits"
+                  className="text-xs sm:text-sm text-green-700 hover:text-green-800 hover:underline whitespace-nowrap"
+                >
+                  Credit Search
+                </Link>
+              )}
               {rightButtons}
               <UserMenu />
             </div>
@@ -164,4 +187,3 @@ export default function PageHeader({ subtitle, backLink, rightButtons, center }:
     </div>
   )
 }
-
