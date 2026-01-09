@@ -161,6 +161,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [includeHalfDoubleBpm, setIncludeHalfDoubleBpm] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
   const [showBpmInfo, setShowBpmInfo] = useState(false)
+  const [showBpmToast, setShowBpmToast] = useState(true)
   const [playingTrackId, setPlayingTrackId] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const authErrorHandledRef = useRef(false) // Prevent infinite loops on auth errors
@@ -2190,6 +2191,42 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     }
   }, [showBpmModal, selectedBpmTrack, bpmFullData, trackBpms, trackKeys, trackScales])
 
+  const bpmSummary = useMemo(() => {
+    const totalTracks = tracks.length
+    if (totalTracks === 0) return null
+
+    const tracksToSearch = tracksNeedingCalc.size
+    const tracksLoading = loadingTrackIds.size
+    const tracksProcessedFromSearch = tracks.filter(t =>
+      tracksNeedingCalc.has(t.id) && !loadingTrackIds.has(t.id)
+    ).length
+    const tracksRemainingToSearch = Math.max(0, tracksToSearch - tracksProcessedFromSearch)
+    const tracksWithBpm = tracks.filter(t => trackBpms[t.id] != null && trackBpms[t.id] !== undefined).length
+    const tracksWithNa = tracks.filter(t => trackBpms[t.id] === null).length
+    const isProcessing = tracksLoading > 0 || tracksRemainingToSearch > 0
+    const hasStartedProcessing = tracksProcessedFromSearch > 0 || tracksLoading > 0
+    const shouldShowProgress = tracksToSearch > 0 && (isProcessing || hasStartedProcessing || bpmProcessingStartTime !== null)
+
+    return {
+      totalTracks,
+      tracksToSearch,
+      tracksLoading,
+      tracksProcessedFromSearch,
+      tracksRemainingToSearch,
+      tracksWithBpm,
+      tracksWithNa,
+      shouldShowProgress,
+    }
+  }, [tracks, tracksNeedingCalc, loadingTrackIds, trackBpms, bpmProcessingStartTime])
+
+  const tracksWithNaCount = bpmSummary?.tracksWithNa ?? 0
+
+  useEffect(() => {
+    if (tracksWithNaCount > 0) {
+      setShowBpmToast(true)
+    }
+  }, [tracksWithNaCount])
+
   // Load preferred page size from localStorage
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -2226,16 +2263,38 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     )
   }
 
+  const bpmDebugSetting = isAdmin ? (
+    <div className="flex items-center justify-between text-sm text-gray-700">
+      <span className="font-medium">BPM Debug</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={showBpmDebug}
+        onClick={() => setShowBpmDebug(!showBpmDebug)}
+        className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${
+          showBpmDebug ? 'bg-emerald-500' : 'bg-gray-200'
+        }`}
+      >
+        <span
+          className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+            showBpmDebug ? 'translate-x-4' : 'translate-x-1'
+          }`}
+        />
+      </button>
+    </div>
+  ) : null
+
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col bg-gray-50 p-4 sm:p-8">
+      <div className="min-h-screen flex flex-col bg-transparent p-4 sm:p-8">
         <div className="max-w-7xl mx-auto flex-1 w-full">
           <PageHeader
             subtitle="[user] playlists"
-            backLink={{
-              href: '/playlists',
-              text: '← Back to Playlists'
-            }}
+            breadcrumbs={[
+              { label: 'Playlists', href: '/playlists' },
+              { label: 'Playlist' },
+            ]}
+            settingsItems={bpmDebugSetting ?? undefined}
           />
           <TrackTableSkeleton />
         </div>
@@ -2256,14 +2315,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
   if (error) {
     return (
-      <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
+      <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-transparent">
         <div className="max-w-7xl mx-auto flex-1 w-full">
           <PageHeader
             subtitle="Search and sort your playlists with ease"
-            backLink={{
-              href: '/playlists',
-              text: '← Back to Playlists'
-            }}
+            breadcrumbs={[
+              { label: 'Playlists', href: '/playlists' },
+              { label: 'Playlist' },
+            ]}
             center
           />
           <div className="flex items-center justify-center min-h-[60vh]">
@@ -2309,24 +2368,15 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   }
 
   return (
-    <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
+    <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-transparent">
       <div className="max-w-7xl mx-auto flex-1 w-full">
         <PageHeader
           subtitle="[user] playlists"
-          backLink={{
-            href: '/playlists',
-            text: '← Back to Playlists'
-          }}
-          rightButtons={
-            isAdmin ? (
-              <button
-                onClick={() => setShowBpmDebug(!showBpmDebug)}
-                className="text-xs sm:text-sm bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-1.5 px-3 sm:py-2 sm:px-4 rounded transition-colors"
-              >
-                {showBpmDebug ? 'Hide' : 'Show'} BPM Debug
-              </button>
-            ) : undefined
-          }
+          breadcrumbs={[
+            { label: 'Playlists', href: '/playlists' },
+            { label: playlistInfo?.name ?? 'Playlist' },
+          ]}
+          settingsItems={bpmDebugSetting ?? undefined}
         />
         
         {/* Show auth error with manual login option */}
@@ -2467,181 +2517,174 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         )}
 
         {playlistInfo && (
-          <div className="mb-6 bg-white rounded-lg border border-gray-200 shadow-sm p-4 sm:p-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+          <div className="mb-6 rounded-2xl bg-white p-6 shadow-[0_4px_24px_rgba(0,0,0,0.06)] sm:p-8">
+            <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
               {playlistInfo.images && playlistInfo.images[0] && (
                 <Image
                   src={playlistInfo.images[0].url}
                   alt={playlistInfo.name}
-                  width={120}
-                  height={120}
-                  className="w-24 h-24 sm:w-30 sm:h-30 object-cover rounded flex-shrink-0"
+                  width={180}
+                  height={180}
+                  className="h-[180px] w-[180px] rounded-xl object-cover shadow-[0_8px_24px_rgba(0,0,0,0.18)]"
                 />
               )}
               <div className="flex-1 min-w-0">
-                {playlistInfo.external_urls?.spotify ? (
-                  <a
-                    href={playlistInfo.external_urls.spotify}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 hover:text-green-600 hover:underline block"
-                    onClick={(e) => {
-                      e.preventDefault()
-                      const spotifyUri = `spotify:playlist:${playlistInfo.id}`
-                      window.location.href = spotifyUri
-                      setTimeout(() => {
-                        window.open(playlistInfo.external_urls.spotify, '_blank', 'noopener,noreferrer')
-                      }, 500)
-                    }}
-                  >
-                    {playlistInfo.name}
-                  </a>
-                ) : (
-                  <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
-                    {playlistInfo.name}
-                  </h1>
-                )}
-                {playlistInfo.description && (
-                  <p className="text-sm sm:text-base text-gray-600 mb-2">
-                    {stripHtmlTags(playlistInfo.description)}
-                  </p>
-                )}
-                <div className="flex flex-wrap gap-3 text-xs sm:text-sm text-gray-500">
-                  {playlistInfo.owner.external_urls?.spotify ? (
-                    <>
-                      <span>By </span>
-                      <a
-                        href={playlistInfo.owner.external_urls.spotify}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-green-600 hover:text-green-700 hover:underline"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          const ownerId = playlistInfo.owner.external_urls?.spotify.split('/').pop()
-                          if (ownerId) {
-                            const spotifyUri = `spotify:user:${ownerId}`
-                            window.location.href = spotifyUri
-                            setTimeout(() => {
-                              window.open(playlistInfo.owner.external_urls?.spotify, '_blank', 'noopener,noreferrer')
-                            }, 500)
-                          }
-                        }}
-                      >
-                        {playlistInfo.owner.display_name}
-                      </a>
-                      <span>•</span>
-                    </>
+                <div className="space-y-3">
+                  {playlistInfo.external_urls?.spotify ? (
+                    <a
+                      href={playlistInfo.external_urls.spotify}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-[32px] font-bold tracking-tight text-[#111827] hover:text-emerald-600"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        const spotifyUri = `spotify:playlist:${playlistInfo.id}`
+                        window.location.href = spotifyUri
+                        setTimeout(() => {
+                          window.open(playlistInfo.external_urls.spotify, '_blank', 'noopener,noreferrer')
+                        }, 500)
+                      }}
+                    >
+                      {playlistInfo.name}
+                    </a>
                   ) : (
-                    <>
-                      <span>By {playlistInfo.owner.display_name}</span>
-                      <span>•</span>
-                    </>
+                    <h1 className="text-[32px] font-bold tracking-tight text-[#111827]">
+                      {playlistInfo.name}
+                    </h1>
                   )}
-                  <span>{playlistInfo.tracks?.total ?? tracks.length} tracks</span>
+                  {playlistInfo.description && (
+                    <p className="text-sm text-gray-600">
+                      {stripHtmlTags(playlistInfo.description)}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-2 text-sm text-gray-500">
+                    {playlistInfo.owner.external_urls?.spotify ? (
+                      <>
+                        <span>By </span>
+                        <a
+                          href={playlistInfo.owner.external_urls.spotify}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-emerald-600 hover:text-emerald-700 hover:underline"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            const ownerId = playlistInfo.owner.external_urls?.spotify.split('/').pop()
+                            if (ownerId) {
+                              const spotifyUri = `spotify:user:${ownerId}`
+                              window.location.href = spotifyUri
+                              setTimeout(() => {
+                                window.open(playlistInfo.owner.external_urls?.spotify, '_blank', 'noopener,noreferrer')
+                              }, 500)
+                            }
+                          }}
+                        >
+                          {playlistInfo.owner.display_name}
+                        </a>
+                        <span>•</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>By {playlistInfo.owner.display_name}</span>
+                        <span>•</span>
+                      </>
+                    )}
+                    <span>{playlistInfo.tracks?.total ?? tracks.length} tracks</span>
+                  </div>
+                  {playlistInfo.external_urls?.spotify && (
+                    <a
+                      href={playlistInfo.external_urls.spotify}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex w-fit items-center rounded-full bg-[#1ED760] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1BC457]"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        const spotifyUri = `spotify:playlist:${playlistInfo.id}`
+                        window.location.href = spotifyUri
+                        setTimeout(() => {
+                          window.open(playlistInfo.external_urls.spotify, '_blank', 'noopener,noreferrer')
+                        }, 500)
+                      }}
+                    >
+                      Open in Spotify
+                    </a>
+                  )}
                 </div>
               </div>
-              {playlistInfo.external_urls?.spotify && (
-                <a
-                  href={playlistInfo.external_urls.spotify}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-full transition-colors text-sm sm:text-base whitespace-nowrap"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    const spotifyUri = `spotify:playlist:${playlistInfo.id}`
-                    window.location.href = spotifyUri
-                    setTimeout(() => {
-                      window.open(playlistInfo.external_urls.spotify, '_blank', 'noopener,noreferrer')
-                    }, 500)
-                  }}
-                >
-                  Open in Spotify
-                </a>
-              )}
             </div>
           </div>
         )}
 
         {/* BPM Processing Progress Indicator - Always visible */}
-        {(() => {
-          const totalTracks = tracks.length
-          if (totalTracks === 0) return null
-
-          // Tracks to search = tracks missing BPM and/or key data
-          const tracksToSearch = tracksNeedingCalc.size
-          
-          // Tracks currently being processed (loading)
-          const tracksLoading = loadingTrackIds.size
-          
-          // Tracks that were NOT in DB but have been processed in this session (have a result, not loading)
-          // X = number of tracks from "to search" that have been processed
-          const tracksProcessedFromSearch = tracks.filter(t => 
-            tracksNeedingCalc.has(t.id) && !loadingTrackIds.has(t.id)
-          ).length
-          
-          // Remaining = total to search - processed (only subtract completed ones, not loading ones)
-          // This starts at tracksToSearch and counts down to 0 as tracks are completed
-          const tracksRemainingToSearch = Math.max(0, tracksToSearch - tracksProcessedFromSearch)
-          
-          // Tracks with BPM value (not null)
-          const tracksWithBpm = tracks.filter(t => trackBpms[t.id] != null && trackBpms[t.id] !== undefined).length
-          
-          // Tracks with N/A (null BPM)
-          const tracksWithNa = tracks.filter(t => trackBpms[t.id] === null).length
-          
-          // Check if processing is ongoing
-          const isProcessing = tracksLoading > 0 || tracksRemainingToSearch > 0
-          // Check if we've started processing (have processed at least one track or are currently loading)
-          const hasStartedProcessing = tracksProcessedFromSearch > 0 || tracksLoading > 0
-          // Show progress if we have tracks to search (even if processing hasn't started yet, show 0 of X)
-          const shouldShowProgress = tracksToSearch > 0 && (isProcessing || hasStartedProcessing || bpmProcessingStartTime !== null)
-
-          // Always show the indicator - never hide it
-          return (
-            <div className="mb-4 sm:mb-6 text-sm text-gray-600 space-y-1">
-              {shouldShowProgress ? (
-                <div>
-                  BPM information processing ongoing ({tracksRemainingToSearch} remaining){' '}
-                  <button
-                    onClick={() => setShowBpmMoreInfo(true)}
-                    className="text-blue-600 hover:text-blue-700 hover:underline"
-                  >
-                    (more info)
-                  </button>
-                </div>
-              ) : tracksWithNa > 0 ? (
-                <div>
-                  {tracksWithNa} of {totalTracks} tracks have no BPM information available. You can retry by clicking on the N/A value.{' '}
-                  <button
-                    onClick={() => setShowBpmMoreInfo(true)}
-                    className="text-blue-600 hover:text-blue-700 hover:underline"
-                  >
-                    (more info)
-                  </button>
-                </div>
-              ) : (
-                <div>
-                  All {totalTracks} tracks have BPM information available.{' '}
-                  <button
-                    onClick={() => setShowBpmMoreInfo(true)}
-                    className="text-blue-600 hover:text-blue-700 hover:underline"
-                  >
-                    (more info)
-                  </button>
-                </div>
-              )}
-            </div>
-          )
-        })()}
+        {bpmSummary && (
+          <div className="mb-4 sm:mb-6 text-sm text-gray-600 space-y-1">
+            {bpmSummary.shouldShowProgress ? (
+              <div>
+                BPM information processing ongoing ({bpmSummary.tracksRemainingToSearch} remaining){' '}
+                <button
+                  onClick={() => setShowBpmMoreInfo(true)}
+                  className="text-blue-600 hover:text-blue-700 hover:underline"
+                >
+                  (more info)
+                </button>
+              </div>
+            ) : bpmSummary.tracksWithNa > 0 ? (
+              <div>
+                {bpmSummary.tracksWithNa} of {bpmSummary.totalTracks} tracks have no BPM information available. You can retry by clicking on the N/A value.{' '}
+                <button
+                  onClick={() => setShowBpmMoreInfo(true)}
+                  className="text-blue-600 hover:text-blue-700 hover:underline"
+                >
+                  (more info)
+                </button>
+              </div>
+            ) : (
+              <div>
+                All {bpmSummary.totalTracks} tracks have BPM information available.{' '}
+                <button
+                  onClick={() => setShowBpmMoreInfo(true)}
+                  className="text-blue-600 hover:text-blue-700 hover:underline"
+                >
+                  (more info)
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         
         <div className="mb-4 sm:mb-6 space-y-3 sm:space-y-4">
-          <div>
+          {tracksWithNaCount > 0 && showBpmToast && (
+            <div className="flex items-start justify-between gap-3 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm">
+              <div className="flex items-start gap-2">
+                <span className="mt-0.5 text-amber-500">
+                  ⚠
+                </span>
+                <span>
+                  {tracksWithNaCount} of {bpmSummary?.totalTracks ?? tracks.length} tracks have no BPM yet.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBpmToast(false)}
+                className="text-amber-700 hover:text-amber-900"
+                aria-label="Dismiss BPM notice"
+              >
+                ×
+              </button>
+            </div>
+          )}
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="7" />
+                <path d="M20 20l-3.5-3.5" strokeLinecap="round" />
+              </svg>
+            </span>
             <input
               type="text"
               placeholder="Search tracks..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-4 py-3 sm:py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-base sm:text-sm"
+              className="w-full rounded-lg bg-[#F3F4F6] py-3 pl-10 pr-4 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
             />
           </div>
 
@@ -2800,10 +2843,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           {paginatedTracks.map((track, index) => (
             <div
               key={track.id}
-              className={`bg-white rounded-lg border shadow-sm p-4 cursor-pointer transition-colors ${
+              className={`bg-white rounded-2xl shadow-[0_4px_16px_rgba(0,0,0,0.06)] p-4 cursor-pointer transition-colors ${
                 playingTrackId === track.id
-                  ? 'border-green-500 bg-green-50'
-                  : 'border-gray-200 hover:bg-gray-50'
+                  ? 'bg-emerald-50'
+                  : 'hover:bg-[#F9FAFB]'
               }`}
               onClick={(e) => {
                 // Only handle left click
@@ -2835,122 +2878,115 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     alt={track.album.name}
                     width={60}
                     height={60}
-                    className="w-15 h-15 object-cover rounded flex-shrink-0"
+                    className="w-15 h-15 object-cover rounded-lg flex-shrink-0"
                   />
                 ) : (
-                  <div className="w-15 h-15 bg-gray-200 rounded flex-shrink-0 flex items-center justify-center">
+                  <div className="w-15 h-15 bg-gray-200 rounded-lg flex-shrink-0 flex items-center justify-center">
                     <span className="text-gray-400 text-xs">No image</span>
                   </div>
                 )}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start gap-2 mb-1">
-                        <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0">
+                  <a
+                    href="#"
+                    className="block truncate text-sm font-semibold text-[#111827] hover:text-emerald-600 hover:underline"
+                    onClick={(e) => handleTrackTitleClick(e, track)}
+                    onContextMenu={(e) => handleTrackContextMenu(e, track)}
+                    title={getPreviewTooltip(track.id)}
+                  >
+                    {track.name}
+                    {track.explicit && (
+                      <span className="ml-1 text-xs bg-gray-200 text-gray-700 px-1 py-0.5 rounded">E</span>
+                    )}
+                  </a>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      fetchCreditsForTrack(track)
+                    }}
+                    className="mt-1 text-xs text-gray-500 hover:text-gray-600"
+                  >
+                    {creditsLoadingIds.has(track.id) ? 'Loading credits...' : 'Credits'}
+                  </button>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {track.artists.map((artist, index) => (
+                      <span key={artist.id || index}>
+                        {artist.external_urls?.spotify ? (
                           <a
-                            href="#"
-                            className="font-medium text-gray-900 text-sm truncate hover:text-green-600 hover:underline block"
-                            onClick={(e) => handleTrackTitleClick(e, track)}
-                            onContextMenu={(e) => handleTrackContextMenu(e, track)}
-                            title={getPreviewTooltip(track.id)}
+                            href={artist.external_urls.spotify}
+                            className="text-emerald-600 hover:text-emerald-700"
+                            onClick={(e) => handleArtistClick(e, artist)}
+                            onContextMenu={(e) => handleArtistContextMenu(e, artist)}
                           >
-                            {track.name}
-                            {track.explicit && (
-                              <span className="ml-1 text-xs bg-gray-200 text-gray-700 px-1 py-0.5 rounded">E</span>
-                            )}
-                          </a>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              fetchCreditsForTrack(track)
-                            }}
-                            className="mt-1 text-xs text-gray-500 hover:text-gray-600"
-                          >
-                            {creditsLoadingIds.has(track.id) ? 'Loading credits...' : 'Credits'}
-                          </button>
-                      <div className="text-xs text-gray-600 mt-1">
-                        {track.artists.map((artist, index) => (
-                          <span key={artist.id || index}>
-                            {artist.external_urls?.spotify ? (
-                              <a
-                                href={artist.external_urls.spotify}
-                                className="text-green-600 hover:text-green-700"
-                                onClick={(e) => handleArtistClick(e, artist)}
-                                onContextMenu={(e) => handleArtistContextMenu(e, artist)}
-                              >
-                                {artist.name}
-                              </a>
-                            ) : (
-                              <span>{artist.name}</span>
-                            )}
-                            {index < track.artists.length - 1 && ', '}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {track.album.external_urls?.spotify ? (
-                          <a
-                            href={track.album.external_urls.spotify}
-                            className="text-green-600 hover:text-green-700"
-                            onClick={(e) => handleAlbumClick(e, track.album)}
-                            onContextMenu={(e) => handleAlbumContextMenu(e, track.album)}
-                          >
-                            {track.album.name}
+                            {artist.name}
                           </a>
                         ) : (
-                          <span>{track.album.name}</span>
+                          <span>{artist.name}</span>
                         )}
-                        {' • '}
-                        {getYearString(track.album.release_date)}
-                        {' • '}
-                        {formatDuration(track.duration_ms)}
-                                    {loadingBpmFields.has(track.id) ? (
-                                      <span className="text-gray-400"> • BPM...</span>
-                                    ) : trackBpms[track.id] != null 
-                                      ? (
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            setSelectedBpmTrack(track)
-                                            setRetryStatus(null)
-                                            setShowBpmModal(true)
-                                          }}
-                                          className="text-blue-600 hover:text-blue-700 hover:underline"
-                                        >
-                                          {` • ${Math.round(trackBpms[track.id]!)} BPM`}
-                                          {bpmStreamStatus[track.id] === 'partial' && (
-                                            <span className="ml-1 text-xs text-yellow-600">(partial)</span>
-                                          )}
-                                        </button>
-                                      )
-                                      : (tracksNeedingBpm.has(track.id) || bpmStreamStatus[track.id] === 'error')
-                                        ? (
-                                            <button
-                                              onClick={(e) => {
-                                                e.stopPropagation()
-                                                setSelectedBpmTrack(track)
-                                                setShowBpmModal(true)
-                                              }}
-                                              className="text-red-500 hover:text-red-600 hover:underline"
-                                            >
-                                              {' • BPM N/A'}
-                                            </button>
-                                          )
-                                        : track.tempo != null 
-                                          ? ` • ${Math.round(track.tempo)} BPM`
-                                          : (
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation()
-                                                  setSelectedBpmTrack(track)
-                                                  setShowBpmModal(true)
-                                                }}
-                                                className="text-red-500 hover:text-red-600 hover:underline"
-                                              >
-                                                {' • BPM N/A'}
-                                              </button>
-                                            )}
-                        {track.popularity != null && ` • Popularity: ${track.popularity}`}
-                      </div>
-                    </div>
+                        {index < track.artists.length - 1 && ', '}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                    <span>
+                      {track.album.external_urls?.spotify ? (
+                        <a
+                          href={track.album.external_urls.spotify}
+                          className="text-emerald-600 hover:text-emerald-700"
+                          onClick={(e) => handleAlbumClick(e, track.album)}
+                          onContextMenu={(e) => handleAlbumContextMenu(e, track.album)}
+                        >
+                          {track.album.name}
+                        </a>
+                      ) : (
+                        <span>{track.album.name}</span>
+                      )}
+                    </span>
+                    <span>{getYearString(track.album.release_date)}</span>
+                    <span>{formatDuration(track.duration_ms)}</span>
+                    {loadingBpmFields.has(track.id) ? (
+                      <span className="text-gray-400">BPM...</span>
+                    ) : trackBpms[track.id] != null ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedBpmTrack(track)
+                          setRetryStatus(null)
+                          setShowBpmModal(true)
+                        }}
+                        className="rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-700 hover:bg-blue-100"
+                      >
+                        {Math.round(trackBpms[track.id]!)} BPM
+                        {bpmStreamStatus[track.id] === 'partial' && (
+                          <span className="ml-1 text-[10px] text-blue-600">(partial)</span>
+                        )}
+                      </button>
+                    ) : (tracksNeedingBpm.has(track.id) || bpmStreamStatus[track.id] === 'error') ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedBpmTrack(track)
+                          setShowBpmModal(true)
+                        }}
+                        className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700 hover:bg-amber-100"
+                      >
+                        BPM N/A
+                      </button>
+                    ) : track.tempo != null ? (
+                      <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-700">
+                        {Math.round(track.tempo)} BPM
+                      </span>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedBpmTrack(track)
+                          setShowBpmModal(true)
+                        }}
+                        className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700 hover:bg-amber-100"
+                      >
+                        BPM N/A
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2959,19 +2995,19 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         </div>
 
         {/* Desktop Table View */}
-        <div className="hidden sm:block bg-white rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+        <div className="hidden sm:block overflow-hidden rounded-2xl bg-white shadow-[0_4px_24px_rgba(0,0,0,0.06)]">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-white/70 border-b border-gray-100">
                 <tr>
-                  <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 w-12">
+                  <th className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 w-12">
                     #
                   </th>
-                  <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 w-12 lg:w-16">
+                  <th className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 w-12 lg:w-16">
                     Cover
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                    className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none"
                     onClick={() => handleSort('name')}
                   >
                     <div className="flex items-center">
@@ -2980,7 +3016,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none hidden md:table-cell max-w-[120px]"
+                    className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none hidden md:table-cell max-w-[120px]"
                     onClick={() => handleSort('artists')}
                   >
                     <div className="flex items-center">
@@ -2989,7 +3025,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none hidden lg:table-cell max-w-[150px]"
+                    className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none hidden lg:table-cell max-w-[150px]"
                     onClick={() => handleSort('album')}
                   >
                     <div className="flex items-center">
@@ -2998,37 +3034,37 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none hidden md:table-cell"
+                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none hidden md:table-cell"
                     onClick={() => handleSort('duration')}
                   >
-                    <div className="flex items-center">
+                    <div className="flex items-center justify-end">
                       Duration
                       <SortIcon field="duration" />
                     </div>
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none hidden md:table-cell"
+                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none hidden md:table-cell"
                     onClick={() => handleSort('tempo')}
                   >
-                    <div className="flex items-center">
+                    <div className="flex items-center justify-end">
                       BPM
                       <SortIcon field="tempo" />
                     </div>
                   </th>
-                  <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 hidden md:table-cell">
+                  <th className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 hidden md:table-cell">
                     Key
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none"
                     onClick={() => handleSort('release_date')}
                   >
-                    <div className="flex items-center">
+                    <div className="flex items-center justify-end">
                       Year
                       <SortIcon field="release_date" />
                     </div>
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-2 lg:py-3 text-right text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none hidden lg:table-cell"
+                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none hidden lg:table-cell"
                     onClick={() => handleSort('popularity')}
                   >
                     <div className="flex items-center justify-end">
@@ -3037,7 +3073,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 select-none hidden lg:table-cell"
+                    className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none hidden lg:table-cell"
                     onClick={() => handleSort('added_at')}
                   >
                     <div className="flex items-center">
@@ -3047,7 +3083,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-gray-100">
                 {sortedTracks.length === 0 ? (
                   <tr>
                     <td colSpan={11} className="px-4 py-8 text-center text-gray-500">
@@ -3060,8 +3096,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       key={track.id} 
                       className={`transition-colors cursor-pointer ${
                         playingTrackId === track.id
-                          ? 'bg-green-50 hover:bg-green-100'
-                          : 'hover:bg-gray-50'
+                          ? 'bg-emerald-50 hover:bg-emerald-100'
+                          : 'hover:bg-[#F9FAFB]'
                       }`}
                       onClick={(e) => {
                         // Only handle left click
@@ -3075,7 +3111,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       }}
                       title={getPreviewTooltip(track.id)}
                     >
-                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-500 text-xs sm:text-sm">
+                      <td className="px-3 lg:px-4 py-4 text-gray-400 text-xs sm:text-sm">
                         <div className="flex items-center justify-center">
                           {playingTrackId === track.id ? (
                             <svg className="w-4 h-4 text-green-600 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
@@ -3088,26 +3124,26 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           )}
                         </div>
                       </td>
-                      <td className="px-3 lg:px-4 py-2 lg:py-3">
+                      <td className="px-3 lg:px-4 py-4">
                         {track.album.images && track.album.images[0] ? (
                           <Image
                             src={track.album.images[0].url}
                             alt={track.album.name}
                             width={40}
                             height={40}
-                            className="w-8 h-8 sm:w-10 sm:h-10 object-cover rounded flex-shrink-0"
+                            className="w-8 h-8 sm:w-10 sm:h-10 object-cover rounded-lg flex-shrink-0"
                           />
                         ) : (
-                          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 rounded flex-shrink-0 flex items-center justify-center">
+                          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 rounded-lg flex-shrink-0 flex items-center justify-center">
                             <span className="text-gray-400 text-xs">No image</span>
                           </div>
                         )}
                       </td>
-                      <td className="px-3 lg:px-4 py-2 lg:py-3">
+                      <td className="px-3 lg:px-4 py-4">
                         <div className="flex items-center gap-2">
                           <a
                             href="#"
-                            className="font-medium text-gray-900 text-xs sm:text-sm hover:text-green-600 hover:underline"
+                            className="font-semibold text-[#111827] text-xs sm:text-sm hover:text-emerald-600 hover:underline"
                             onClick={(e) => handleTrackTitleClick(e, track)}
                             onContextMenu={(e) => handleTrackContextMenu(e, track)}
                             title={getPreviewTooltip(track.id)}
@@ -3130,13 +3166,13 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           </button>
                         </div>
                       </td>
-                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-700 text-xs sm:text-sm hidden md:table-cell max-w-[120px] truncate" title={track.artists.map(a => a.name).join(', ')}>
+                      <td className="px-3 lg:px-4 py-4 text-gray-500 text-xs sm:text-sm hidden md:table-cell max-w-[120px] truncate" title={track.artists.map(a => a.name).join(', ')}>
                         {track.artists.map((artist, index) => (
                           <span key={artist.id || index}>
                             {artist.external_urls?.spotify ? (
                               <a
                                 href={artist.external_urls.spotify}
-                                className="text-green-600 hover:text-green-700 hover:underline"
+                                className="text-emerald-600 hover:text-emerald-700 hover:underline"
                                 onClick={(e) => handleArtistClick(e, artist)}
                                 onContextMenu={(e) => handleArtistContextMenu(e, artist)}
                               >
@@ -3149,11 +3185,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           </span>
                         ))}
                       </td>
-                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-700 text-xs sm:text-sm hidden lg:table-cell max-w-[150px] truncate" title={track.album.name}>
+                      <td className="px-3 lg:px-4 py-4 text-gray-500 text-xs sm:text-sm hidden lg:table-cell max-w-[150px] truncate" title={track.album.name}>
                         {track.album.external_urls?.spotify ? (
                           <a
                             href={track.album.external_urls.spotify}
-                            className="text-green-600 hover:text-green-700 hover:underline"
+                            className="text-emerald-600 hover:text-emerald-700 hover:underline"
                             onClick={(e) => handleAlbumClick(e, track.album)}
                             onContextMenu={(e) => handleAlbumContextMenu(e, track.album)}
                           >
@@ -3163,12 +3199,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           <span>{track.album.name}</span>
                         )}
                       </td>
-                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden md:table-cell">
+                      <td className="px-3 lg:px-4 py-4 text-gray-500 text-xs sm:text-sm hidden md:table-cell text-right">
                         {formatDuration(track.duration_ms)}
                       </td>
-                                  <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden md:table-cell" onClick={(e) => e.stopPropagation()}>
+                                  <td className="px-3 lg:px-4 py-4 text-xs sm:text-sm hidden md:table-cell text-right" onClick={(e) => e.stopPropagation()}>
                                     {loadingBpmFields.has(track.id) ? (
-                                      <div className="flex items-center gap-1">
+                                      <div className="flex items-center justify-end gap-1 text-gray-400">
                                         <svg className="animate-spin h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -3184,12 +3220,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                             setRetryAttempted(false)
                                             setShowBpmModal(true)
                                           }}
-                                          className="text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                                          className="inline-flex items-center justify-center rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
                                           title="Click for BPM details"
                                         >
                                           {Math.round(trackBpms[track.id]!)}
                                           {bpmStreamStatus[track.id] === 'partial' && (
-                                            <span className="ml-1 text-xs text-yellow-600">partial</span>
+                                            <span className="ml-1 text-[10px] text-blue-600">partial</span>
                                           )}
                                         </button>
                                       )
@@ -3202,14 +3238,18 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                                 setRetryAttempted(false)
                                                 setShowBpmModal(true)
                                               }}
-                                              className="text-red-500 hover:text-red-600 hover:underline cursor-pointer"
+                                              className="inline-flex items-center justify-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
                                               title="Click to see why BPM is not available"
                                             >
                                               N/A
                                             </button>
                                           )
                                         : track.tempo != null 
-                                          ? Math.round(track.tempo)
+                                          ? (
+                                              <span className="inline-flex items-center justify-center rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                                                {Math.round(track.tempo)}
+                                              </span>
+                                            )
                                           : (
                                               <button
                                                 onClick={() => {
@@ -3218,14 +3258,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                                   setRetryAttempted(false)
                                                   setShowBpmModal(true)
                                                 }}
-                                                className="text-red-500 hover:text-red-600 hover:underline cursor-pointer"
+                                                className="inline-flex items-center justify-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
                                                 title="Click to see why BPM is not available"
                                               >
                                                 N/A
                                               </button>
                                             )}
                                   </td>
-                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden md:table-cell">
+                      <td className="px-3 lg:px-4 py-4 text-xs sm:text-sm hidden md:table-cell">
                         {(() => {
                           if (loadingKeyFields.has(track.id)) {
                             return (
@@ -3241,27 +3281,47 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           const key = trackKeys[track.id]
                           const scale = trackScales[track.id]
                           if (key && scale) {
-                            return `${key} ${scale}`
+                            return (
+                              <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                                {key} {scale}
+                              </span>
+                            )
                           } else if (key) {
-                            return key
+                            return (
+                              <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                                {key}
+                              </span>
+                            )
                           } else if (scale) {
-                            return scale
+                            return (
+                              <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                                {scale}
+                              </span>
+                            )
                           }
                           if (tracksNeedingKey.has(track.id) || bpmStreamStatus[track.id] === 'error') {
-                            return 'N/A'
+                            return (
+                              <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+                                N/A
+                              </span>
+                            )
                           }
-                          return '-'
+                          return (
+                            <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-500">
+                              -
+                            </span>
+                          )
                         })()}
                       </td>
-                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm">
+                      <td className="px-3 lg:px-4 py-4 text-gray-500 text-xs sm:text-sm text-right">
                         {getYearString(track.album.release_date)}
                       </td>
-                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm text-right hidden lg:table-cell">
+                      <td className="px-3 lg:px-4 py-4 text-gray-500 text-xs sm:text-sm text-right hidden lg:table-cell">
                         {track.popularity != null ? track.popularity : (
                           <span className="text-gray-400">N/A</span>
                         )}
                       </td>
-                      <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden lg:table-cell">
+                      <td className="px-3 lg:px-4 py-4 text-gray-500 text-xs sm:text-sm hidden lg:table-cell">
                         {track.added_at ? formatDate(track.added_at) : 'N/A'}
                       </td>
                     </tr>

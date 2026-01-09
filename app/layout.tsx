@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import './globals.css'
 import PageViewTracker from './components/PageViewTracker'
@@ -17,6 +18,11 @@ export const metadata: Metadata = {
     apple: '/favicon-32x32.png?v=2',
   },
 }
+
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+})
 
 function Footer() {
   return (
@@ -41,7 +47,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="flex flex-col min-h-screen">
+      <body className={`${inter.className} flex min-h-screen flex-col text-[#111827] antialiased`}>
         <ErrorBoundary>
           <QueryProvider>
             <PageViewTracker />
@@ -53,4 +59,3 @@ export default function RootLayout({
     </html>
   )
 }
-

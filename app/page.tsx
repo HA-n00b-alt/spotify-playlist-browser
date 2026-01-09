@@ -27,7 +27,7 @@ export default async function Home({
   }
 
   return (
-    <main className="flex min-h-screen flex-col p-4 sm:p-8 bg-gray-50">
+    <main className="flex min-h-screen flex-col p-4 sm:p-8 bg-transparent">
       <div className="max-w-7xl mx-auto flex-1 w-full">
         <PageHeader subtitle="Search and sort your playlists with ease" center />
         
@@ -104,4 +104,3 @@ export default async function Home({
     </main>
   )
 }
-

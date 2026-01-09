@@ -93,7 +93,7 @@ export default async function PlaylistsPage() {
 
   if (error === 'Unauthorized') {
     return (
-      <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
+      <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-transparent">
         <div className="max-w-7xl mx-auto flex-1 w-full">
           <PageHeader subtitle="Search and sort your playlists with ease" center />
           <div className="flex items-center justify-center min-h-[60vh]">
@@ -134,7 +134,7 @@ export default async function PlaylistsPage() {
     console.log('[Playlists Page] Error page rendering:', { error, isForbidden, isAuthError })
     
     return (
-      <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
+      <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-transparent">
         <div className="max-w-7xl mx-auto flex-1 w-full">
           <PageHeader subtitle="Search and sort your playlists with ease" center />
           
@@ -223,17 +223,18 @@ export default async function PlaylistsPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
+    <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-transparent">
       <div className="max-w-7xl mx-auto flex-1 w-full">
-        <PageHeader 
+        <PageHeader
           subtitle="[user] playlists"
-          rightButtons={
+          breadcrumbs={[{ label: 'Playlists' }]}
+          settingsItems={
             isAdmin ? (
               <Link
                 href="/stats"
-                className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded transition-colors text-sm sm:text-base"
+                className="inline-flex items-center justify-between text-sm font-medium text-gray-700 hover:text-gray-900"
               >
-                Stats
+                View Stats
               </Link>
             ) : undefined
           }
@@ -310,4 +311,3 @@ export default async function PlaylistsPage() {
     </div>
   )
 }
-

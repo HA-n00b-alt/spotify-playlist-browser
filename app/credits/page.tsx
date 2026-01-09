@@ -10,7 +10,7 @@ export default async function CreditsSearchPage() {
 
   if (!accessToken) {
     return (
-      <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
+      <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-transparent">
         <div className="max-w-7xl mx-auto flex-1 w-full">
           <PageHeader subtitle="Search and sort your playlists with ease" center />
           <div className="flex items-center justify-center min-h-[60vh]">
@@ -41,14 +41,14 @@ export default async function CreditsSearchPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-gray-50">
+    <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-transparent">
       <div className="max-w-7xl mx-auto flex-1 w-full">
         <PageHeader
           subtitle="MusicBrainz credits search"
-          backLink={{
-            href: '/playlists',
-            text: '← Back to Playlists',
-          }}
+          breadcrumbs={[
+            { label: 'Playlists', href: '/playlists' },
+            { label: 'Credit Search' },
+          ]}
         />
         <CreditsSearchClient />
       </div>
