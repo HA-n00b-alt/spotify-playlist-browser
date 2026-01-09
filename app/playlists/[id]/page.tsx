@@ -183,7 +183,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     y: number
     spotifyUrl: string
     spotifyUri: string
-    track: Track
+    track?: Track
   } | null>(null)
 
   // Cleanup audio on unmount and clear cache on page unload
@@ -2352,7 +2352,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     if (bpmSummary) {
       setShowBpmNotice(true)
     }
-  }, [bpmSummary?.totalTracks, bpmSummary?.tracksWithNa, bpmSummary?.tracksRemainingToSearch])
+  }, [bpmSummary])
 
 
   // Load preferred page size from localStorage
@@ -4304,15 +4304,17 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           onClick={(e) => e.stopPropagation()}
           onContextMenu={(e) => e.preventDefault()}
         >
-          <button
-            onClick={() => {
-              fetchCreditsForTrack(contextMenu.track)
-              setContextMenu(null)
-            }}
-            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-          >
-            Show credits
-          </button>
+          {contextMenu.track && (
+            <button
+              onClick={() => {
+                fetchCreditsForTrack(contextMenu.track)
+                setContextMenu(null)
+              }}
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+            >
+              Show credits
+            </button>
+          )}
           <button
             onClick={() => {
               openSpotifyApp(contextMenu.spotifyUri, contextMenu.spotifyUrl)
