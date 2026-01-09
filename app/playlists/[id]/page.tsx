@@ -4304,17 +4304,17 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           onClick={(e) => e.stopPropagation()}
           onContextMenu={(e) => e.preventDefault()}
         >
-          {contextMenu.track && (
+          {contextMenu.track ? (
             <button
               onClick={() => {
-                fetchCreditsForTrack(contextMenu.track)
+                fetchCreditsForTrack(contextMenu.track as Track)
                 setContextMenu(null)
               }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
             >
               Show credits
             </button>
-          )}
+          ) : null}
           <button
             onClick={() => {
               openSpotifyApp(contextMenu.spotifyUri, contextMenu.spotifyUrl)
