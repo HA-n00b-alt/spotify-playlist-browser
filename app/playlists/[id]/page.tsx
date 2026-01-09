@@ -2288,7 +2288,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       <div className="min-h-screen flex flex-col bg-transparent p-4 sm:p-8">
         <div className="max-w-7xl mx-auto flex-1 w-full">
           <PageHeader
-            subtitle="[user] playlists"
+            subtitle="[user] playlist"
             breadcrumbs={[
               { label: 'Playlists', href: '/playlists' },
               { label: 'Playlist' },
@@ -2370,7 +2370,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-transparent">
       <div className="max-w-7xl mx-auto flex-1 w-full">
         <PageHeader
-          subtitle="[user] playlists"
+          subtitle="[user] playlist"
           breadcrumbs={[
             { label: 'Playlists', href: '/playlists' },
             { label: playlistInfo?.name ?? 'Playlist' },
@@ -2529,6 +2529,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               )}
               <div className="flex-1 min-w-0">
                 <div className="space-y-3">
+                  <p className="text-[11px] text-gray-400">
+                    {playlistInfo.owner?.display_name ?? 'User'} playlist
+                  </p>
                   {playlistInfo.external_urls?.spotify ? (
                     <a
                       href={playlistInfo.external_urls.spotify}
@@ -2590,22 +2593,32 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     <span>{playlistInfo.tracks?.total ?? tracks.length} tracks</span>
                   </div>
                   {playlistInfo.external_urls?.spotify && (
-                    <a
-                      href={playlistInfo.external_urls.spotify}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex w-fit items-center rounded-full bg-[#18B45A] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#149A4C]"
-                      onClick={(e) => {
-                        e.preventDefault()
-                        const spotifyUri = `spotify:playlist:${playlistInfo.id}`
-                        window.location.href = spotifyUri
-                        setTimeout(() => {
-                          window.open(playlistInfo.external_urls.spotify, '_blank', 'noopener,noreferrer')
-                        }, 500)
-                      }}
-                    >
-                      Open in Spotify
-                    </a>
+                    <div className="flex flex-col items-start gap-2">
+                      <a
+                        href={playlistInfo.external_urls.spotify}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex w-fit items-center rounded-full bg-[#18B45A] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#149A4C]"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          const spotifyUri = `spotify:playlist:${playlistInfo.id}`
+                          window.location.href = spotifyUri
+                          setTimeout(() => {
+                            window.open(playlistInfo.external_urls.spotify, '_blank', 'noopener,noreferrer')
+                          }, 500)
+                        }}
+                      >
+                        Open in Spotify
+                      </a>
+                      {isCached && cachedAt && (
+                        <button
+                          onClick={() => setShowCacheModal(true)}
+                          className="text-xs text-gray-400 hover:text-gray-600 hover:underline"
+                        >
+                          Using cached data
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -2796,19 +2809,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           )}
         </div>
 
-        {/* Cached Data Indicator - Discrete, just before table */}
-        <div className="mb-2 flex items-center justify-between">
-          {isCached && cachedAt && (
-            <div className="text-right">
-              <button
-                onClick={() => setShowCacheModal(true)}
-                className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
-              >
-                Using cached data
-              </button>
-            </div>
-          )}
-        </div>
+        {/* Cached Data Indicator moved to header */}
 
         {/* Mobile Card View */}
         <div className="block sm:hidden space-y-3">
@@ -3016,7 +3017,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       <SortIcon field="tempo" />
                     </div>
                   </th>
-                  <th className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden md:table-cell">
+                  <th className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden md:table-cell min-w-[96px]">
                     Key
                   </th>
                   <th
@@ -3222,7 +3223,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                               </button>
                                             )}
                                   </td>
-                      <td className="px-3 lg:px-4 py-4 text-xs sm:text-sm hidden md:table-cell">
+                      <td className="px-3 lg:px-4 py-4 text-xs sm:text-sm hidden md:table-cell whitespace-nowrap min-w-[96px]">
                         {(() => {
                           if (loadingKeyFields.has(track.id)) {
                             return (
@@ -3239,19 +3240,19 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           const scale = trackScales[track.id]
                           if (key && scale) {
                             return (
-                              <span className="inline-flex items-center rounded-full border border-slate-200 bg-transparent px-2.5 py-1 text-xs font-medium text-slate-700">
+                              <span className="inline-flex items-center rounded-full border border-slate-200 bg-transparent px-2.5 py-1 text-xs font-medium text-slate-700 whitespace-nowrap">
                                 {key} {scale}
                               </span>
                             )
                           } else if (key) {
                             return (
-                              <span className="inline-flex items-center rounded-full border border-slate-200 bg-transparent px-2.5 py-1 text-xs font-medium text-slate-700">
+                              <span className="inline-flex items-center rounded-full border border-slate-200 bg-transparent px-2.5 py-1 text-xs font-medium text-slate-700 whitespace-nowrap">
                                 {key}
                               </span>
                             )
                           } else if (scale) {
                             return (
-                              <span className="inline-flex items-center rounded-full border border-slate-200 bg-transparent px-2.5 py-1 text-xs font-medium text-slate-700">
+                              <span className="inline-flex items-center rounded-full border border-slate-200 bg-transparent px-2.5 py-1 text-xs font-medium text-slate-700 whitespace-nowrap">
                                 {scale}
                               </span>
                             )

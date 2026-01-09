@@ -1,29 +1,13 @@
 import Link from 'next/link'
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
 import PageHeader from './components/PageHeader'
-
-async function checkAuth() {
-  const cookieStore = await cookies()
-  const accessToken = cookieStore.get('access_token')?.value
-  const refreshToken = cookieStore.get('refresh_token')?.value
-  return !!(accessToken || refreshToken)
-}
 
 export default async function Home({
   searchParams,
 }: {
   searchParams?: Promise<{ error?: string; skipRedirect?: string }>
 }) {
-  const isAuthenticated = await checkAuth()
   const params = await searchParams
   const error = params?.error
-  const skipRedirect = params?.skipRedirect
-
-  // If authenticated, redirect to playlists (unless skipRedirect is set)
-  if (isAuthenticated && !error && !skipRedirect) {
-    redirect('/playlists')
-  }
 
   return (
     <main className="flex min-h-screen flex-col p-4 sm:p-8 bg-transparent">
