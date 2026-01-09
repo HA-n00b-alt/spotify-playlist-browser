@@ -1,17 +1,22 @@
 import { NextResponse } from 'next/server'
-import { MB_BASE_URL, USER_AGENT } from '@/lib/musicbrainz'
+import {
+  fetchCoverArtUrl,
+  fetchReleaseDetails,
+  recordingMatchesCreditName,
+  releaseMatchesCreditName,
+  searchReleasesByCredit,
+} from '@/lib/musicbrainz/client'
 
-const ROLE_FIELD_MAP: Record<string, string> = {
-  producer: 'producer',
-  songwriter: 'writer',
-  mixer: 'mixer',
-  engineer: 'engineer',
-  artist: 'artist',
-}
-
-function buildQuery(name: string, role: string): string {
-  const field = ROLE_FIELD_MAP[role] ?? 'artist'
-  return `${field}:"${name}"`
+interface TrackResult {
+  id: string
+  title: string
+  artist: string
+  album: string
+  year: string
+  length: number
+  isrc?: string
+  releaseId: string
+  coverArtUrl?: string | null
 }
 
 export async function GET(request: Request) {
@@ -25,66 +30,75 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Missing name parameter' }, { status: 400 })
   }
 
-  const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 100) : 25
+  const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 50) : 25
   const offset = Number.isFinite(offsetParam) ? Math.max(offsetParam, 0) : 0
-  const query = buildQuery(name, role)
-  const url =
-    `${MB_BASE_URL}/recording?` +
-    `query=${encodeURIComponent(query)}` +
-    `&limit=${limit}&offset=${offset}` +
-    `&fmt=json&inc=artist-credits+releases+isrcs`
+  const nameLower = name.toLowerCase()
 
   try {
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': USER_AGENT,
-        Accept: 'application/json',
-      },
-      cache: 'no-store',
+    const releaseSearch = await searchReleasesByCredit({
+      name,
+      role,
+      limit,
+      offset,
     })
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => '')
-      return NextResponse.json(
-        {
-          error: `MusicBrainz request failed: ${response.status} ${response.statusText}`,
-          details: errorText.slice(0, 200),
-        },
-        { status: response.status }
-      )
-    }
+    const releaseDetails = await Promise.all(
+      releaseSearch.releases.map(async (release) => {
+        const [detail, coverArtUrl] = await Promise.all([
+          fetchReleaseDetails(release.id),
+          fetchCoverArtUrl(release.id),
+        ])
+        return { detail, coverArtUrl }
+      })
+    )
 
-    const data = await response.json()
-    const recordings = Array.isArray(data?.recordings) ? data.recordings : []
+    const results: TrackResult[] = []
 
-    const results = recordings.map((recording: any) => {
-      const artistCredit = Array.isArray(recording?.['artist-credit'])
-        ? recording['artist-credit']
-        : []
-      const artist = artistCredit
-        .map((credit: any) => credit?.name || credit?.artist?.name)
-        .filter(Boolean)
-        .join(', ')
-      const release = Array.isArray(recording?.releases) ? recording.releases[0] : null
-      const releaseDate = typeof release?.date === 'string' ? release.date : ''
-      const year = releaseDate ? releaseDate.split('-')[0] : ''
-      const isrc = Array.isArray(recording?.isrcs) ? recording.isrcs[0] : undefined
+    releaseDetails.forEach(({ detail, coverArtUrl }) => {
+      if (!detail?.id) return
+      const releaseMatches = releaseMatchesCreditName(detail, nameLower)
+      const year = typeof detail?.date === 'string' ? detail.date.split('-')[0] : ''
 
-      return {
-        id: recording?.id,
-        title: recording?.title || 'Unknown title',
-        artist: artist || 'Unknown artist',
-        album: release?.title || 'Unknown release',
-        year,
-        length: typeof recording?.length === 'number' ? recording.length : 0,
-        isrc,
-      }
+      const media = Array.isArray(detail?.media) ? detail.media : []
+      media.forEach((disc: any) => {
+        const tracks = Array.isArray(disc?.tracks) ? disc.tracks : []
+        tracks.forEach((track: any) => {
+          const recording = track?.recording
+          if (!recording?.id) return
+          const trackMatches = recordingMatchesCreditName(recording, nameLower)
+          if (!trackMatches && !releaseMatches) return
+
+          const artistCredit = Array.isArray(recording?.['artist-credit'])
+            ? recording['artist-credit']
+            : Array.isArray(detail?.['artist-credit'])
+              ? detail['artist-credit']
+              : []
+          const artist = artistCredit
+            .map((credit: any) => credit?.name || credit?.artist?.name)
+            .filter(Boolean)
+            .join(', ')
+          const isrc = Array.isArray(recording?.isrcs) ? recording.isrcs[0] : undefined
+
+          results.push({
+            id: recording.id,
+            title: recording?.title || track?.title || 'Unknown title',
+            artist: artist || 'Unknown artist',
+            album: detail?.title || 'Unknown release',
+            year,
+            length: typeof recording?.length === 'number' ? recording.length : 0,
+            isrc,
+            releaseId: detail.id,
+            coverArtUrl,
+          })
+        })
+      })
     })
 
     return NextResponse.json({
-      count: typeof data?.count === 'number' ? data.count : results.length,
-      offset,
-      limit,
+      releaseCount: releaseSearch.count,
+      releaseOffset: releaseSearch.offset,
+      releaseLimit: releaseSearch.limit,
+      trackCount: results.length,
       results,
     })
   } catch (error) {

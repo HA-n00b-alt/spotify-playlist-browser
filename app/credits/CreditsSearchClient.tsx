@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { useState } from 'react'
 import { formatDuration } from '@/lib/musicbrainz'
 
@@ -13,12 +14,15 @@ interface SearchResult {
   year: string
   length: number
   isrc?: string
+  releaseId: string
+  coverArtUrl?: string | null
 }
 
 interface SearchResponse {
-  count: number
-  offset: number
-  limit: number
+  releaseCount: number
+  releaseOffset: number
+  releaseLimit: number
+  trackCount: number
   results: SearchResult[]
 }
 
@@ -34,8 +38,10 @@ export default function CreditsSearchClient() {
   const [name, setName] = useState('')
   const [role, setRole] = useState<RoleOption>('producer')
   const [results, setResults] = useState<SearchResult[]>([])
-  const [count, setCount] = useState(0)
-  const [offset, setOffset] = useState(0)
+  const [releaseCount, setReleaseCount] = useState(0)
+  const [releaseOffset, setReleaseOffset] = useState(0)
+  const [releaseLimit, setReleaseLimit] = useState(25)
+  const [trackCount, setTrackCount] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -55,8 +61,10 @@ export default function CreditsSearchClient() {
         throw new Error(message)
       }
       const data = (await res.json()) as SearchResponse
-      setCount(data.count || 0)
-      setOffset(data.offset || 0)
+      setReleaseCount(data.releaseCount || 0)
+      setReleaseOffset(data.releaseOffset || 0)
+      setReleaseLimit(data.releaseLimit || limit)
+      setTrackCount((prev) => (append ? prev + (data.trackCount || data.results.length) : (data.trackCount || data.results.length)))
       setResults((prev) => (append ? [...prev, ...data.results] : data.results))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'MusicBrainz search failed')
@@ -75,11 +83,11 @@ export default function CreditsSearchClient() {
   }
 
   const handleLoadMore = async () => {
-    const nextOffset = offset + limit
+    const nextOffset = releaseOffset + releaseLimit
     await fetchResults(nextOffset, true)
   }
 
-  const hasMore = results.length < count
+  const hasMore = releaseOffset + releaseLimit < releaseCount
 
   return (
     <div className="space-y-6">
@@ -136,50 +144,142 @@ export default function CreditsSearchClient() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
           <h2 className="text-lg font-semibold text-gray-900">Results</h2>
           <span className="text-sm text-gray-500">
-            {count > 0 ? `${results.length} of ${count}` : 'No results yet'}
+            {releaseCount > 0
+              ? `${trackCount} tracks across ${releaseCount} releases`
+              : 'No results yet'}
           </span>
         </div>
 
         {results.length === 0 ? (
           <div className="text-sm text-gray-500">Search to see matching songs.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-gray-500 border-b">
-                  <th className="py-2 pr-3 font-semibold">Title</th>
-                  <th className="py-2 pr-3 font-semibold">Artist</th>
-                  <th className="py-2 pr-3 font-semibold">Release</th>
-                  <th className="py-2 pr-3 font-semibold">Year</th>
-                  <th className="py-2 pr-3 font-semibold">Length</th>
-                  <th className="py-2 pr-3 font-semibold">ISRC</th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.map((track) => (
-                  <tr key={track.id} className="border-b last:border-b-0">
-                    <td className="py-2 pr-3">
+          <>
+            <div className="sm:hidden space-y-3">
+              {results.map((track) => (
+                <div
+                  key={`${track.id}-${track.releaseId}`}
+                  className="border border-gray-200 rounded-lg p-3 shadow-sm bg-white"
+                >
+                  <div className="flex gap-3">
+                    {track.coverArtUrl ? (
+                      <Image
+                        src={track.coverArtUrl}
+                        alt={track.album}
+                        width={56}
+                        height={56}
+                        className="w-14 h-14 rounded object-cover"
+                      />
+                    ) : (
+                      <div className="w-14 h-14 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-400">
+                        No image
+                      </div>
+                    )}
+                    <div className="min-w-0">
                       <a
                         href={`https://musicbrainz.org/recording/${encodeURIComponent(track.id)}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-green-700 hover:text-green-800 hover:underline"
+                        className="font-semibold text-gray-900 text-sm hover:text-green-700 hover:underline"
                       >
                         {track.title}
                       </a>
-                    </td>
-                    <td className="py-2 pr-3 text-gray-700">{track.artist}</td>
-                    <td className="py-2 pr-3 text-gray-700">{track.album}</td>
-                    <td className="py-2 pr-3 text-gray-700">{track.year || '-'}</td>
-                    <td className="py-2 pr-3 text-gray-700">
-                      {track.length ? formatDuration(track.length) : '-'}
-                    </td>
-                    <td className="py-2 pr-3 text-gray-700">{track.isrc || '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      <div className="text-xs text-gray-600 truncate">{track.artist}</div>
+                      <div className="text-xs text-gray-500 truncate">
+                        {track.album} {track.year ? `• ${track.year}` : ''}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {track.length ? formatDuration(track.length) : '-'} {track.isrc ? `• ${track.isrc}` : ''}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden sm:block bg-white rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 w-12">
+                        #
+                      </th>
+                      <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 w-12 lg:w-16">
+                        Cover
+                      </th>
+                      <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">
+                        Track
+                      </th>
+                      <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 hidden md:table-cell max-w-[140px]">
+                        Artist
+                      </th>
+                      <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 hidden lg:table-cell max-w-[160px]">
+                        Release
+                      </th>
+                      <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 hidden md:table-cell">
+                        Duration
+                      </th>
+                      <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">
+                        Year
+                      </th>
+                      <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 hidden lg:table-cell">
+                        ISRC
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {results.map((track, index) => (
+                      <tr key={`${track.id}-${track.releaseId}`} className="hover:bg-gray-50">
+                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-500 text-xs sm:text-sm">
+                          {index + 1}
+                        </td>
+                        <td className="px-3 lg:px-4 py-2 lg:py-3">
+                          {track.coverArtUrl ? (
+                            <Image
+                              src={track.coverArtUrl}
+                              alt={track.album}
+                              width={40}
+                              height={40}
+                              className="w-8 h-8 sm:w-10 sm:h-10 object-cover rounded"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 rounded flex items-center justify-center">
+                              <span className="text-gray-400 text-xs">No image</span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 lg:px-4 py-2 lg:py-3">
+                          <a
+                            href={`https://musicbrainz.org/recording/${encodeURIComponent(track.id)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-medium text-gray-900 text-xs sm:text-sm hover:text-green-600 hover:underline"
+                          >
+                            {track.title}
+                          </a>
+                        </td>
+                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-700 text-xs sm:text-sm hidden md:table-cell max-w-[140px] truncate">
+                          {track.artist}
+                        </td>
+                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-700 text-xs sm:text-sm hidden lg:table-cell max-w-[160px] truncate">
+                          {track.album}
+                        </td>
+                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden md:table-cell">
+                          {track.length ? formatDuration(track.length) : '-'}
+                        </td>
+                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm">
+                          {track.year || '-'}
+                        </td>
+                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden lg:table-cell">
+                          {track.isrc || '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
         )}
 
         {hasMore && (

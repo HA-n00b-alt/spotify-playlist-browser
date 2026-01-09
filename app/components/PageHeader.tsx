@@ -117,55 +117,24 @@ export default function PageHeader({
         </div>
       ) : (
         /* Default layout for authenticated pages */
-        <>
-          {/* Mobile: User menu top right, title/subtitle below */}
-          {/* Desktop: User menu and buttons on the right, title/subtitle on the left */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-            <div className="flex-1 min-w-0 w-full sm:w-auto">
-              {/* Mobile: Header with user menu on top */}
-              <div className="flex justify-between items-start mb-2 sm:hidden">
-                <div className="flex-1 min-w-0">
-                  <h1 className="text-2xl font-bold text-gray-900">Spotify Playlist Tools</h1>
-                  <p className="text-sm text-gray-500 mt-1">{displaySubtitle}</p>
-                </div>
-                <div className="flex-shrink-0 ml-4 flex items-center gap-3">
-                  <div className="flex items-center gap-2 text-xs text-gray-500" title={bpmStatusLabel}>
-                    <span className={`h-2.5 w-2.5 rounded-full ${bpmStatusColor}`} />
-                    <span>BPM API</span>
-                  </div>
-                  {showCreditsLink && (
-                    <Link
-                      href="/credits"
-                      className="text-xs text-green-700 hover:text-green-800 hover:underline whitespace-nowrap"
-                    >
-                      Credit Search
-                    </Link>
-                  )}
-                  <UserMenu />
-                </div>
-              </div>
-              {/* Desktop: Header without user menu (it's on the right) */}
-              <div className="hidden sm:block">
-                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Spotify Playlist Tools</h1>
-                <p className="text-sm text-gray-500 mt-1">{displaySubtitle}</p>
-              </div>
-              {/* Mobile: Buttons below title */}
-              {rightButtons && (
-                <div className="mt-3 sm:hidden">
-                  {rightButtons}
-                </div>
-              )}
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm px-4 sm:px-6 py-4 sm:py-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Spotify Playlist Tools</h1>
+              <p className="text-sm text-gray-500 mt-1">{displaySubtitle}</p>
             </div>
-            {/* Desktop: User menu and buttons on the right */}
-            <div className="hidden sm:flex gap-2 items-center">
-              <div className="flex items-center gap-2 text-xs text-gray-500" title={bpmStatusLabel}>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <div
+                className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-gray-200 bg-gray-50 text-xs text-gray-600"
+                title={bpmStatusLabel}
+              >
                 <span className={`h-2.5 w-2.5 rounded-full ${bpmStatusColor}`} />
                 <span>BPM API</span>
               </div>
               {showCreditsLink && (
                 <Link
                   href="/credits"
-                  className="text-xs sm:text-sm text-green-700 hover:text-green-800 hover:underline whitespace-nowrap"
+                  className="inline-flex items-center px-3 py-1 rounded-full border border-green-200 text-xs text-green-700 hover:text-green-800 hover:border-green-300 hover:bg-green-50"
                 >
                   Credit Search
                 </Link>
@@ -174,7 +143,7 @@ export default function PageHeader({
               <UserMenu />
             </div>
           </div>
-        </>
+        </div>
       )}
       {backLink && (
         <Link

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { fetchMusicBrainzJson } from '@/lib/musicbrainz/client'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -11,30 +12,11 @@ export async function GET(request: Request) {
     )
   }
 
-  const url =
-    `https://musicbrainz.org/ws/2/isrc/${encodeURIComponent(isrc)}` +
-    `?fmt=json&inc=artist-credits+artist-rels+recording-rels+work-rels`
-  const userAgent =
-    process.env.MUSICBRAINZ_USER_AGENT ?? 'spotify-playlist-browser/1.0 (https://example.com)'
-
   try {
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': userAgent,
-        Accept: 'application/json',
-      },
-      cache: 'no-store',
+    const data = await fetchMusicBrainzJson<any>(`/isrc/${encodeURIComponent(isrc)}`, {
+      fmt: 'json',
+      inc: 'artist-credits+artist-rels+recording-rels+work-rels',
     })
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => '')
-      return NextResponse.json(
-        { error: `MusicBrainz request failed: ${response.status} ${response.statusText}`, details: errorText.slice(0, 200) },
-        { status: response.status }
-      )
-    }
-
-    const data = await response.json()
     const recording = data?.recordings?.[0]
     if (!recording) {
       return NextResponse.json(
@@ -96,29 +78,22 @@ export async function GET(request: Request) {
     let releaseMasteredBy: string[] = []
     let releaseId: string | null = null
     if (recording?.id) {
-      const releaseUrl =
-        `https://musicbrainz.org/ws/2/release?recording=${encodeURIComponent(recording.id)}` +
-        `&fmt=json&inc=artist-rels&limit=1`
       try {
-        const releaseResponse = await fetch(releaseUrl, {
-          headers: {
-            'User-Agent': userAgent,
-            Accept: 'application/json',
-          },
-          cache: 'no-store',
+        const releaseData = await fetchMusicBrainzJson<any>('/release', {
+          recording: recording.id,
+          fmt: 'json',
+          inc: 'artist-rels',
+          limit: 1,
         })
-        if (releaseResponse.ok) {
-          const releaseData = await releaseResponse.json()
-          const release = releaseData?.releases?.[0]
-          releaseId = typeof release?.id === 'string' ? release.id : null
-          if (producedBy.length === 0 || mixedBy.length === 0 || masteredBy.length === 0) {
-            const releaseRelations = Array.isArray(release?.relations)
-              ? release.relations
-              : []
-            releaseProducedBy = collectNamesForRoles(releaseRelations, producerRoles)
-            releaseMixedBy = collectNamesForRoles(releaseRelations, mixRoles)
-            releaseMasteredBy = collectNamesForRoles(releaseRelations, masterRoles)
-          }
+        const release = releaseData?.releases?.[0]
+        releaseId = typeof release?.id === 'string' ? release.id : null
+        if (producedBy.length === 0 || mixedBy.length === 0 || masteredBy.length === 0) {
+          const releaseRelations = Array.isArray(release?.relations)
+            ? release.relations
+            : []
+          releaseProducedBy = collectNamesForRoles(releaseRelations, producerRoles)
+          releaseMixedBy = collectNamesForRoles(releaseRelations, mixRoles)
+          releaseMasteredBy = collectNamesForRoles(releaseRelations, masterRoles)
         }
       } catch {
         releaseProducedBy = []
