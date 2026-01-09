@@ -164,6 +164,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [showBpmNotice, setShowBpmNotice] = useState(true)
   const [playingTrackId, setPlayingTrackId] = useState<string | null>(null)
   const [loggedInUserName, setLoggedInUserName] = useState<string | null>(null)
+  const [showBpmRecalcPrompt, setShowBpmRecalcPrompt] = useState(false)
+  const [pendingRecalcIds, setPendingRecalcIds] = useState<{ all: string[]; newOnly: string[] }>({ all: [], newOnly: [] })
+  const [isHeaderRefreshing, setIsHeaderRefreshing] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const authErrorHandledRef = useRef(false) // Prevent infinite loops on auth errors
   const audioCache = useRef<Map<string, string>>(new Map()) // Cache audio blobs by URL
@@ -323,6 +326,54 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     } finally {
       setIsRefreshing(false)
       setRefreshDone(true)
+    }
+  }
+
+  const fetchTracksInDbForIds = async (trackIds: string[]) => {
+    if (trackIds.length === 0) {
+      return new Set<string>()
+    }
+    try {
+      const res = await fetch('/api/bpm/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trackIds }),
+      })
+      if (!res.ok) {
+        return new Set<string>()
+      }
+      const data = await res.json()
+      const inDbSet = new Set<string>()
+      for (const [trackId, result] of Object.entries(data.results || {})) {
+        const r = result as any
+        if (r && (r.source !== undefined || r.error !== undefined || r.bpmRaw !== undefined || r.cached === true)) {
+          inDbSet.add(trackId)
+        }
+      }
+      return inDbSet
+    } catch (error) {
+      console.error('[BPM Client] Error checking tracks in DB:', error)
+      return new Set<string>()
+    }
+  }
+
+  const handleHeaderRefresh = async () => {
+    setIsHeaderRefreshing(true)
+    try {
+      const [, refreshedTracks] = await Promise.all([
+        refreshPlaylist(),
+        refreshTracks(),
+      ])
+      const trackIds = refreshedTracks.map((t) => t.id)
+      const inDbSet = await fetchTracksInDbForIds(trackIds)
+      setTracksInDb(inDbSet)
+      const newOnly = trackIds.filter((id) => !inDbSet.has(id))
+      setPendingRecalcIds({ all: trackIds, newOnly })
+      setShowBpmRecalcPrompt(true)
+    } catch (error) {
+      console.error('Error refreshing playlist:', error)
+    } finally {
+      setIsHeaderRefreshing(false)
     }
   }
   
@@ -1229,77 +1280,81 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   }
 
   // Function to recalculate all BPM/key/scale for tracks in the playlist
-  const handleRecalculateAll = async () => {
-    if (!confirm('This will clear the cache and force recalculation of BPM/key/scale for all tracks in this playlist. Continue?')) {
+  const triggerRecalculateTracks = async (trackIds: string[]) => {
+    if (trackIds.length === 0) {
+      setShowBpmRecalcPrompt(false)
       return
     }
 
     setRecalculating(true)
     try {
-      // Pass track IDs directly to avoid Spotify API call (much faster)
-      const trackIds = tracks.map(t => t.id)
       const res = await fetch('/api/bpm/recalculate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           playlistId: params.id,
-          trackIds: trackIds.length > 0 ? trackIds : undefined,
+          trackIds,
         }),
       })
 
-      if (res.ok) {
-        const data = await res.json()
-        // Clear local state to force refetch
-        setTrackBpms({})
-        setTrackKeys({})
-        setTrackScales({})
-        setLoadingBpmFields(new Set())
-        setLoadingKeyFields(new Set())
-        setTracksNeedingBpm(new Set())
-        setTracksNeedingKey(new Set())
-        setTracksNeedingCalc(new Set())
-        setTracksInDb(new Set())
-        setBpmDebugInfo({})
-        setBpmDetails({})
-        setBpmFullData({}) // Clear full data as well
-        
-        // Trigger actual recalculation by calling individual BPM API for each track
-        // This ensures the recalculation actually happens, not just cache clearing
-        if (trackIds.length > 0) {
-          console.log(`[BPM Client] Triggering recalculation for ${trackIds.length} tracks`)
-          
-          // Process in batches to avoid overwhelming the system
-          const BATCH_SIZE = 5 // Smaller batches to ensure completion
-          let processed = 0
-          
-          for (let i = 0; i < trackIds.length; i += BATCH_SIZE) {
-            const batch = trackIds.slice(i, i + BATCH_SIZE)
-            
-            // Trigger recalculation for each track in the batch and wait for completion
-            // Use Promise.allSettled to continue even if some fail, but wait for all to complete
-            const results = await Promise.allSettled(
-              batch.map(trackId => 
-                fetch(`/api/bpm?spotifyTrackId=${encodeURIComponent(trackId)}`, {
-                  method: 'GET',
-                }).then(res => {
-                  if (!res.ok) {
-                    throw new Error(`HTTP ${res.status}`)
-                  }
-                  return res.json().then(data => ({ trackId, data }))
-                }).catch(err => {
-                  console.error(`[BPM Client] Error triggering recalculation for track ${trackId}:`, err)
-                  throw err
-                })
-              )
-            )
-            
-            // Process successful results and update state
-            for (const result of results) {
-              if (result.status === 'fulfilled') {
-                const { trackId, data } = result.value
-                // Update BPM, key, scale from the response
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to recalculate BPM/key')
+      }
+
+      setTrackBpms(prev => {
+        const next = { ...prev }
+        trackIds.forEach(id => delete next[id])
+        return next
+      })
+      setTrackKeys(prev => {
+        const next = { ...prev }
+        trackIds.forEach(id => delete next[id])
+        return next
+      })
+      setTrackScales(prev => {
+        const next = { ...prev }
+        trackIds.forEach(id => delete next[id])
+        return next
+      })
+      setBpmFullData(prev => {
+        const next = { ...prev }
+        trackIds.forEach(id => delete next[id])
+        return next
+      })
+      setBpmDetails(prev => {
+        const next = { ...prev }
+        trackIds.forEach(id => delete next[id])
+        return next
+      })
+      setBpmDebugInfo(prev => {
+        const next = { ...prev }
+        trackIds.forEach(id => delete next[id])
+        return next
+      })
+      setTracksInDb(prev => {
+        const next = new Set(prev)
+        trackIds.forEach(id => next.delete(id))
+        return next
+      })
+
+      const BATCH_SIZE = 5
+      for (let i = 0; i < trackIds.length; i += BATCH_SIZE) {
+        const batch = trackIds.slice(i, i + BATCH_SIZE)
+        await Promise.allSettled(
+          batch.map(trackId =>
+            fetch(`/api/bpm?spotifyTrackId=${encodeURIComponent(trackId)}`, {
+              method: 'GET',
+            })
+              .then(res => {
+                if (!res.ok) {
+                  throw new Error(`HTTP ${res.status}`)
+                }
+                return res.json().then(data => ({ trackId, data }))
+              })
+              .then(({ trackId, data }) => {
                 if (data.bpm != null) {
                   setTrackBpms(prev => ({ ...prev, [trackId]: data.bpm }))
                 }
@@ -1309,9 +1364,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 if (data.scale) {
                   setTrackScales(prev => ({ ...prev, [trackId]: data.scale }))
                 }
-                // Update full data for modal
-                if (data.bpmEssentia !== undefined || data.bpmLibrosa !== undefined || data.bpmSelected || 
-                    data.keyEssentia !== undefined || data.keyLibrosa !== undefined || data.keySelected) {
+                if (
+                  data.bpmEssentia !== undefined ||
+                  data.bpmLibrosa !== undefined ||
+                  data.bpmSelected ||
+                  data.keyEssentia !== undefined ||
+                  data.keyLibrosa !== undefined ||
+                  data.keySelected
+                ) {
                   setBpmFullData(prev => ({
                     ...prev,
                     [trackId]: {
@@ -1336,43 +1396,33 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     },
                   }))
                 }
-                // Update details
                 setBpmDetails(prev => ({
                   ...prev,
                   [trackId]: { source: data.source, error: data.error },
                 }))
-                if (data.bpm != null) {
-                  setTracksInDb(prev => new Set(prev).add(trackId))
-                }
-              }
-            }
-            
-            // Count successful results
-            const successful = results.filter(r => r.status === 'fulfilled').length
-            processed += batch.length
-            console.log(`[BPM Client] Completed recalculation for ${successful}/${batch.length} tracks in batch (${processed}/${trackIds.length} total)`)
-            
-            // Small delay between batches to avoid overwhelming the system
-            if (i + BATCH_SIZE < trackIds.length) {
-              await new Promise(resolve => setTimeout(resolve, 500))
-            }
-          }
-          
-          // Also fetch batch to ensure we have all data
-          await fetchBpmsBatch()
+              })
+          )
+        )
+
+        if (i + BATCH_SIZE < trackIds.length) {
+          await new Promise(resolve => setTimeout(resolve, 500))
         }
-        
-        alert(`Cache cleared for ${data.cleared} tracks. Recalculation triggered for all tracks.`)
-      } else {
-        const errorData = await res.json().catch(() => ({}))
-        alert(`Failed to recalculate: ${errorData.error || 'Unknown error'}`)
       }
+
+      await fetchBpmsBatch()
     } catch (error) {
       console.error('[BPM Client] Error recalculating:', error)
-      alert('Failed to recalculate BPM/key/scale')
     } finally {
       setRecalculating(false)
+      setShowBpmRecalcPrompt(false)
     }
+  }
+
+  const handleRecalculateAll = async () => {
+    if (!confirm('This will clear the cache and force recalculation of BPM/key/scale for all tracks in this playlist. Continue?')) {
+      return
+    }
+    await triggerRecalculateTracks(tracks.map(t => t.id))
   }
 
   /**
@@ -2529,18 +2579,40 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
         {playlistInfo && (
           <div className="relative mb-6 rounded-2xl bg-white p-6 shadow-[0_4px_24px_rgba(0,0,0,0.06)] border-t border-gray-100 sm:p-10">
-            {isCached && cachedAt && (
+            <div className="absolute right-6 top-6 flex items-center gap-2">
+              {isCached && cachedAt && (
+                <button
+                  onClick={() => setShowCacheModal(true)}
+                  className="group relative inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-200 text-[11px] font-semibold text-blue-700"
+                  aria-label="Using cached data"
+                >
+                  C
+                  <span className="pointer-events-none absolute right-0 top-8 whitespace-nowrap rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 opacity-0 shadow-sm transition-opacity duration-0 group-hover:opacity-100">
+                    Using cached data
+                  </span>
+                </button>
+              )}
               <button
-                onClick={() => setShowCacheModal(true)}
-                className="group absolute right-6 top-6 inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-200 text-[11px] font-semibold text-blue-700"
-                aria-label="Using cached data"
+                onClick={handleHeaderRefresh}
+                className="group relative inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:text-gray-700"
+                aria-label="Refresh playlist"
+                disabled={isHeaderRefreshing}
               >
-                C
-                <span className="pointer-events-none absolute right-0 top-8 whitespace-nowrap rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
-                  Using cached data
+                {isHeaderRefreshing ? (
+                  <svg className="h-3.5 w-3.5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                ) : (
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                )}
+                <span className="pointer-events-none absolute right-0 top-8 whitespace-nowrap rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 opacity-0 shadow-sm transition-opacity duration-0 group-hover:opacity-100">
+                  Refresh playlist
                 </span>
               </button>
-            )}
+            </div>
             <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
               {playlistInfo.images && playlistInfo.images[0] && (
                 <Image
@@ -2924,7 +2996,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     <span>{getYearString(track.album.release_date)}</span>
                     <span>{formatDuration(track.duration_ms)}</span>
                         {loadingBpmFields.has(track.id) ? (
-                          <span className="text-gray-400">BPM...</span>
+                          <span className="inline-flex w-16 items-center justify-center text-gray-400">BPM...</span>
                         ) : trackBpms[track.id] != null ? (
                           <button
                             onClick={(e) => {
@@ -3178,7 +3250,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       </td>
                                   <td className="px-3 lg:px-4 py-4 text-xs sm:text-sm hidden md:table-cell text-right" onClick={(e) => e.stopPropagation()}>
                                     {loadingBpmFields.has(track.id) ? (
-                                      <div className="flex items-center justify-end gap-1 text-gray-400">
+                                      <div className="flex w-16 items-center justify-end gap-1 text-gray-400">
                                         <svg className="animate-spin h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -3243,7 +3315,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         {(() => {
                           if (loadingKeyFields.has(track.id)) {
                             return (
-                              <span className="inline-flex items-center gap-1 text-gray-400">
+                              <span className="inline-flex w-24 items-center justify-center gap-1 text-gray-400">
                                 <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -4097,6 +4169,47 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   )}
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBpmRecalcPrompt && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
+          onClick={() => setShowBpmRecalcPrompt(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-[#171923]">Recalculate BPM & Key?</h2>
+              <button
+                onClick={() => setShowBpmRecalcPrompt(false)}
+                className="text-gray-400 hover:text-gray-600 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            <p className="mt-2 text-sm text-gray-600">
+              Choose whether to recalculate only new tracks or every track in this playlist.
+            </p>
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                onClick={() => triggerRecalculateTracks(pendingRecalcIds.all)}
+                className="rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:border-gray-300 hover:text-gray-900"
+                disabled={recalculating}
+              >
+                All tracks
+              </button>
+              <button
+                onClick={() => triggerRecalculateTracks(pendingRecalcIds.newOnly)}
+                className="rounded-full bg-[#18B45A] px-4 py-2 text-sm font-semibold text-white hover:bg-[#149A4C]"
+                disabled={recalculating}
+              >
+                Only new tracks
+              </button>
             </div>
           </div>
         </div>

@@ -324,7 +324,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                       {isCached && (
                         <span className="group relative inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-200 text-[11px] font-semibold text-blue-700">
                           C
-                          <span className="pointer-events-none absolute right-0 top-7 whitespace-nowrap rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+                          <span className="pointer-events-none absolute right-0 top-7 whitespace-nowrap rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 opacity-0 shadow-sm transition-opacity duration-0 group-hover:opacity-100">
                             Using cached data
                           </span>
                         </span>
@@ -476,7 +476,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                         {isCached && (
                           <span className="group relative inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-200 text-[11px] font-semibold text-blue-700">
                             C
-                            <span className="pointer-events-none absolute right-0 top-7 whitespace-nowrap rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+                            <span className="pointer-events-none absolute right-0 top-7 whitespace-nowrap rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 opacity-0 shadow-sm transition-opacity duration-0 group-hover:opacity-100">
                               Using cached data
                             </span>
                           </span>
