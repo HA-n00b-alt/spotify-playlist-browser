@@ -3,6 +3,24 @@ import { getAccessToken, makeSpotifyRequest } from '@/lib/spotify';
 import { CreditTrack } from '@/lib/musicbrainz';
 import { logError } from '@/lib/logger';
 
+interface SpotifyUserProfile {
+  id: string
+}
+
+interface SpotifyPlaylist {
+  id: string
+}
+
+interface SpotifyTrackItem {
+  uri: string
+}
+
+interface SpotifySearchResponse {
+  tracks?: {
+    items: SpotifyTrackItem[]
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const accessToken = await getAccessToken();
@@ -18,11 +36,11 @@ export async function POST(request: NextRequest) {
     }
 
     // 1. Get User ID
-    const user = await makeSpotifyRequest<SpotifyApi.CurrentUsersProfileResponse>('/me');
+    const user = await makeSpotifyRequest<SpotifyUserProfile>('/me');
     const userId = user.id;
 
     // 2. Create Playlist
-    const playlist = await makeSpotifyRequest<SpotifyApi.PlaylistObjectFull>(`/users/${userId}/playlists`, {
+    const playlist = await makeSpotifyRequest<SpotifyPlaylist>(`/users/${userId}/playlists`, {
       method: 'POST',
       body: JSON.stringify({
         name: name || 'MusicBrainz Search Results',
@@ -52,7 +70,7 @@ export async function POST(request: NextRequest) {
             query = `track:${track.title} artist:${cleanArtist}`;
           }
 
-          const searchRes = await makeSpotifyRequest<SpotifyApi.SearchResponse>(
+          const searchRes = await makeSpotifyRequest<SpotifySearchResponse>(
             `/search?q=${encodeURIComponent(query)}&type=track&limit=1`
           );
 
@@ -64,7 +82,7 @@ export async function POST(request: NextRequest) {
           if (track.isrc) {
              const cleanArtist = track.artist.split(' feat.')[0].split(' ft.')[0];
              const textQuery = `track:${track.title} artist:${cleanArtist}`;
-             const fallbackRes = await makeSpotifyRequest<SpotifyApi.SearchResponse>(
+             const fallbackRes = await makeSpotifyRequest<SpotifySearchResponse>(
                 `/search?q=${encodeURIComponent(textQuery)}&type=track&limit=1`
              );
              if (fallbackRes.tracks?.items && fallbackRes.tracks.items.length > 0) {
