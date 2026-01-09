@@ -1,4 +1,4 @@
-import { MB_BASE_URL, USER_AGENT } from './musicbrainz'
+import { MB_BASE_URL, USER_AGENT } from '../musicbrainz'
 
 type MusicBrainzParams = Record<string, string | number | undefined>
 
