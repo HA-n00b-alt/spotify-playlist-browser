@@ -67,6 +67,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [loadingPreviewIds, setLoadingPreviewIds] = useState<Set<string>>(new Set())
   const [bpmStreamStatus, setBpmStreamStatus] = useState<Record<string, 'partial' | 'final' | 'error'>>({})
   const streamAbortRef = useRef<AbortController | null>(null)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
   const [showBpmDebug, setShowBpmDebug] = useState(false)
   const [bpmDebugInfo, setBpmDebugInfo] = useState<Record<string, any>>({})
   const [bpmDetails, setBpmDetails] = useState<Record<string, { source?: string; error?: string }>>({})
@@ -234,6 +235,18 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     return () => {
       streamAbortRef.current?.abort()
     }
+  }, [])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
+        event.preventDefault()
+        searchInputRef.current?.focus()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
   useEffect(() => {
@@ -1287,6 +1300,17 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     }
 
     setRecalculating(true)
+    setShowBpmRecalcPrompt(false)
+    setLoadingBpmFields(prev => {
+      const next = new Set(prev)
+      trackIds.forEach(id => next.add(id))
+      return next
+    })
+    setLoadingKeyFields(prev => {
+      const next = new Set(prev)
+      trackIds.forEach(id => next.add(id))
+      return next
+    })
     try {
       const res = await fetch('/api/bpm/recalculate', {
         method: 'POST',
@@ -1317,6 +1341,16 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       setTrackScales(prev => {
         const next = { ...prev }
         trackIds.forEach(id => delete next[id])
+        return next
+      })
+      setTracksNeedingBpm(prev => {
+        const next = new Set(prev)
+        trackIds.forEach(id => next.add(id))
+        return next
+      })
+      setTracksNeedingKey(prev => {
+        const next = new Set(prev)
+        trackIds.forEach(id => next.add(id))
         return next
       })
       setBpmFullData(prev => {
@@ -1357,13 +1391,33 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               .then(({ trackId, data }) => {
                 if (data.bpm != null) {
                   setTrackBpms(prev => ({ ...prev, [trackId]: data.bpm }))
+                  setTracksNeedingBpm(prev => {
+                    const next = new Set(prev)
+                    next.delete(trackId)
+                    return next
+                  })
                 }
                 if (data.key) {
                   setTrackKeys(prev => ({ ...prev, [trackId]: data.key }))
+                  setTracksNeedingKey(prev => {
+                    const next = new Set(prev)
+                    next.delete(trackId)
+                    return next
+                  })
                 }
                 if (data.scale) {
                   setTrackScales(prev => ({ ...prev, [trackId]: data.scale }))
                 }
+                setLoadingBpmFields(prev => {
+                  const next = new Set(prev)
+                  next.delete(trackId)
+                  return next
+                })
+                setLoadingKeyFields(prev => {
+                  const next = new Set(prev)
+                  next.delete(trackId)
+                  return next
+                })
                 if (
                   data.bpmEssentia !== undefined ||
                   data.bpmLibrosa !== undefined ||
@@ -1401,6 +1455,18 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   [trackId]: { source: data.source, error: data.error },
                 }))
               })
+              .catch(() => {
+                setLoadingBpmFields(prev => {
+                  const next = new Set(prev)
+                  next.delete(trackId)
+                  return next
+                })
+                setLoadingKeyFields(prev => {
+                  const next = new Set(prev)
+                  next.delete(trackId)
+                  return next
+                })
+              })
           )
         )
 
@@ -1414,7 +1480,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       console.error('[BPM Client] Error recalculating:', error)
     } finally {
       setRecalculating(false)
-      setShowBpmRecalcPrompt(false)
     }
   }
 
@@ -2706,6 +2771,39 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       >
                         Open in Spotify
                       </a>
+                      {bpmSummary && showBpmNotice && (
+                        <div className="mt-2 flex w-full items-start justify-between gap-3 rounded-lg border border-amber-100 bg-amber-50 px-4 py-2 text-xs text-amber-900">
+                          <div className="flex items-start gap-2">
+                            <span className="mt-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full border border-amber-200 text-[10px] font-semibold text-amber-700">
+                              i
+                            </span>
+                            <span>
+                              {bpmSummary.shouldShowProgress
+                                ? `BPM information processing ongoing (${bpmSummary.tracksRemainingToSearch} remaining).`
+                                : bpmSummary.tracksWithNa > 0
+                                  ? `${bpmSummary.tracksWithNa} of ${bpmSummary.totalTracks} tracks have no BPM information available. You can retry by clicking on the N/A value.`
+                                  : `All ${bpmSummary.totalTracks} tracks have BPM information available.`}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setShowBpmMoreInfo(true)}
+                              className="text-amber-700 underline-offset-2 hover:text-amber-900 hover:underline"
+                            >
+                              Details
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowBpmNotice(false)}
+                              className="text-amber-700 hover:text-amber-900"
+                              aria-label="Dismiss notice"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -2715,39 +2813,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         )}
 
         <div className="mb-4 sm:mb-6 space-y-3 sm:space-y-4">
-          {bpmSummary && showBpmNotice && (
-            <div className="flex items-start justify-between gap-3 rounded-lg border border-amber-100 bg-amber-50 px-4 py-2 text-xs text-amber-900">
-              <div className="flex items-start gap-2">
-                <span className="mt-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full border border-amber-200 text-[10px] font-semibold text-amber-700">
-                  i
-                </span>
-                <span>
-                  {bpmSummary.shouldShowProgress
-                    ? `BPM information processing ongoing (${bpmSummary.tracksRemainingToSearch} remaining).`
-                    : bpmSummary.tracksWithNa > 0
-                      ? `${bpmSummary.tracksWithNa} of ${bpmSummary.totalTracks} tracks have no BPM information available. You can retry by clicking on the N/A value.`
-                      : `All ${bpmSummary.totalTracks} tracks have BPM information available.`}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowBpmMoreInfo(true)}
-                  className="text-amber-700 underline-offset-2 hover:text-amber-900 hover:underline"
-                >
-                  Details
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowBpmNotice(false)}
-                  className="text-amber-700 hover:text-amber-900"
-                  aria-label="Dismiss notice"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-          )}
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
               <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -2757,9 +2822,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             </span>
             <input
               type="text"
-              placeholder="Search tracks... (Cmd/Ctrl+K)"
+              placeholder="Search tracks... (Cmd/Ctrl+F)"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              ref={searchInputRef}
               className="w-full rounded-lg bg-[#F3F4F6] py-3 pl-10 pr-4 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
             />
           </div>
@@ -3097,15 +3163,15 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none hidden md:table-cell"
+                    className="px-3 lg:px-4 py-3 text-center text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none hidden md:table-cell"
                     onClick={() => handleSort('tempo')}
                   >
-                    <div className="flex items-center justify-end">
+                    <div className="flex items-center justify-center">
                       BPM
                       <SortIcon field="tempo" />
                     </div>
                   </th>
-                  <th className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden md:table-cell min-w-[96px]">
+                  <th className="px-3 lg:px-4 py-3 text-center text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden md:table-cell min-w-[96px]">
                     Key
                   </th>
                   <th
@@ -3248,7 +3314,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       <td className="px-3 lg:px-4 py-4 text-gray-500 text-xs sm:text-sm hidden md:table-cell text-right">
                         {formatDuration(track.duration_ms)}
                       </td>
-                                  <td className="px-3 lg:px-4 py-4 text-xs sm:text-sm hidden md:table-cell text-right" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-3 lg:px-4 py-4 text-xs sm:text-sm hidden md:table-cell text-center" onClick={(e) => e.stopPropagation()}>
                                     {loadingBpmFields.has(track.id) ? (
                                       <div className="flex w-16 items-center justify-end gap-1 text-gray-400">
                                         <svg className="animate-spin h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -3311,7 +3377,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                               </button>
                                             )}
                                   </td>
-                      <td className="px-3 lg:px-4 py-4 text-xs sm:text-sm hidden md:table-cell whitespace-nowrap min-w-[96px]">
+                      <td className="px-3 lg:px-4 py-4 text-xs sm:text-sm hidden md:table-cell whitespace-nowrap min-w-[96px] text-center">
                         {(() => {
                           if (loadingKeyFields.has(track.id)) {
                             return (
@@ -3326,30 +3392,36 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           }
                           const key = trackKeys[track.id]
                           const scale = trackScales[track.id]
-                          if (key && scale) {
+                          if (key || scale) {
                             return (
-                              <span className="inline-flex w-24 items-center justify-center rounded-full border border-slate-200 bg-transparent px-2.5 py-1 text-xs font-medium text-slate-700 whitespace-nowrap">
-                                {key} {scale}
-                              </span>
-                            )
-                          } else if (key) {
-                            return (
-                              <span className="inline-flex w-24 items-center justify-center rounded-full border border-slate-200 bg-transparent px-2.5 py-1 text-xs font-medium text-slate-700 whitespace-nowrap">
-                                {key}
-                              </span>
-                            )
-                          } else if (scale) {
-                            return (
-                              <span className="inline-flex w-24 items-center justify-center rounded-full border border-slate-200 bg-transparent px-2.5 py-1 text-xs font-medium text-slate-700 whitespace-nowrap">
-                                {scale}
-                              </span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setSelectedBpmTrack(track)
+                                  setRetryStatus(null)
+                                  setRetryAttempted(false)
+                                  setShowBpmModal(true)
+                                }}
+                                className="inline-flex w-24 items-center justify-center rounded-full border border-slate-200 bg-transparent px-2.5 py-1 text-xs font-medium text-slate-700 whitespace-nowrap"
+                              >
+                                {key && scale ? `${key} ${scale}` : key || scale}
+                              </button>
                             )
                           }
                           if (tracksNeedingKey.has(track.id) || bpmStreamStatus[track.id] === 'error') {
                             return (
-                              <span className="inline-flex w-24 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-1 text-xs font-medium text-amber-700">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setSelectedBpmTrack(track)
+                                  setRetryStatus(null)
+                                  setRetryAttempted(false)
+                                  setShowBpmModal(true)
+                                }}
+                                className="inline-flex w-24 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-1 text-xs font-medium text-amber-700"
+                              >
                                 N/A
-                              </span>
+                              </button>
                             )
                           }
                           return (

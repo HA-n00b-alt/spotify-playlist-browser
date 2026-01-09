@@ -258,6 +258,20 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
     )
   }
 
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
+        event.preventDefault()
+        searchInputRef.current?.focus()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   return (
     <div>
       <div className="mb-4 sm:mb-6 flex flex-wrap gap-3">
@@ -270,9 +284,10 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
           </span>
           <input
             type="text"
-            placeholder="Search playlists... (Cmd/Ctrl+K)"
+            placeholder="Search playlists... (Cmd/Ctrl+F)"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            ref={searchInputRef}
             className="w-full rounded-lg bg-[#F3F4F6] py-3 pl-10 pr-4 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
           />
         </div>
