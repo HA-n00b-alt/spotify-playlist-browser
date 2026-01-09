@@ -1460,7 +1460,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     } catch (error) {
       setCreditsErrorByTrackId(prev => ({
         ...prev,
-        [track.id]: error instanceof Error ? error.message : 'Failed to fetch credits',
+        [track.id]: error instanceof Error ? error.message : 'Unable to fetch credits',
       }))
     } finally {
       setCreditsLoadingIds(prev => {
@@ -3122,7 +3122,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                               e.stopPropagation()
                               fetchCreditsForTrack(track)
                             }}
-                            className="text-[11px] text-blue-600 hover:text-blue-700 hover:underline"
+                            className="text-[11px] text-gray-500 hover:text-gray-600"
                           >
                             {creditsLoadingIds.has(track.id) ? 'Loading credits...' : 'Credits'}
                           </button>

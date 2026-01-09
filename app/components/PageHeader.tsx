@@ -16,6 +16,7 @@ interface PageHeaderProps {
 
 export default function PageHeader({ subtitle, backLink, rightButtons, center }: PageHeaderProps) {
   const [userName, setUserName] = useState<string | null>(null)
+  const [bpmStatus, setBpmStatus] = useState<'checking' | 'ok' | 'error'>('checking')
 
   useEffect(() => {
     // Fetch user info for subtitle
@@ -30,6 +31,43 @@ export default function PageHeader({ subtitle, backLink, rightButtons, center }:
         console.error('Error fetching user info:', err)
       })
   }, [])
+
+  useEffect(() => {
+    let isMounted = true
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30000)
+
+    setBpmStatus('checking')
+    fetch('/api/bpm/health', { signal: controller.signal })
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`BPM health check failed: ${res.status}`)
+        }
+        return res.json().catch(() => ({}))
+      })
+      .then((data) => {
+        if (!isMounted) return
+        setBpmStatus(data?.ok ? 'ok' : 'error')
+      })
+      .catch(() => {
+        if (!isMounted) return
+        setBpmStatus('error')
+      })
+      .finally(() => {
+        clearTimeout(timeoutId)
+      })
+
+    return () => {
+      isMounted = false
+      clearTimeout(timeoutId)
+      controller.abort()
+    }
+  }, [])
+
+  const bpmStatusColor =
+    bpmStatus === 'ok' ? 'bg-green-500' : bpmStatus === 'checking' ? 'bg-amber-400' : 'bg-red-500'
+  const bpmStatusLabel =
+    bpmStatus === 'ok' ? 'BPM API healthy' : bpmStatus === 'checking' ? 'BPM API checking' : 'BPM API error'
 
   // Replace [user] placeholder with actual username if available
   const displaySubtitle = subtitle.includes('[user]') && userName
@@ -57,7 +95,11 @@ export default function PageHeader({ subtitle, backLink, rightButtons, center }:
                   <h1 className="text-2xl font-bold text-gray-900">Spotify Playlist Tools</h1>
                   <p className="text-sm text-gray-500 mt-1">{displaySubtitle}</p>
                 </div>
-                <div className="flex-shrink-0 ml-4">
+                <div className="flex-shrink-0 ml-4 flex items-center gap-3">
+                  <div className="flex items-center gap-2 text-xs text-gray-500" title={bpmStatusLabel}>
+                    <span className={`h-2.5 w-2.5 rounded-full ${bpmStatusColor}`} />
+                    <span>BPM API</span>
+                  </div>
                   <UserMenu />
                 </div>
               </div>
@@ -75,6 +117,10 @@ export default function PageHeader({ subtitle, backLink, rightButtons, center }:
             </div>
             {/* Desktop: User menu and buttons on the right */}
             <div className="hidden sm:flex gap-2 items-center">
+              <div className="flex items-center gap-2 text-xs text-gray-500" title={bpmStatusLabel}>
+                <span className={`h-2.5 w-2.5 rounded-full ${bpmStatusColor}`} />
+                <span>BPM API</span>
+              </div>
               {rightButtons}
               <UserMenu />
             </div>
@@ -92,6 +138,5 @@ export default function PageHeader({ subtitle, backLink, rightButtons, center }:
     </div>
   )
 }
-
 
 
