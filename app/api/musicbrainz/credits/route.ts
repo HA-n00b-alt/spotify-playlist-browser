@@ -52,35 +52,72 @@ export async function GET(request: Request) {
       : []
 
     const recordingRelations = Array.isArray(recording?.relations) ? recording.relations : []
-    const productionRoles = new Set([
+    const producerRoles = new Set([
       'producer',
       'co-producer',
       'assistant producer',
       'executive producer',
-      'engineer',
-      'recording engineer',
-      'mixer',
-      'mixing',
     ])
+    const mixRoles = new Set(['mix', 'mixing', 'mixer'])
+    const masterRoles = new Set(['mastering', 'mastering engineer'])
     const compositionRoles = new Set(['composer', 'lyricist'])
 
-    const production = Array.from(
-      new Set(
-        recordingRelations
-          .filter((rel: any) => {
-            const role = String(rel?.type).toLowerCase()
-            if (productionRoles.has(role)) return true
-            const attributes = Array.isArray(rel?.attributes) ? rel.attributes : []
-            return attributes.some((attr: any) => productionRoles.has(String(attr).toLowerCase()))
-          })
-          .map((rel: any) => {
-            if (typeof rel?.artist?.name === 'string') return rel.artist.name
-            if (typeof rel?.name === 'string') return rel.name
-            return null
-          })
-          .filter(Boolean)
+    const collectNamesForRoles = (relations: any[], roles: Set<string>) =>
+      Array.from(
+        new Set(
+          relations
+            .filter((rel: any) => {
+              const role = String(rel?.type).toLowerCase()
+              if (roles.has(role)) return true
+              const attributes = Array.isArray(rel?.attributes) ? rel.attributes : []
+              return attributes.some((attr: any) => roles.has(String(attr).toLowerCase()))
+            })
+            .map((rel: any) => {
+              if (typeof rel?.artist?.name === 'string') return rel.artist.name
+              if (typeof rel?.name === 'string') return rel.name
+              return null
+            })
+            .filter(Boolean)
+        )
       )
-    )
+
+    const producedBy = collectNamesForRoles(recordingRelations, producerRoles)
+    const mixedBy = collectNamesForRoles(recordingRelations, mixRoles)
+    const masteredBy = collectNamesForRoles(recordingRelations, masterRoles)
+
+    let releaseProducedBy: string[] = []
+    let releaseMixedBy: string[] = []
+    let releaseMasteredBy: string[] = []
+    if (
+      recording?.id &&
+      (producedBy.length === 0 || mixedBy.length === 0 || masteredBy.length === 0)
+    ) {
+      const releaseUrl =
+        `https://musicbrainz.org/ws/2/release?recording=${encodeURIComponent(recording.id)}` +
+        `&fmt=json&inc=artist-rels&limit=1`
+      try {
+        const releaseResponse = await fetch(releaseUrl, {
+          headers: {
+            'User-Agent': userAgent,
+            Accept: 'application/json',
+          },
+          cache: 'no-store',
+        })
+        if (releaseResponse.ok) {
+          const releaseData = await releaseResponse.json()
+          const releaseRelations = Array.isArray(releaseData?.releases?.[0]?.relations)
+            ? releaseData.releases[0].relations
+            : []
+          releaseProducedBy = collectNamesForRoles(releaseRelations, producerRoles)
+          releaseMixedBy = collectNamesForRoles(releaseRelations, mixRoles)
+          releaseMasteredBy = collectNamesForRoles(releaseRelations, masterRoles)
+        }
+      } catch {
+        releaseProducedBy = []
+        releaseMixedBy = []
+        releaseMasteredBy = []
+      }
+    }
 
     const composition = Array.from(
       new Set(
@@ -115,9 +152,11 @@ export async function GET(request: Request) {
     const uniqueComposition = Array.from(new Set(composition))
 
     return NextResponse.json({
-      performers,
-      production,
-      composition: uniqueComposition,
+      performedBy: performers,
+      producedBy: Array.from(new Set([...producedBy, ...releaseProducedBy])),
+      mixedBy: Array.from(new Set([...mixedBy, ...releaseMixedBy])),
+      masteredBy: Array.from(new Set([...masteredBy, ...releaseMasteredBy])),
+      writtenBy: uniqueComposition,
     })
   } catch (error) {
     return NextResponse.json(

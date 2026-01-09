@@ -102,7 +102,16 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [retryTrackId, setRetryTrackId] = useState<string | null>(null)
   const [recalcStatus, setRecalcStatus] = useState<{ loading: boolean; success?: boolean; error?: string } | null>(null)
   const [creditsByTrackId, setCreditsByTrackId] = useState<
-    Record<string, { performers: string[]; production: string[]; composition: string[] }>
+    Record<
+      string,
+      {
+        performedBy: string[]
+        writtenBy: string[]
+        producedBy: string[]
+        mixedBy: string[]
+        masteredBy: string[]
+      }
+    >
   >({})
   const [creditsLoadingIds, setCreditsLoadingIds] = useState<Set<string>>(new Set())
   const [creditsErrorByTrackId, setCreditsErrorByTrackId] = useState<Record<string, string>>({})
@@ -1425,9 +1434,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       setCreditsByTrackId(prev => ({
         ...prev,
         [track.id]: {
-          performers: data.performers || [],
-          production: data.production || [],
-          composition: data.composition || [],
+          performedBy: data.performedBy || data.performers || [],
+          writtenBy: data.writtenBy || data.composition || [],
+          producedBy: data.producedBy || data.production || [],
+          mixedBy: data.mixedBy || [],
+          masteredBy: data.masteredBy || [],
         },
       }))
       setCreditsErrorByTrackId(prev => {
@@ -2840,7 +2851,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             }}
                             className="mt-1 text-xs text-blue-600 hover:text-blue-700 hover:underline"
                           >
-                            {creditsLoadingIds.has(track.id) ? 'Loading credits...' : 'Show credits'}
+                            {creditsLoadingIds.has(track.id) ? 'Loading credits...' : 'Credits'}
                           </button>
                       <div className="text-xs text-gray-600 mt-1">
                         {track.artists.map((artist, index) => (
@@ -3102,7 +3113,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             }}
                             className="text-[11px] text-blue-600 hover:text-blue-700 hover:underline"
                           >
-                            {creditsLoadingIds.has(track.id) ? 'Loading credits...' : 'Show credits'}
+                            {creditsLoadingIds.has(track.id) ? 'Loading credits...' : 'Credits'}
                           </button>
                         </div>
                       </td>
@@ -3896,25 +3907,41 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             ) : (
               <div className="space-y-4 text-sm text-gray-700">
                 <div>
-                  <div className="font-semibold text-gray-900">Primary Performer</div>
-                  {creditsByTrackId[selectedCreditsTrack.id]?.performers?.length ? (
-                    <div>{creditsByTrackId[selectedCreditsTrack.id].performers.join(', ')}</div>
+                  <div className="font-semibold text-gray-900">Performed by</div>
+                  {creditsByTrackId[selectedCreditsTrack.id]?.performedBy?.length ? (
+                    <div>{creditsByTrackId[selectedCreditsTrack.id].performedBy.join(', ')}</div>
                   ) : (
                     <div className="text-gray-400">Not available</div>
                   )}
                 </div>
                 <div>
-                  <div className="font-semibold text-gray-900">Production Crew</div>
-                  {creditsByTrackId[selectedCreditsTrack.id]?.production?.length ? (
-                    <div>{creditsByTrackId[selectedCreditsTrack.id].production.join(', ')}</div>
+                  <div className="font-semibold text-gray-900">Written by</div>
+                  {creditsByTrackId[selectedCreditsTrack.id]?.writtenBy?.length ? (
+                    <div>{creditsByTrackId[selectedCreditsTrack.id].writtenBy.join(', ')}</div>
                   ) : (
                     <div className="text-gray-400">Not available</div>
                   )}
                 </div>
                 <div>
-                  <div className="font-semibold text-gray-900">Composition</div>
-                  {creditsByTrackId[selectedCreditsTrack.id]?.composition?.length ? (
-                    <div>{creditsByTrackId[selectedCreditsTrack.id].composition.join(', ')}</div>
+                  <div className="font-semibold text-gray-900">Produced by</div>
+                  {creditsByTrackId[selectedCreditsTrack.id]?.producedBy?.length ? (
+                    <div>{creditsByTrackId[selectedCreditsTrack.id].producedBy.join(', ')}</div>
+                  ) : (
+                    <div className="text-gray-400">Not available</div>
+                  )}
+                </div>
+                <div>
+                  <div className="font-semibold text-gray-900">Mixed by</div>
+                  {creditsByTrackId[selectedCreditsTrack.id]?.mixedBy?.length ? (
+                    <div>{creditsByTrackId[selectedCreditsTrack.id].mixedBy.join(', ')}</div>
+                  ) : (
+                    <div className="text-gray-400">Not available</div>
+                  )}
+                </div>
+                <div>
+                  <div className="font-semibold text-gray-900">Mastered by</div>
+                  {creditsByTrackId[selectedCreditsTrack.id]?.masteredBy?.length ? (
+                    <div>{creditsByTrackId[selectedCreditsTrack.id].masteredBy.join(', ')}</div>
                   ) : (
                     <div className="text-gray-400">Not available</div>
                   )}
