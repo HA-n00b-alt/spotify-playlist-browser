@@ -2617,7 +2617,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           {bpmSummary && showBpmNotice && (
             <div className="flex items-start justify-between gap-3 rounded-lg border border-amber-100 bg-amber-50 px-4 py-2 text-xs text-amber-900">
               <div className="flex items-start gap-2">
-                <span className="mt-0.5 text-amber-500">!</span>
+                <span className="mt-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full border border-amber-200 text-[10px] font-semibold text-amber-700">
+                  i
+                </span>
                 <span>
                   {bpmSummary.shouldShowProgress
                     ? `BPM information processing ongoing (${bpmSummary.tracksRemainingToSearch} remaining).`
@@ -2630,7 +2632,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 <button
                   type="button"
                   onClick={() => setShowBpmMoreInfo(true)}
-                  className="text-amber-700 hover:text-amber-900"
+                  className="text-amber-700 underline-offset-2 hover:text-amber-900 hover:underline"
                 >
                   Details
                 </button>
@@ -2914,7 +2916,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                               setRetryStatus(null)
                               setShowBpmModal(true)
                             }}
-                            className="rounded-full border border-blue-200 bg-[#F5F5F7] px-2.5 py-0.5 text-[11px] font-medium text-blue-700"
+                            className="rounded-full border border-blue-200 bg-transparent px-2.5 py-0.5 text-[11px] font-medium text-blue-700"
                           >
                             {Math.round(trackBpms[track.id]!)} BPM
                             {bpmStreamStatus[track.id] === 'partial' && (
@@ -2928,12 +2930,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                               setSelectedBpmTrack(track)
                               setShowBpmModal(true)
                             }}
-                            className="rounded-full border border-amber-200 bg-[#F5F5F7] px-2.5 py-0.5 text-[11px] font-medium text-amber-700"
+                            className="rounded-full border border-amber-200 bg-transparent px-2.5 py-0.5 text-[11px] font-medium text-amber-700"
                           >
                             BPM N/A
                           </button>
                         ) : track.tempo != null ? (
-                          <span className="rounded-full border border-blue-200 bg-[#F5F5F7] px-2.5 py-0.5 text-[11px] font-medium text-blue-700">
+                          <span className="rounded-full border border-blue-200 bg-transparent px-2.5 py-0.5 text-[11px] font-medium text-blue-700">
                             {Math.round(track.tempo)} BPM
                           </span>
                         ) : (
@@ -2943,7 +2945,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                               setSelectedBpmTrack(track)
                               setShowBpmModal(true)
                             }}
-                            className="rounded-full border border-amber-200 bg-[#F5F5F7] px-2.5 py-0.5 text-[11px] font-medium text-amber-700"
+                            className="rounded-full border border-amber-200 bg-transparent px-2.5 py-0.5 text-[11px] font-medium text-amber-700"
                           >
                             BPM N/A
                           </button>
@@ -3175,7 +3177,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                             setRetryAttempted(false)
                                             setShowBpmModal(true)
                                           }}
-                                          className="inline-flex items-center justify-center rounded-full border border-blue-200 bg-[#F5F5F7] px-2.5 py-1 text-xs font-medium text-blue-700"
+                                          className="inline-flex items-center justify-center rounded-full border border-blue-200 bg-transparent px-2.5 py-1 text-xs font-medium text-blue-700"
                                           title="Click for BPM details"
                                         >
                                           {Math.round(trackBpms[track.id]!)}
@@ -3193,7 +3195,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                                 setRetryAttempted(false)
                                                 setShowBpmModal(true)
                                               }}
-                                              className="inline-flex items-center justify-center rounded-full border border-amber-200 bg-[#F5F5F7] px-2.5 py-1 text-xs font-medium text-amber-700"
+                                              className="inline-flex items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-1 text-xs font-medium text-amber-700"
                                               title="Click to see why BPM is not available"
                                             >
                                               N/A
@@ -3201,7 +3203,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                           )
                                         : track.tempo != null 
                                           ? (
-                                              <span className="inline-flex items-center justify-center rounded-full border border-blue-200 bg-[#F5F5F7] px-2.5 py-1 text-xs font-medium text-blue-700">
+                                              <span className="inline-flex items-center justify-center rounded-full border border-blue-200 bg-transparent px-2.5 py-1 text-xs font-medium text-blue-700">
                                                 {Math.round(track.tempo)}
                                               </span>
                                             )
@@ -3213,7 +3215,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                                   setRetryAttempted(false)
                                                   setShowBpmModal(true)
                                                 }}
-                                                className="inline-flex items-center justify-center rounded-full border border-amber-200 bg-[#F5F5F7] px-2.5 py-1 text-xs font-medium text-amber-700"
+                                                className="inline-flex items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-1 text-xs font-medium text-amber-700"
                                                 title="Click to see why BPM is not available"
                                               >
                                                 N/A
@@ -3237,32 +3239,32 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           const scale = trackScales[track.id]
                           if (key && scale) {
                             return (
-                              <span className="inline-flex items-center rounded-full border border-slate-200 bg-[#F5F5F7] px-2.5 py-1 text-xs font-medium text-slate-700">
+                              <span className="inline-flex items-center rounded-full border border-slate-200 bg-transparent px-2.5 py-1 text-xs font-medium text-slate-700">
                                 {key} {scale}
                               </span>
                             )
                           } else if (key) {
                             return (
-                              <span className="inline-flex items-center rounded-full border border-slate-200 bg-[#F5F5F7] px-2.5 py-1 text-xs font-medium text-slate-700">
+                              <span className="inline-flex items-center rounded-full border border-slate-200 bg-transparent px-2.5 py-1 text-xs font-medium text-slate-700">
                                 {key}
                               </span>
                             )
                           } else if (scale) {
                             return (
-                              <span className="inline-flex items-center rounded-full border border-slate-200 bg-[#F5F5F7] px-2.5 py-1 text-xs font-medium text-slate-700">
+                              <span className="inline-flex items-center rounded-full border border-slate-200 bg-transparent px-2.5 py-1 text-xs font-medium text-slate-700">
                                 {scale}
                               </span>
                             )
                           }
                           if (tracksNeedingKey.has(track.id) || bpmStreamStatus[track.id] === 'error') {
                             return (
-                              <span className="inline-flex items-center rounded-full border border-amber-200 bg-[#F5F5F7] px-2.5 py-1 text-xs font-medium text-amber-700">
+                              <span className="inline-flex items-center rounded-full border border-amber-200 bg-transparent px-2.5 py-1 text-xs font-medium text-amber-700">
                                 N/A
                               </span>
                             )
                           }
                           return (
-                            <span className="inline-flex items-center rounded-full border border-gray-200 bg-[#F5F5F7] px-2.5 py-1 text-xs font-medium text-gray-500">
+                            <span className="inline-flex items-center rounded-full border border-gray-200 bg-transparent px-2.5 py-1 text-xs font-medium text-gray-500">
                               -
                             </span>
                           )
