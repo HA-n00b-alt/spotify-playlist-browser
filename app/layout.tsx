@@ -47,7 +47,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.className} flex min-h-screen flex-col text-[#111827] antialiased`}>
+      <body className={`${inter.className} flex min-h-screen flex-col text-[#171923] antialiased`}>
         <ErrorBoundary>
           <QueryProvider>
             <PageViewTracker />

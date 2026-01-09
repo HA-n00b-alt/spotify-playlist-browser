@@ -161,6 +161,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [includeHalfDoubleBpm, setIncludeHalfDoubleBpm] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
   const [showBpmInfo, setShowBpmInfo] = useState(false)
+  const [showBpmNotice, setShowBpmNotice] = useState(true)
   const [playingTrackId, setPlayingTrackId] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const authErrorHandledRef = useRef(false) // Prevent infinite loops on auth errors
@@ -2218,6 +2219,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     }
   }, [tracks, tracksNeedingCalc, loadingTrackIds, trackBpms, bpmProcessingStartTime])
 
+  useEffect(() => {
+    if (bpmSummary) {
+      setShowBpmNotice(true)
+    }
+  }, [bpmSummary?.totalTracks, bpmSummary?.tracksWithNa, bpmSummary?.tracksRemainingToSearch])
+
 
   // Load preferred page size from localStorage
   useEffect(() => {
@@ -2243,13 +2250,13 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) {
       return (
-        <span className="ml-1 text-gray-400 text-xs">
+        <span className="ml-1 text-gray-300 text-[10px]">
           ↕
         </span>
       )
     }
     return (
-      <span className="ml-1 text-gray-600 text-xs">
+      <span className="ml-1 text-gray-700 text-[10px]">
         {sortDirection === 'asc' ? '↑' : '↓'}
       </span>
     )
@@ -2509,7 +2516,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         )}
 
         {playlistInfo && (
-          <div className="mb-6 rounded-2xl bg-white p-6 shadow-[0_4px_24px_rgba(0,0,0,0.06)] sm:p-8">
+          <div className="mb-6 rounded-2xl bg-white p-6 shadow-[0_4px_24px_rgba(0,0,0,0.06)] border-t border-gray-100 sm:p-10">
             <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
               {playlistInfo.images && playlistInfo.images[0] && (
                 <Image
@@ -2527,7 +2534,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       href={playlistInfo.external_urls.spotify}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="block text-[32px] font-bold tracking-tight text-[#111827] hover:text-emerald-600"
+                      className="block text-[32px] font-bold tracking-tight text-[#171923] hover:text-emerald-600"
                       onClick={(e) => {
                         e.preventDefault()
                         const spotifyUri = `spotify:playlist:${playlistInfo.id}`
@@ -2540,7 +2547,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       {playlistInfo.name}
                     </a>
                   ) : (
-                    <h1 className="text-[32px] font-bold tracking-tight text-[#111827]">
+                    <h1 className="text-[32px] font-bold tracking-tight text-[#171923]">
                       {playlistInfo.name}
                     </h1>
                   )}
@@ -2607,8 +2614,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         )}
 
         <div className="mb-4 sm:mb-6 space-y-3 sm:space-y-4">
-          {bpmSummary && (
-            <div className="flex items-start justify-between gap-3 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm">
+          {bpmSummary && showBpmNotice && (
+            <div className="flex items-start justify-between gap-3 rounded-lg border border-amber-100 bg-amber-50 px-4 py-2 text-xs text-amber-900">
               <div className="flex items-start gap-2">
                 <span className="mt-0.5 text-amber-500">!</span>
                 <span>
@@ -2619,25 +2626,35 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       : `All ${bpmSummary.totalTracks} tracks have BPM information available.`}
                 </span>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowBpmMoreInfo(true)}
-                className="text-amber-700 hover:text-amber-900"
-              >
-                More info
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowBpmMoreInfo(true)}
+                  className="text-amber-700 hover:text-amber-900"
+                >
+                  Details
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowBpmNotice(false)}
+                  className="text-amber-700 hover:text-amber-900"
+                  aria-label="Dismiss notice"
+                >
+                  ×
+                </button>
+              </div>
             </div>
           )}
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="11" cy="11" r="7" />
                 <path d="M20 20l-3.5-3.5" strokeLinecap="round" />
               </svg>
             </span>
             <input
               type="text"
-              placeholder="Search tracks..."
+              placeholder="Search tracks... (Cmd/Ctrl+K)"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full rounded-lg bg-[#F3F4F6] py-3 pl-10 pr-4 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
@@ -2789,9 +2806,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               </button>
             </div>
           )}
-          <div className="text-xs text-gray-500 ml-auto">
-            Right click on a track for play options
-          </div>
         </div>
 
         {/* Mobile Card View */}
@@ -2844,7 +2858,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 <div className="flex-1 min-w-0">
                   <a
                     href="#"
-                    className="block truncate text-sm font-semibold text-[#111827] hover:text-emerald-600 hover:underline"
+                    className="block truncate text-sm font-semibold text-[#171923] hover:text-emerald-600 hover:underline"
                     onClick={(e) => handleTrackTitleClick(e, track)}
                     onContextMenu={(e) => handleTrackContextMenu(e, track)}
                     title={getPreviewTooltip(track.id)}
@@ -2854,15 +2868,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       <span className="ml-1 text-xs bg-gray-200 text-gray-700 px-1 py-0.5 rounded">E</span>
                     )}
                   </a>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      fetchCreditsForTrack(track)
-                    }}
-                    className="mt-1 text-xs text-gray-500 hover:text-gray-600"
-                  >
-                    {creditsLoadingIds.has(track.id) ? 'Loading credits...' : 'Credits'}
-                  </button>
                   <div className="text-xs text-gray-500 mt-1">
                     {track.artists.map((artist, index) => (
                       <span key={artist.id || index}>
@@ -2899,50 +2904,50 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </span>
                     <span>{getYearString(track.album.release_date)}</span>
                     <span>{formatDuration(track.duration_ms)}</span>
-                    {loadingBpmFields.has(track.id) ? (
-                      <span className="text-gray-400">BPM...</span>
-                    ) : trackBpms[track.id] != null ? (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setSelectedBpmTrack(track)
-                          setRetryStatus(null)
-                          setShowBpmModal(true)
-                        }}
-                        className="rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-700 hover:bg-blue-100"
-                      >
-                        {Math.round(trackBpms[track.id]!)} BPM
-                        {bpmStreamStatus[track.id] === 'partial' && (
-                          <span className="ml-1 text-[10px] text-blue-600">(partial)</span>
+                        {loadingBpmFields.has(track.id) ? (
+                          <span className="text-gray-400">BPM...</span>
+                        ) : trackBpms[track.id] != null ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSelectedBpmTrack(track)
+                              setRetryStatus(null)
+                              setShowBpmModal(true)
+                            }}
+                            className="rounded-full border border-blue-200 bg-[#F5F5F7] px-2.5 py-0.5 text-[11px] font-medium text-blue-700"
+                          >
+                            {Math.round(trackBpms[track.id]!)} BPM
+                            {bpmStreamStatus[track.id] === 'partial' && (
+                              <span className="ml-1 text-[10px] text-blue-600">(partial)</span>
+                            )}
+                          </button>
+                        ) : (tracksNeedingBpm.has(track.id) || bpmStreamStatus[track.id] === 'error') ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSelectedBpmTrack(track)
+                              setShowBpmModal(true)
+                            }}
+                            className="rounded-full border border-amber-200 bg-[#F5F5F7] px-2.5 py-0.5 text-[11px] font-medium text-amber-700"
+                          >
+                            BPM N/A
+                          </button>
+                        ) : track.tempo != null ? (
+                          <span className="rounded-full border border-blue-200 bg-[#F5F5F7] px-2.5 py-0.5 text-[11px] font-medium text-blue-700">
+                            {Math.round(track.tempo)} BPM
+                          </span>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSelectedBpmTrack(track)
+                              setShowBpmModal(true)
+                            }}
+                            className="rounded-full border border-amber-200 bg-[#F5F5F7] px-2.5 py-0.5 text-[11px] font-medium text-amber-700"
+                          >
+                            BPM N/A
+                          </button>
                         )}
-                      </button>
-                    ) : (tracksNeedingBpm.has(track.id) || bpmStreamStatus[track.id] === 'error') ? (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setSelectedBpmTrack(track)
-                          setShowBpmModal(true)
-                        }}
-                        className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700 hover:bg-amber-100"
-                      >
-                        BPM N/A
-                      </button>
-                    ) : track.tempo != null ? (
-                      <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-700">
-                        {Math.round(track.tempo)} BPM
-                      </span>
-                    ) : (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setSelectedBpmTrack(track)
-                          setShowBpmModal(true)
-                        }}
-                        className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700 hover:bg-amber-100"
-                      >
-                        BPM N/A
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>
@@ -2951,19 +2956,21 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         </div>
 
         {/* Desktop Table View */}
-        <div className="hidden sm:block overflow-hidden rounded-2xl bg-white shadow-[0_4px_24px_rgba(0,0,0,0.06)]">
+        <div className="hidden sm:block overflow-hidden rounded-2xl bg-white shadow-[0_4px_24px_rgba(0,0,0,0.06)] border-t border-gray-100">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-white/70 border-b border-gray-100">
                 <tr>
-                  <th className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 w-12">
+                  <th className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] w-12">
                     #
                   </th>
-                  <th className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 w-12 lg:w-16">
-                    Cover
+                  <th
+                    className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] w-12 lg:w-16"
+                    aria-label="Cover"
+                  >
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none"
+                    className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none"
                     onClick={() => handleSort('name')}
                   >
                     <div className="flex items-center">
@@ -2972,7 +2979,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none hidden md:table-cell max-w-[120px]"
+                    className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none hidden md:table-cell max-w-[120px]"
                     onClick={() => handleSort('artists')}
                   >
                     <div className="flex items-center">
@@ -2981,7 +2988,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none hidden lg:table-cell max-w-[150px]"
+                    className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none hidden lg:table-cell max-w-[150px]"
                     onClick={() => handleSort('album')}
                   >
                     <div className="flex items-center">
@@ -2990,7 +2997,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none hidden md:table-cell"
+                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none hidden md:table-cell"
                     onClick={() => handleSort('duration')}
                   >
                     <div className="flex items-center justify-end">
@@ -2999,7 +3006,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none hidden md:table-cell"
+                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none hidden md:table-cell"
                     onClick={() => handleSort('tempo')}
                   >
                     <div className="flex items-center justify-end">
@@ -3007,11 +3014,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       <SortIcon field="tempo" />
                     </div>
                   </th>
-                  <th className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 hidden md:table-cell">
+                  <th className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden md:table-cell">
                     Key
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none"
+                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none"
                     onClick={() => handleSort('release_date')}
                   >
                     <div className="flex items-center justify-end">
@@ -3020,7 +3027,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none hidden lg:table-cell"
+                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none hidden lg:table-cell"
                     onClick={() => handleSort('popularity')}
                   >
                     <div className="flex items-center justify-end">
@@ -3029,17 +3036,20 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none hidden lg:table-cell"
+                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none hidden lg:table-cell"
                     onClick={() => handleSort('added_at')}
                   >
-                    <div className="flex items-center">
+                    <div className="flex items-center justify-end">
                       Added
                       <SortIcon field="added_at" />
                     </div>
                   </th>
+                  <th className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0]">
+                    <span className="sr-only">Options</span>
+                  </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody>
                 {sortedTracks.length === 0 ? (
                   <tr>
                     <td colSpan={11} className="px-4 py-8 text-center text-gray-500">
@@ -3050,7 +3060,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   paginatedTracks.map((track, index) => (
                     <tr 
                       key={track.id} 
-                      className={`transition-colors cursor-pointer ${
+                      className={`group transition-colors cursor-pointer ${
                         playingTrackId === track.id
                           ? 'bg-emerald-50 hover:bg-emerald-100'
                           : 'hover:bg-[#F9FAFB]'
@@ -3099,7 +3109,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         <div className="flex items-center gap-2">
                           <a
                             href="#"
-                            className="font-semibold text-[#111827] text-xs sm:text-sm hover:text-emerald-600 hover:underline"
+                            className="font-semibold text-[#171923] text-xs sm:text-sm hover:text-emerald-600 hover:underline"
                             onClick={(e) => handleTrackTitleClick(e, track)}
                             onContextMenu={(e) => handleTrackContextMenu(e, track)}
                             title={getPreviewTooltip(track.id)}
@@ -3109,17 +3119,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           {track.explicit && (
                             <span className="ml-1 text-xs bg-gray-200 text-gray-700 px-1 py-0.5 rounded">E</span>
                           )}
-                        </div>
-                        <div className="mt-1">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              fetchCreditsForTrack(track)
-                            }}
-                            className="text-[11px] text-gray-500 hover:text-gray-600"
-                          >
-                            {creditsLoadingIds.has(track.id) ? 'Loading credits...' : 'Credits'}
-                          </button>
                         </div>
                       </td>
                       <td className="px-3 lg:px-4 py-4 text-gray-500 text-xs sm:text-sm hidden md:table-cell max-w-[120px] truncate" title={track.artists.map(a => a.name).join(', ')}>
@@ -3176,7 +3175,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                             setRetryAttempted(false)
                                             setShowBpmModal(true)
                                           }}
-                                          className="inline-flex items-center justify-center rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                                          className="inline-flex items-center justify-center rounded-full border border-blue-200 bg-[#F5F5F7] px-2.5 py-1 text-xs font-medium text-blue-700"
                                           title="Click for BPM details"
                                         >
                                           {Math.round(trackBpms[track.id]!)}
@@ -3194,7 +3193,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                                 setRetryAttempted(false)
                                                 setShowBpmModal(true)
                                               }}
-                                              className="inline-flex items-center justify-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                                              className="inline-flex items-center justify-center rounded-full border border-amber-200 bg-[#F5F5F7] px-2.5 py-1 text-xs font-medium text-amber-700"
                                               title="Click to see why BPM is not available"
                                             >
                                               N/A
@@ -3202,7 +3201,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                           )
                                         : track.tempo != null 
                                           ? (
-                                              <span className="inline-flex items-center justify-center rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                                              <span className="inline-flex items-center justify-center rounded-full border border-blue-200 bg-[#F5F5F7] px-2.5 py-1 text-xs font-medium text-blue-700">
                                                 {Math.round(track.tempo)}
                                               </span>
                                             )
@@ -3214,7 +3213,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                                   setRetryAttempted(false)
                                                   setShowBpmModal(true)
                                                 }}
-                                                className="inline-flex items-center justify-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                                                className="inline-flex items-center justify-center rounded-full border border-amber-200 bg-[#F5F5F7] px-2.5 py-1 text-xs font-medium text-amber-700"
                                                 title="Click to see why BPM is not available"
                                               >
                                                 N/A
@@ -3238,32 +3237,32 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           const scale = trackScales[track.id]
                           if (key && scale) {
                             return (
-                              <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                              <span className="inline-flex items-center rounded-full border border-slate-200 bg-[#F5F5F7] px-2.5 py-1 text-xs font-medium text-slate-700">
                                 {key} {scale}
                               </span>
                             )
                           } else if (key) {
                             return (
-                              <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                              <span className="inline-flex items-center rounded-full border border-slate-200 bg-[#F5F5F7] px-2.5 py-1 text-xs font-medium text-slate-700">
                                 {key}
                               </span>
                             )
                           } else if (scale) {
                             return (
-                              <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                              <span className="inline-flex items-center rounded-full border border-slate-200 bg-[#F5F5F7] px-2.5 py-1 text-xs font-medium text-slate-700">
                                 {scale}
                               </span>
                             )
                           }
                           if (tracksNeedingKey.has(track.id) || bpmStreamStatus[track.id] === 'error') {
                             return (
-                              <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+                              <span className="inline-flex items-center rounded-full border border-amber-200 bg-[#F5F5F7] px-2.5 py-1 text-xs font-medium text-amber-700">
                                 N/A
                               </span>
                             )
                           }
                           return (
-                            <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-500">
+                            <span className="inline-flex items-center rounded-full border border-gray-200 bg-[#F5F5F7] px-2.5 py-1 text-xs font-medium text-gray-500">
                               -
                             </span>
                           )
@@ -3277,8 +3276,18 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           <span className="text-gray-400">N/A</span>
                         )}
                       </td>
-                      <td className="px-3 lg:px-4 py-4 text-gray-500 text-xs sm:text-sm hidden lg:table-cell">
+                      <td className="px-3 lg:px-4 py-4 text-gray-500 text-xs sm:text-sm text-right hidden lg:table-cell">
                         {track.added_at ? formatDate(track.added_at) : 'N/A'}
+                      </td>
+                      <td className="px-3 lg:px-4 py-4 text-right">
+                        <button
+                          type="button"
+                          className="opacity-0 transition-opacity text-gray-400 hover:text-gray-600 group-hover:opacity-100"
+                          onClick={(e) => handleTrackContextMenu(e, track)}
+                          aria-label="More options"
+                        >
+                          ...
+                        </button>
                       </td>
                     </tr>
                   ))

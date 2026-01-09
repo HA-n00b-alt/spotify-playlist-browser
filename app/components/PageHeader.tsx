@@ -164,7 +164,7 @@ export default function PageHeader({
       {center ? (
         /* Centered layout for login/error pages */
         <div className="text-center">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Spotify Playlist Tools</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-[#171923]">Spotify Playlist Tools</h1>
           <p className="text-sm text-gray-500 mt-1">{displaySubtitle}</p>
         </div>
       ) : (
@@ -216,7 +216,7 @@ export default function PageHeader({
                 </div>
                 {(breadcrumbs && breadcrumbs.length > 0 ? breadcrumbs : [{ label: 'Playlists' }]).map((crumb, index, list) => (
                   <div key={`${crumb.label}-${index}`} className="flex items-center gap-2">
-                    <span className="text-gray-300">/</span>
+                    <span className="text-gray-300">&gt;</span>
                     {crumb.href && index < list.length - 1 ? (
                       <Link
                         href={crumb.href}
@@ -225,7 +225,7 @@ export default function PageHeader({
                         {crumb.label}
                       </Link>
                     ) : (
-                      <span className="font-semibold text-gray-900">{crumb.label}</span>
+                      <span className="font-semibold text-[#171923]">{crumb.label}</span>
                     )}
                   </div>
                 ))}
@@ -241,10 +241,12 @@ export default function PageHeader({
                     aria-expanded={isSettingsOpen}
                   >
                     <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="2">
-                      <path d="M4 7h16M4 12h16M4 17h16" strokeLinecap="round" />
-                      <circle cx="9" cy="7" r="2" fill="currentColor" />
-                      <circle cx="15" cy="12" r="2" fill="currentColor" />
-                      <circle cx="10" cy="17" r="2" fill="currentColor" />
+                      <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.05.05a2 2 0 0 1-2.83 2.83l-.05-.05a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 0 1-4 0v-.08a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.88.34l-.05.05a2 2 0 1 1-2.83-2.83l.05-.05a1.7 1.7 0 0 0 .34-1.88 1.7 1.7 0 0 0-1.55-1H3a2 2 0 0 1 0-4h.08a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.88l-.05-.05a2 2 0 1 1 2.83-2.83l.05.05a1.7 1.7 0 0 0 1.88.34 1.7 1.7 0 0 0 1-1.55V3a2 2 0 0 1 4 0v.08a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.88-.34l.05-.05a2 2 0 1 1 2.83 2.83l-.05.05a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.55 1H21a2 2 0 0 1 0 4h-.08a1.7 1.7 0 0 0-1.55 1Z"
+                      />
                     </svg>
                   </button>
 
@@ -279,7 +281,7 @@ export default function PageHeader({
           <div className="h-16" />
           <div className="mx-auto w-full max-w-7xl px-4 sm:px-8 pt-6">
             <div className="space-y-1">
-              <h1 className="text-2xl font-semibold text-[#111827] sm:text-3xl">{title}</h1>
+              <h1 className="text-2xl font-semibold text-[#171923] sm:text-3xl">{title}</h1>
               <p className="text-sm text-gray-500">{displaySubtitle}</p>
             </div>
           </div>

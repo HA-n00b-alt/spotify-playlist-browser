@@ -246,13 +246,13 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) {
       return (
-        <span className="ml-1 text-gray-400 text-xs">
+        <span className="ml-1 text-gray-300 text-[10px]">
           ↕
         </span>
       )
     }
     return (
-      <span className="ml-1 text-gray-600 text-xs">
+      <span className="ml-1 text-gray-700 text-[10px]">
         {sortDirection === 'asc' ? '↑' : '↓'}
       </span>
     )
@@ -263,14 +263,14 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
       <div className="mb-4 sm:mb-6 flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[220px]">
           <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="11" cy="11" r="7" />
               <path d="M20 20l-3.5-3.5" strokeLinecap="round" />
             </svg>
           </span>
           <input
             type="text"
-            placeholder="Search playlists..."
+            placeholder="Search playlists... (Cmd/Ctrl+K)"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full rounded-lg bg-[#F3F4F6] py-3 pl-10 pr-4 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
@@ -279,7 +279,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
         <button
           onClick={handleRefresh}
           disabled={isRefreshing}
-          className="px-4 py-2 rounded-full bg-[#1ED760] text-white text-sm font-semibold transition hover:bg-[#1BC457] disabled:bg-gray-300"
+          className="px-4 py-2 rounded-full border border-gray-200 text-gray-700 text-sm font-semibold transition hover:border-gray-300 hover:text-gray-900 disabled:border-gray-200 disabled:text-gray-400"
         >
           {isRefreshing ? 'Refreshing...' : 'Refresh'}
         </button>
@@ -317,13 +317,13 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <div className="font-semibold text-[#111827] truncate flex-1">
+                    <div className="font-semibold text-[#171923] truncate flex-1">
                       {playlist.name}
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       {isCached && (
                         <span
-                          className="text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-semibold"
+                          className="text-[11px] text-blue-700 border border-blue-200 bg-[#F5F5F7] px-1.5 py-0.5 rounded-full font-semibold"
                           title="Cached"
                         >
                           C
@@ -331,7 +331,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                       )}
                       {isNew && (
                         <span
-                          className="text-xs bg-green-600 text-white px-1.5 py-0.5 rounded font-semibold"
+                          className="text-[11px] text-emerald-700 border border-emerald-200 bg-[#F5F5F7] px-1.5 py-0.5 rounded-full font-semibold"
                           title="New"
                         >
                           New
@@ -385,7 +385,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
             <thead className="bg-white/70 border-b border-gray-100">
               <tr>
                 <th
-                  className="px-4 lg:px-6 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none"
+                  className="px-4 lg:px-6 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none"
                   onClick={() => handleSort('name')}
                 >
                   <div className="flex items-center">
@@ -393,11 +393,11 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                     <SortIcon field="name" />
                   </div>
                 </th>
-                <th className="px-2 py-3 text-center text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 w-16">
+                <th className="px-2 py-3 text-center text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] w-16">
                   Status
                 </th>
                 <th
-                  className="px-4 lg:px-6 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none hidden md:table-cell"
+                  className="px-4 lg:px-6 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none hidden md:table-cell"
                   onClick={() => handleSort('description')}
                 >
                   <div className="flex items-center">
@@ -406,7 +406,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                   </div>
                 </th>
                 <th
-                  className="px-4 lg:px-6 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none"
+                  className="px-4 lg:px-6 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none"
                   onClick={() => handleSort('owner')}
                 >
                   <div className="flex items-center">
@@ -415,7 +415,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                   </div>
                 </th>
                 <th
-                  className="px-4 lg:px-6 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none"
+                  className="px-4 lg:px-6 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none"
                   onClick={() => handleSort('tracks')}
                 >
                   <div className="flex items-center justify-end">
@@ -424,7 +424,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                   </div>
                 </th>
                 <th
-                  className="px-4 lg:px-6 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none hidden lg:table-cell"
+                  className="px-4 lg:px-6 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none hidden lg:table-cell"
                   onClick={() => handleSort('followers')}
                 >
                   <div className="flex items-center justify-end">
@@ -465,7 +465,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                           </div>
                         )}
                         <div className="min-w-0 flex-1">
-                          <div className="font-semibold text-[#111827] group-hover:text-emerald-600 transition-colors truncate text-sm sm:text-base">
+                          <div className="font-semibold text-[#171923] group-hover:text-emerald-600 transition-colors truncate text-sm sm:text-base">
                             {playlist.name}
                           </div>
                         </div>
@@ -475,7 +475,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                       <div className="flex items-center justify-center gap-1">
                         {isCached && (
                           <span
-                            className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded"
+                            className="text-[11px] text-blue-700 border border-blue-200 bg-[#F5F5F7] px-2 py-0.5 rounded-full"
                             title="Cached"
                           >
                             C
@@ -483,7 +483,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                         )}
                         {isNew && (
                           <span
-                            className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded"
+                            className="text-[11px] text-emerald-700 border border-emerald-200 bg-[#F5F5F7] px-2 py-0.5 rounded-full"
                             title="New"
                           >
                             N
