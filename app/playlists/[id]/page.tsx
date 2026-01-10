@@ -3033,7 +3033,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     <button
                       type="button"
                       onClick={(e) => handleTrackContextMenu(e, track)}
-                      className="text-gray-400 hover:text-gray-600 text-sm leading-none px-1"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                       aria-label="More options"
                     >
                       ...
