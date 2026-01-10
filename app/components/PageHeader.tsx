@@ -236,19 +236,7 @@ export default function PageHeader({
         <div className="text-center">
           <h1 className="text-2xl sm:text-3xl font-bold text-[#171923]">Spotify Playlist Tools</h1>
           <p className="text-sm text-gray-500 mt-1">{displaySubtitle}</p>
-          {showBackLink ? (
-            <div className="mx-auto mt-2 w-full max-w-7xl px-4 sm:px-8 lg:px-0 text-left">
-              <Link
-                href={backHref}
-                className="hidden sm:inline-flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-gray-700"
-              >
-                <svg viewBox="0 0 16 16" aria-hidden="true" className="h-3 w-3">
-                  <path d="M10.5 3.5 6 8l4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Back
-              </Link>
-            </div>
-          ) : null}
+          {/* Back link removed */}
         </div>
       ) : (
         /* Default layout for authenticated pages */
