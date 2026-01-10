@@ -23,20 +23,16 @@ export default async function Home({
         <div className="rounded-2xl bg-white p-6 shadow-[0_4px_24px_rgba(0,0,0,0.06)] border-t border-gray-100 sm:p-10">
           <div className="space-y-8">
             <div className="space-y-3">
-              <h2 className="text-2xl sm:text-3xl font-semibold text-[#171923]">Choose your workspace</h2>
-              <p className="text-sm sm:text-base text-gray-600">
-                Spotify Playlist Tools focuses on BPM/key insights inside your playlists. Credit Search Tools lets
-                you find production credits without Spotify authentication.
-              </p>
+              <h2 className="text-2xl sm:text-3xl font-semibold text-[#171923]">Choose your tool</h2>
             </div>
 
             {error && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 {error === 'access_denied'
-                  ? 'Authorization was denied. Please try again.'
+                  ? 'Spotify authorization was denied. Please try again.'
                   : error === 'token_exchange_failed'
-                  ? 'Failed to complete login. Please try again.'
-                  : 'An error occurred during login. Please try again.'}
+                  ? 'Spotify login could not be completed. Please try again.'
+                  : 'An error occurred during Spotify login. Please try again.'}
               </div>
             )}
 
@@ -66,11 +62,8 @@ export default async function Home({
                     </svg>
                   </div>
                 </div>
-                <div className="mt-6 flex items-center gap-3 text-xs text-gray-500">
-                  <span className="rounded-full bg-gray-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]">
-                    {isAuthenticated ? 'Authenticated' : 'Spotify login required'}
-                  </span>
-                  <span className="text-[11px] text-gray-400">Click to {isAuthenticated ? 'open playlists' : 'authenticate'}</span>
+                <div className="mt-6 text-[11px] text-gray-400">
+                  {isAuthenticated ? 'Open playlist tool' : 'Click to authenticate'}
                 </div>
               </Link>
 
@@ -94,12 +87,7 @@ export default async function Home({
                     </svg>
                   </div>
                 </div>
-                <div className="mt-6 flex items-center gap-3 text-xs text-gray-500">
-                  <span className="rounded-full bg-gray-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]">
-                    Available now
-                  </span>
-                  <span className="text-[11px] text-gray-400">Open credit search</span>
-                </div>
+                <div className="mt-6 text-[11px] text-gray-400">Open credits search</div>
               </Link>
             </div>
 
@@ -121,10 +109,10 @@ export default async function Home({
                 </a>
                 .
               </p>
-              <div className="rounded-lg border border-gray-100 bg-[#F5F5F7] px-4 py-3 text-xs text-gray-600">
+              <p className="text-sm text-gray-600">
                 <span className="font-semibold text-[#171923]">Privacy Notice:</span> Spotify login is used only to
                 fetch your playlists. BPM/key results are cached per track to improve performance.
-              </div>
+              </p>
             </div>
           </div>
         </div>
