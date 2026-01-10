@@ -1,17 +1,21 @@
+import { redirect } from 'next/navigation'
+import { isSuperAdminUser } from '@/lib/analytics'
 import PageHeader from '../components/PageHeader'
-import CreditsSearchClient from './CreditsSearchClient'
+import AdminClient from './AdminClient'
 
 export const dynamic = 'force-dynamic'
 
-export default async function CreditsSearchPage() {
+export default async function AdminPage() {
+  const isSuperAdmin = await isSuperAdminUser()
+  if (!isSuperAdmin) {
+    redirect('/')
+  }
+
   return (
     <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-transparent">
       <div className="max-w-7xl mx-auto flex-1 w-full">
-        <PageHeader
-          subtitle="MusicBrainz credits search"
-          breadcrumbs={[{ label: 'Credit Search' }]}
-        />
-        <CreditsSearchClient />
+        <PageHeader subtitle="" breadcrumbs={[{ label: 'Admin' }]} />
+        <AdminClient />
       </div>
       <footer className="mt-auto py-6 sm:py-8 text-center text-xs sm:text-sm text-gray-500 border-t border-gray-200">
         Created by{' '}

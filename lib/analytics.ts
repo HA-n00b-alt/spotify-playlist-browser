@@ -107,9 +107,25 @@ export async function getCurrentUserId(): Promise<string | null> {
  */
 export async function isAdminUser(): Promise<boolean> {
   const userId = await getCurrentUserId()
-  return userId === 'delman-it'
+  if (!userId) {
+    return false
+  }
+
+  try {
+    const rows = await query<{ exists: boolean }>(
+      'SELECT EXISTS (SELECT 1 FROM admin_users WHERE spotify_user_id = $1 AND active = true) AS exists',
+      [userId]
+    )
+    return rows[0]?.exists === true
+  } catch (error) {
+    console.error('[Analytics] Error checking admin table:', error)
+    return false
+  }
 }
 
-
+export async function isSuperAdminUser(): Promise<boolean> {
+  const userId = await getCurrentUserId()
+  return userId === 'delman-it'
+}
 
 

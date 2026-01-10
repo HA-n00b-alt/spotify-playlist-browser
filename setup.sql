@@ -160,3 +160,19 @@ COMMENT ON TABLE playlist_order IS 'Stores custom display order for playlists pe
 COMMENT ON COLUMN playlist_order.spotify_user_id IS 'Spotify user ID to identify the user';
 COMMENT ON COLUMN playlist_order.playlist_id IS 'Spotify playlist ID';
 COMMENT ON COLUMN playlist_order.display_order IS 'Custom display order (lower numbers appear first)';
+
+-- ============================================================================
+-- Admin Users Table
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS admin_users (
+  spotify_user_id VARCHAR(255) PRIMARY KEY,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+INSERT INTO admin_users (spotify_user_id, active)
+VALUES ('delman-it', TRUE)
+ON CONFLICT (spotify_user_id) DO NOTHING;
+
+COMMENT ON TABLE admin_users IS 'Spotify user IDs allowed to access admin features';

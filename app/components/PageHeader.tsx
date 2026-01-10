@@ -22,6 +22,9 @@ export default function PageHeader({
   settingsItems,
 }: PageHeaderProps) {
   const [userName, setUserName] = useState<string | null>(null)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [bpmStatus, setBpmStatus] = useState<'checking' | 'ok' | 'error'>('checking')
   const [bpmStatusMessage, setBpmStatusMessage] = useState<string | null>(null)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
@@ -35,8 +38,25 @@ export default function PageHeader({
       .then((res) => res.json())
       .then((data) => {
         if (data.authenticated && data.user) {
+          setIsAuthenticated(true)
           setUserName(data.user.display_name || data.user.id || null)
+          fetch('/api/auth/is-admin')
+            .then((res) => res.json())
+            .then((adminData) => {
+              setIsAdmin(Boolean(adminData?.isAdmin))
+            })
+            .catch(() => {})
+          if (data.user.id === 'delman-it') {
+            setIsSuperAdmin(true)
+          } else {
+            setIsSuperAdmin(false)
+          }
+          return
         }
+        setIsAuthenticated(false)
+        setIsAdmin(false)
+        setIsSuperAdmin(false)
+        setUserName(null)
       })
       .catch((err) => {
         console.error('Error fetching user info:', err)
@@ -208,12 +228,22 @@ export default function PageHeader({
                       >
                         Credit Search
                       </Link>
-                      <Link
-                        href="/stats"
-                        className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-                      >
-                        Stats
-                      </Link>
+                      {isAuthenticated && isAdmin && (
+                        <Link
+                          href="/stats"
+                          className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                        >
+                          Stats
+                        </Link>
+                      )}
+                      {isAuthenticated && isSuperAdmin && (
+                        <Link
+                          href="/admin"
+                          className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                        >
+                          Admin
+                        </Link>
+                      )}
                       <Link
                         href="/docs"
                         className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
