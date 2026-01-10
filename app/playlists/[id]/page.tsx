@@ -2789,21 +2789,21 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               </div>
             </div>
             {bpmSummary && showBpmNotice && (
-              <div className="mt-4 inline-flex items-start gap-2 rounded-full border border-amber-200/70 bg-amber-50/80 px-3 py-1 text-xs text-amber-700">
-                <svg viewBox="0 0 20 20" aria-hidden="true" className="mt-0.5 h-4 w-4">
+              <div className="mt-4 inline-flex items-start gap-2 text-[11px] text-amber-600">
+                <svg viewBox="0 0 20 20" aria-hidden="true" className="mt-0.5 h-3.5 w-3.5">
                   <path
                     d="M10 2.5 18.5 17H1.5L10 2.5Z"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="1.4"
+                    strokeWidth="1.2"
                     strokeLinejoin="round"
                   />
-                  <path d="M10 7.5v4.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                  <path d="M10 7.5v4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
                   <circle cx="10" cy="14.5" r="0.8" fill="currentColor" />
                 </svg>
                 <span>
                   {bpmSummary.shouldShowProgress
-                    ? `BPM information processing (${bpmSummary.tracksRemainingToSearch} remaining).`
+                    ? `BPM processing (${bpmSummary.tracksRemainingToSearch} remaining).`
                     : bpmSummary.tracksWithNa > 0
                       ? `${bpmSummary.tracksWithNa} of ${bpmSummary.totalTracks} tracks missing BPM.`
                       : `All ${bpmSummary.totalTracks} tracks have BPM information.`}
@@ -2811,14 +2811,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 <button
                   type="button"
                   onClick={() => setShowBpmMoreInfo(true)}
-                  className="text-amber-700 underline-offset-2 hover:text-amber-900 hover:underline"
+                  className="text-amber-600 underline-offset-2 hover:text-amber-800 hover:underline"
                 >
                   Details
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowBpmNotice(false)}
-                  className="text-amber-700 hover:text-amber-900"
+                  className="text-amber-600 hover:text-amber-800"
                   aria-label="Dismiss notice"
                 >
                   ×
@@ -2842,17 +2842,19 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               ref={searchInputRef}
-              className="w-full rounded-lg bg-[#F3F4F6] py-3 pl-10 pr-4 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+              className="w-full rounded-lg bg-[#F6F7F9] py-3 pl-10 pr-11 text-sm text-gray-900 placeholder-gray-500 ring-1 ring-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
             />
-          </div>
-
-          <div>
             <button
               type="button"
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              className="text-xs sm:text-sm text-gray-600 hover:text-gray-900 underline py-1"
+              onClick={() => setShowAdvanced((prev) => !prev)}
+              className={`absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:text-gray-800 ${
+                showAdvanced ? 'bg-gray-100 text-gray-800' : 'bg-white'
+              }`}
+              aria-label={showAdvanced ? 'Hide advanced filters' : 'Show advanced filters'}
             >
-              {showAdvanced ? 'Hide' : 'Show'} Advanced Filters
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10 6h10M4 6h2M10 12h10M4 12h2M10 18h10M4 18h2" />
+              </svg>
             </button>
           </div>
 
