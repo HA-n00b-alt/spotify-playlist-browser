@@ -4,6 +4,8 @@ import {
   searchRecordingsByCredit,
 } from '@/lib/musicbrainz/client'
 
+export const dynamic = 'force-dynamic'
+
 interface TrackResult {
   id: string
   title: string
@@ -22,7 +24,8 @@ export async function GET(request: Request) {
   const role = searchParams.get('role')?.trim().toLowerCase() || 'producer'
   const limitParam = Number(searchParams.get('limit') ?? 25)
   const offsetParam = Number(searchParams.get('offset') ?? 0)
-  const debug = searchParams.get('debug') === 'true'
+  const debugParam = searchParams.get('debug')
+  const debug = debugParam !== null && debugParam.toLowerCase() !== 'false'
 
   if (!name) {
     return NextResponse.json({ error: 'Missing name parameter' }, { status: 400 })
