@@ -687,7 +687,7 @@ async function* streamProducerRecordingsByWorks(params: {
   offset: number
 }): AsyncGenerator<any> {
   const seenRecordingIds = new Set<string>()
-  const deezerIsrcCache = new Map<string, boolean>()
+  const deezerIsrcCache = new Map<string, { hasDeezer: boolean; raw: unknown | null }>()
   let seenCount = 0
   let yieldedCount = 0
   const workBatchLimit = 100
@@ -729,11 +729,12 @@ async function* streamProducerRecordingsByWorks(params: {
             if (isrcMap.has(isrc)) continue
             const cached = deezerIsrcCache.get(isrc)
             const deezerResult = cached === undefined ? await fetchDeezerTrackByIsrc(isrc) : null
-            const hasDeezer = cached ?? Boolean(deezerResult)
-            deezerIsrcCache.set(isrc, hasDeezer)
+            const hasDeezer = cached ? cached.hasDeezer : Boolean(deezerResult?.summary)
+            const raw = cached ? cached.raw : (deezerResult?.raw ?? null)
+            deezerIsrcCache.set(isrc, { hasDeezer, raw })
             isrcMap.set(isrc, {
               hasDeezer,
-              deezerResponse: deezerResult?.raw ?? null,
+              deezerResponse: raw,
             })
           }
           if (recording?.id && (!bestRecording || recording.id.localeCompare(bestRecording.id) < 0)) {
@@ -746,8 +747,9 @@ async function* streamProducerRecordingsByWorks(params: {
               if (typeof isrc === 'string' && isrc.trim()) {
                 const cached = deezerIsrcCache.get(isrc)
                 const deezerResult = cached === undefined ? await fetchDeezerTrackByIsrc(isrc) : null
-                const hasDeezer = cached ?? Boolean(deezerResult)
-                deezerIsrcCache.set(isrc, hasDeezer)
+                const hasDeezer = cached ? cached.hasDeezer : Boolean(deezerResult?.summary)
+                const raw = cached ? cached.raw : (deezerResult?.raw ?? null)
+                deezerIsrcCache.set(isrc, { hasDeezer, raw })
                 if (hasDeezer) {
                   bestNoAttributeRecording = recording
                   bestNoAttributeHasDeezer = true

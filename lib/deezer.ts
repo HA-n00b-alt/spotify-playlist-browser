@@ -10,7 +10,7 @@ export interface DeezerTrackSummary {
 
 export async function fetchDeezerTrackByIsrc(
   isrc: string
-): Promise<{ summary: DeezerTrackSummary; raw: unknown } | null> {
+): Promise<{ summary: DeezerTrackSummary | null; raw: unknown } | null> {
   const trimmed = isrc.trim()
   if (!trimmed) return null
 
@@ -32,16 +32,15 @@ export async function fetchDeezerTrackByIsrc(
 
   const data = await response.json().catch(() => null)
   const track = data?.data && Array.isArray(data.data) ? data.data[0] : null
-  if (!track) return null
 
   return {
-    summary: {
+    summary: track ? {
       title: track.title || '',
       artist: track.artist?.name || '',
       album: track.album?.title || '',
       coverArtUrl: track.album?.cover_medium || track.album?.cover || null,
       previewUrl: track.preview || null,
-    },
+    } : null,
     raw: data,
   }
 }
