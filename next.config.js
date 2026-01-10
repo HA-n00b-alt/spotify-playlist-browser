@@ -20,6 +20,10 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'coverartarchive.org',
       },
+      {
+        protocol: 'https',
+        hostname: 'cdn-images.dzcdn.net',
+      },
     ],
   },
 }
