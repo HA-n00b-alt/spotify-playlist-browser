@@ -260,18 +260,8 @@ async function browseProducerWorksByArtist(params: {
     const rawWorks = Array.isArray(data?.works) ? data.works : []
     rawTotal = typeof data?.['work-count'] === 'number' ? data['work-count'] : rawWorks.length + rawOffset
 
-    for (const work of rawWorks) {
-      const relations = Array.isArray(work?.relations) ? work.relations : []
-      const matches = relations.some((relation: any) => isProducerRelation(relation, params.artistId))
-      if (!matches) continue
-      scannedProducerCount += 1
-      if (scannedProducerCount <= params.offset) {
-        continue
-      }
-      if (works.length < params.offset + params.limit) {
-        works.push(work)
-      }
-    }
+    scannedProducerCount += rawWorks.length
+    works.push(...rawWorks)
 
     if (rawWorks.length === 0) {
       break
