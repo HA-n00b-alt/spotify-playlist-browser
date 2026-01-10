@@ -9,8 +9,15 @@ interface AdminEntry {
   is_super_admin?: boolean
 }
 
+interface AdminRequest {
+  id: number
+  spotify_user_id: string
+  requested_at: string
+}
+
 export default function AdminClient() {
   const [admins, setAdmins] = useState<AdminEntry[]>([])
+  const [requests, setRequests] = useState<AdminRequest[]>([])
   const [loading, setLoading] = useState(false)
   const [newAdmin, setNewAdmin] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -32,8 +39,26 @@ export default function AdminClient() {
     }
   }
 
+  const loadRequests = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/requests')
+      if (!res.ok) {
+        throw new Error('Failed to load admin requests')
+      }
+      const data = await res.json()
+      setRequests(Array.isArray(data?.requests) ? data.requests : [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load admin requests')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
     loadAdmins()
+    loadRequests()
   }, [])
 
   const handleAdd = async () => {
@@ -81,6 +106,27 @@ export default function AdminClient() {
     }
   }
 
+  const handleRequestAction = async (requestId: number, action: 'approve' | 'deny') => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/requests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId, action }),
+      })
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}))
+        throw new Error(payload?.error || 'Failed to update request')
+      }
+      await Promise.all([loadAdmins(), loadRequests()])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update request')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="rounded-2xl bg-white p-6 shadow-[0_4px_24px_rgba(0,0,0,0.06)] border-t border-gray-100 sm:p-10 space-y-6">
       <div className="space-y-2">
@@ -113,6 +159,57 @@ export default function AdminClient() {
           {error}
         </div>
       )}
+
+      <div className="space-y-3">
+        <div className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-400">
+          Admin Access Requests
+        </div>
+        <div className="overflow-hidden rounded-xl border border-gray-100">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-[11px] uppercase tracking-[0.08em] text-gray-400">
+              <tr>
+                <th className="px-4 py-3 text-left">User ID</th>
+                <th className="px-4 py-3 text-left">Requested</th>
+                <th className="px-4 py-3 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {requests.length === 0 ? (
+                <tr>
+                  <td colSpan={3} className="px-4 py-6 text-center text-sm text-gray-500">
+                    {loading ? 'Loading admin requests…' : 'No pending requests.'}
+                  </td>
+                </tr>
+              ) : (
+                requests.map((request) => (
+                  <tr key={request.id} className="border-t border-gray-100">
+                    <td className="px-4 py-3 text-gray-700 font-medium">{request.spotify_user_id}</td>
+                    <td className="px-4 py-3 text-gray-500">
+                      {new Date(request.requested_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-3 text-right space-x-3">
+                      <button
+                        type="button"
+                        onClick={() => handleRequestAction(request.id, 'approve')}
+                        className="text-xs font-semibold text-emerald-600 hover:text-emerald-700"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRequestAction(request.id, 'deny')}
+                        className="text-xs font-semibold text-rose-600 hover:text-rose-700"
+                      >
+                        Deny
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       <div className="overflow-hidden rounded-xl border border-gray-100">
         <table className="w-full text-sm">

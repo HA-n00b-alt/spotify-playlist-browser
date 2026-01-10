@@ -31,6 +31,8 @@ export default function PageHeader({
   const settingsRef = useRef<HTMLDivElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [adminRequestStatus, setAdminRequestStatus] = useState<'idle' | 'requested' | 'pending' | 'already_admin' | 'error'>('idle')
+  const [adminRequestMessage, setAdminRequestMessage] = useState<string | null>(null)
 
   useEffect(() => {
     // Fetch user info for subtitle
@@ -177,6 +179,38 @@ export default function PageHeader({
   const backHref = showBackLink ? breadcrumbs[breadcrumbs.length - 2]?.href || '/' : '/'
   const playlistsHref = isAuthenticated ? '/playlists' : '/api/auth/login'
 
+  const handleRequestAdmin = async () => {
+    if (!isAuthenticated) {
+      window.location.href = '/api/auth/login'
+      return
+    }
+
+    setAdminRequestStatus('idle')
+    setAdminRequestMessage(null)
+    try {
+      const res = await fetch('/api/admin/requests', { method: 'POST' })
+      if (!res.ok) {
+        throw new Error('Failed to request admin access')
+      }
+      const data = await res.json().catch(() => ({}))
+      const status =
+        data?.status === 'pending' || data?.status === 'already_admin' || data?.status === 'requested'
+          ? data.status
+          : 'requested'
+      setAdminRequestStatus(status)
+      setAdminRequestMessage(
+        status === 'already_admin'
+          ? 'Admin access already granted.'
+          : status === 'pending'
+          ? 'Request already pending.'
+          : 'Request submitted for approval.'
+      )
+    } catch (error) {
+      setAdminRequestStatus('error')
+      setAdminRequestMessage('Unable to submit request. Please try again.')
+    }
+  }
+
   return (
     <div className="mb-4 sm:mb-6">
       {center ? (
@@ -291,6 +325,28 @@ export default function PageHeader({
                             <div className="space-y-2">{settingsItems}</div>
                           </>
                         )}
+                        <div className="h-px bg-gray-100" />
+                        <div className="space-y-2">
+                          <div className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-400">
+                            Access
+                          </div>
+                          {isAdmin || isSuperAdmin ? (
+                            <div className="text-xs text-gray-600">Admin access granted.</div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={handleRequestAdmin}
+                              className="w-full rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                            >
+                              Request Admin Access
+                            </button>
+                          )}
+                          {adminRequestMessage ? (
+                            <div className={`text-xs ${adminRequestStatus === 'error' ? 'text-rose-600' : 'text-gray-500'}`}>
+                              {adminRequestMessage}
+                            </div>
+                          ) : null}
+                        </div>
                         {isAuthenticated && (isAdmin || isSuperAdmin) && (
                           <>
                             <div className="h-px bg-gray-100" />
