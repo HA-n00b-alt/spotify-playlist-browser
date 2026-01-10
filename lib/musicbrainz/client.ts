@@ -179,7 +179,7 @@ async function fetchRecordingsByWork(params: {
     limit: params.limit,
     offset: params.offset,
     fmt: 'json',
-    inc: 'artist-credits+isrcs',
+    inc: 'artist-credits+isrcs+releases+release-groups',
   })
 
   const recordings = Array.isArray(data?.recordings) ? data.recordings : []
@@ -200,8 +200,37 @@ async function findArtistIdByName(name: string): Promise<string | null> {
   const artists = Array.isArray(data?.artists) ? data.artists : []
   if (!artists.length) return null
   const exact = artists.find((artist: any) => typeof artist?.name === 'string' && artist.name.toLowerCase() === name.toLowerCase())
-  if (exact?.id) return exact.id
-  return artists[0]?.id || null
+  const selectedId = exact?.id || artists[0]?.id || null
+  if (!selectedId) return null
+
+  try {
+    const lookup = await fetchMusicBrainzJson<any>(`/artist/${encodeURIComponent(selectedId)}`, {
+      fmt: 'json',
+    })
+    if (lookup?.id === selectedId) {
+      return selectedId
+    }
+  } catch {
+    return null
+  }
+
+  return null
+}
+
+function selectRepresentativeRecording(recordings: any[]): any | null {
+  if (!Array.isArray(recordings) || recordings.length === 0) {
+    return null
+  }
+  const noAttributeRecordings = recordings.filter((recording) => {
+    const attributes = Array.isArray(recording?.attributes) ? recording.attributes : []
+    return attributes.length === 0
+  })
+  const candidates = noAttributeRecordings.length > 0 ? noAttributeRecordings : recordings
+  const withIds = candidates.filter((recording) => typeof recording?.id === 'string')
+  if (withIds.length > 0) {
+    return withIds.sort((a, b) => a.id.localeCompare(b.id))[0]
+  }
+  return candidates[0] ?? null
 }
 
 async function browseProducerWorksByArtist(params: {
@@ -216,9 +245,8 @@ async function browseProducerWorksByArtist(params: {
   const works: any[] = []
   const requestUrls: string[] = []
   let iterations = 0
-  const maxIterations = Math.max(6, Math.ceil((params.offset + params.limit) / batchLimit) + 2)
 
-  while (rawOffset < rawTotal && iterations < maxIterations && works.length < params.offset + params.limit) {
+  while (rawOffset < rawTotal) {
     const requestParams = {
       artist: params.artistId,
       limit: batchLimit,
@@ -442,7 +470,7 @@ async function searchProducerRecordingsByWorks(params: {
 }> {
   const workBatch = await browseProducerWorksByArtist({
     artistId: params.artistId,
-    limit: Math.max(params.limit, 25),
+    limit: 100,
     offset: 0,
   })
 
@@ -451,50 +479,47 @@ async function searchProducerRecordingsByWorks(params: {
   let scannedRecordings = 0
   let worksProcessed = 0
   const recordingByWorkUrls: string[] = []
-  const maxWorkRecordingsPages = 3
+  const workRecordingPageLimit = 100
 
   for (const work of workBatch.works) {
     if (!work?.id) continue
     worksProcessed += 1
     let workOffset = 0
-    let pages = 0
-    while (pages < maxWorkRecordingsPages && recordings.length < params.offset + params.limit) {
+    let totalForWork = Number.POSITIVE_INFINITY
+    const recordingsForWork: any[] = []
+
+    while (workOffset < totalForWork) {
       recordingByWorkUrls.push(buildUrl('/recording', {
         work: work.id,
-        limit: 25,
+        limit: workRecordingPageLimit,
         offset: workOffset,
         fmt: 'json',
-        inc: 'artist-credits+isrcs',
+        inc: 'artist-credits+isrcs+releases+release-groups',
       }))
       const workRecordings = await fetchRecordingsByWork({
         workId: work.id,
-        limit: 25,
+        limit: workRecordingPageLimit,
         offset: workOffset,
       })
-      pages += 1
+      totalForWork = workRecordings.count
       scannedRecordings += workRecordings.recordings.length
-      for (const recording of workRecordings.recordings) {
-        const recordingId = recording?.id
-        if (!recordingId || seenRecordingIds.has(recordingId)) {
-          continue
-        }
-        seenRecordingIds.add(recordingId)
-        if (seenRecordingIds.size <= params.offset) {
-          continue
-        }
-        recordings.push(recording)
-        if (recordings.length >= params.offset + params.limit) {
-          break
-        }
-      }
-      if (workRecordings.recordings.length < workRecordings.limit) {
+      recordingsForWork.push(...workRecordings.recordings)
+      if (workRecordings.recordings.length === 0) {
         break
       }
-      workOffset += workRecordings.limit
+      workOffset += workRecordings.recordings.length
     }
-    if (recordings.length >= params.offset + params.limit) {
-      break
+
+    const representative = selectRepresentativeRecording(recordingsForWork)
+    const recordingId = representative?.id
+    if (!recordingId || seenRecordingIds.has(recordingId)) {
+      continue
     }
+    seenRecordingIds.add(recordingId)
+    if (seenRecordingIds.size <= params.offset) {
+      continue
+    }
+    recordings.push(representative)
   }
 
   return {

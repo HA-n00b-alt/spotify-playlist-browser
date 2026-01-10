@@ -11,11 +11,60 @@ interface TrackResult {
   title: string
   artist: string
   album: string
+  releaseType?: string
   year: string
   length: number
   isrc?: string
   releaseId: string
   coverArtUrl?: string | null
+}
+
+function getReleasePrimaryType(release: any): string | null {
+  const releaseGroup = release?.['release-group'] || release?.release_group
+  const primaryType = releaseGroup?.['primary-type'] || releaseGroup?.primary_type
+  return typeof primaryType === 'string' ? primaryType : null
+}
+
+function selectReleaseInfo(releases: any[]) {
+  const typedReleases = releases.map((release) => ({
+    release,
+    primaryType: getReleasePrimaryType(release),
+  }))
+  const albumRelease = typedReleases.find((item) => item.primaryType === 'Album')
+  if (albumRelease?.release) {
+    return {
+      release: albumRelease.release,
+      releaseType: 'Album',
+    }
+  }
+  const singleRelease = typedReleases.find((item) => item.primaryType === 'Single')
+  if (singleRelease?.release) {
+    return {
+      release: singleRelease.release,
+      releaseType: 'Single',
+    }
+  }
+  const primaryTypes = typedReleases
+    .map((item) => item.primaryType)
+    .filter((type): type is string => typeof type === 'string')
+  const uniqueTypes = Array.from(new Set(primaryTypes))
+  const fallbackRelease = releases[0]
+  if (uniqueTypes.length === 1) {
+    return {
+      release: fallbackRelease,
+      releaseType: uniqueTypes[0],
+    }
+  }
+  if (uniqueTypes.length > 1) {
+    return {
+      release: fallbackRelease,
+      releaseType: 'Multiple',
+    }
+  }
+  return {
+    release: fallbackRelease,
+    releaseType: 'Unknown',
+  }
 }
 
 export async function GET(request: Request) {
@@ -85,7 +134,8 @@ export async function GET(request: Request) {
     const results = await Promise.all(
       recordingSearch.recordings.map(async (recording) => {
         const releases = Array.isArray(recording?.releases) ? recording.releases : []
-        const release = releases[0]
+        const releaseSelection = selectReleaseInfo(releases)
+        const release = releaseSelection.release
         const releaseId = release?.id || 'unknown'
         const coverArtUrl = release?.id ? await fetchCoverArtUrl(release.id) : null
         const year = typeof release?.date === 'string' ? release.date.split('-')[0] : ''
@@ -103,6 +153,7 @@ export async function GET(request: Request) {
           title: recording?.title || 'Unknown title',
           artist: artist || 'Unknown artist',
           album: release?.title || 'Unknown release',
+          releaseType: releaseSelection.releaseType,
           year,
           length: typeof recording?.length === 'number' ? recording.length : 0,
           isrc,
