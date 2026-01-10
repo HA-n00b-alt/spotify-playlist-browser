@@ -144,7 +144,7 @@ async function browseProducerRecordingsByArtist(params: {
       limit: batchLimit,
       offset: rawOffset,
       fmt: 'json',
-      inc: 'releases+artist-credits+isrcs+artist-rels',
+      inc: 'artist-credits+isrcs+artist-rels',
     })
 
     const rawRecordings = Array.isArray(data?.recordings) ? data.recordings : []
@@ -214,7 +214,7 @@ export async function searchRecordingsByCredit(params: {
     limit: params.limit,
     offset: params.offset,
     fmt: 'json',
-    inc: 'releases+artist-credits+isrcs',
+    inc: 'artist-credits+isrcs',
   })
 
   const recordings = Array.isArray(data?.recordings) ? data.recordings : []
