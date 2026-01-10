@@ -233,8 +233,16 @@ export default function CreditsSearchClient() {
               </div>
             )}
             {debugResponse && (
-              <div className="max-h-48 overflow-auto whitespace-pre-wrap rounded border border-gray-200 bg-white p-2 text-[11px] text-gray-600">
-                {debugResponse}
+              <div className="max-h-56 overflow-auto rounded border border-gray-200 bg-white p-2 text-[11px] text-gray-600">
+                <pre className="whitespace-pre-wrap">
+                  {(() => {
+                    try {
+                      return JSON.stringify(JSON.parse(debugResponse), null, 2)
+                    } catch {
+                      return debugResponse
+                    }
+                  })()}
+                </pre>
               </div>
             )}
           </div>

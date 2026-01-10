@@ -71,6 +71,13 @@ export async function GET(request: Request) {
           rawTotal: (recordingSearch as any).debug?.rawTotal ?? null,
           scannedProducerCount: (recordingSearch as any).debug?.scannedProducerCount ?? null,
           collectedCount: (recordingSearch as any).debug?.collectedCount ?? null,
+          worksScanned: (recordingSearch as any).debug?.worksScanned ?? null,
+          worksProcessed: (recordingSearch as any).debug?.worksProcessed ?? null,
+          recordingsScanned: (recordingSearch as any).debug?.recordingsScanned ?? null,
+          recordingsCollected: (recordingSearch as any).debug?.recordingsCollected ?? null,
+          workBrowseUrls: (recordingSearch as any).debug?.workBrowse?.requestUrls ?? null,
+          recordingBrowseUrls: (recordingSearch as any).debug?.requestUrls ?? null,
+          recordingByWorkUrls: (recordingSearch as any).debug?.recordingByWorkUrls ?? null,
         },
       })
     }

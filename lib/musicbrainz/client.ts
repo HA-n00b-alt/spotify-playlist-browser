@@ -169,6 +169,28 @@ function isProducerRelation(relation: any, artistId: string): boolean {
   return relation.artist && relation.artist.id === artistId
 }
 
+async function fetchRecordingsByWork(params: {
+  workId: string
+  limit: number
+  offset: number
+}): Promise<{ count: number; offset: number; limit: number; recordings: any[] }> {
+  const data = await fetchMusicBrainzJson<any>('/recording', {
+    work: params.workId,
+    limit: params.limit,
+    offset: params.offset,
+    fmt: 'json',
+    inc: 'artist-credits+isrcs',
+  })
+
+  const recordings = Array.isArray(data?.recordings) ? data.recordings : []
+  return {
+    count: typeof data?.count === 'number' ? data.count : recordings.length,
+    offset: typeof data?.offset === 'number' ? data.offset : params.offset,
+    limit: typeof data?.limit === 'number' ? data.limit : params.limit,
+    recordings,
+  }
+}
+
 async function findArtistIdByName(name: string): Promise<string | null> {
   const data = await fetchMusicBrainzJson<any>('/artist', {
     query: `artist:"${name}"`,
@@ -182,6 +204,77 @@ async function findArtistIdByName(name: string): Promise<string | null> {
   return artists[0]?.id || null
 }
 
+async function browseProducerWorksByArtist(params: {
+  artistId: string
+  limit: number
+  offset: number
+}): Promise<{ count: number; offset: number; limit: number; works: any[]; debug?: Record<string, unknown> }> {
+  const batchLimit = Math.min(100, Math.max(params.limit, 25))
+  let rawOffset = 0
+  let rawTotal = Number.POSITIVE_INFINITY
+  let scannedProducerCount = 0
+  const works: any[] = []
+  const requestUrls: string[] = []
+  let iterations = 0
+  const maxIterations = Math.max(6, Math.ceil((params.offset + params.limit) / batchLimit) + 2)
+
+  while (rawOffset < rawTotal && iterations < maxIterations && works.length < params.offset + params.limit) {
+    const requestParams = {
+      artist: params.artistId,
+      limit: batchLimit,
+      offset: rawOffset,
+      fmt: 'json',
+      inc: 'artist-rels',
+    }
+    requestUrls.push(buildUrl('/work', requestParams))
+    const data = await fetchMusicBrainzJson<any>('/work', requestParams)
+
+    const rawWorks = Array.isArray(data?.works) ? data.works : []
+    rawTotal = typeof data?.['work-count'] === 'number' ? data['work-count'] : rawWorks.length + rawOffset
+
+    for (const work of rawWorks) {
+      const relations = Array.isArray(work?.relations) ? work.relations : []
+      const matches = relations.some((relation: any) => isProducerRelation(relation, params.artistId))
+      if (!matches) continue
+      scannedProducerCount += 1
+      if (scannedProducerCount <= params.offset) {
+        continue
+      }
+      if (works.length < params.offset + params.limit) {
+        works.push(work)
+      }
+    }
+
+    if (rawWorks.length === 0) {
+      break
+    }
+    rawOffset += rawWorks.length
+    iterations += 1
+  }
+
+  const reachedEnd = rawOffset >= rawTotal || rawTotal === 0
+  const estimatedCount = reachedEnd
+    ? scannedProducerCount
+    : Math.max(scannedProducerCount, params.offset + works.length + 1)
+
+  return {
+    count: estimatedCount,
+    offset: params.offset,
+    limit: params.limit,
+    works: works.slice(0, params.limit),
+    debug: {
+      artistId: params.artistId,
+      batchLimit,
+      iterations,
+      rawOffset,
+      rawTotal: Number.isFinite(rawTotal) ? rawTotal : null,
+      scannedProducerCount,
+      collectedCount: works.length,
+      requestUrls,
+    },
+  }
+}
+
 async function browseProducerRecordingsByArtist(params: {
   artistId: string
   limit: number
@@ -192,17 +285,20 @@ async function browseProducerRecordingsByArtist(params: {
   let rawTotal = Number.POSITIVE_INFINITY
   let scannedProducerCount = 0
   const recordings: any[] = []
+  const requestUrls: string[] = []
   let iterations = 0
   const maxIterations = Math.max(6, Math.ceil((params.offset + params.limit) / batchLimit) + 2)
 
   while (rawOffset < rawTotal && iterations < maxIterations && recordings.length < params.offset + params.limit) {
-    const data = await fetchMusicBrainzJson<any>('/recording', {
+    const requestParams = {
       artist: params.artistId,
       limit: batchLimit,
       offset: rawOffset,
       fmt: 'json',
       inc: 'artist-credits+isrcs+artist-rels',
-    })
+    }
+    requestUrls.push(buildUrl('/recording', requestParams))
+    const data = await fetchMusicBrainzJson<any>('/recording', requestParams)
 
     const rawRecordings = Array.isArray(data?.recordings) ? data.recordings : []
     rawTotal = typeof data?.['recording-count'] === 'number' ? data['recording-count'] : rawRecordings.length + rawOffset
@@ -245,6 +341,7 @@ async function browseProducerRecordingsByArtist(params: {
       rawTotal: Number.isFinite(rawTotal) ? rawTotal : null,
       scannedProducerCount,
       collectedCount: recordings.length,
+      requestUrls,
     },
   }
 }
@@ -259,17 +356,20 @@ async function browseProducerReleasesByArtist(params: {
   let rawTotal = Number.POSITIVE_INFINITY
   let scannedProducerCount = 0
   const releases: Array<{ id: string; title: string; date?: string }> = []
+  const requestUrls: string[] = []
   let iterations = 0
   const maxIterations = Math.max(6, Math.ceil((params.offset + params.limit) / batchLimit) + 2)
 
   while (rawOffset < rawTotal && iterations < maxIterations && releases.length < params.offset + params.limit) {
-    const data = await fetchMusicBrainzJson<any>('/release', {
+    const requestParams = {
       artist: params.artistId,
       limit: batchLimit,
       offset: rawOffset,
       fmt: 'json',
       inc: 'artist-credits+artist-rels',
-    })
+    }
+    requestUrls.push(buildUrl('/release', requestParams))
+    const data = await fetchMusicBrainzJson<any>('/release', requestParams)
 
     const rawReleases = Array.isArray(data?.releases) ? data.releases : []
     rawTotal = typeof data?.['release-count'] === 'number' ? data['release-count'] : rawReleases.length + rawOffset
@@ -316,6 +416,86 @@ async function browseProducerReleasesByArtist(params: {
       rawTotal: Number.isFinite(rawTotal) ? rawTotal : null,
       scannedProducerCount,
       collectedCount: releases.length,
+      requestUrls,
+    },
+  }
+}
+
+async function searchProducerRecordingsByWorks(params: {
+  artistId: string
+  limit: number
+  offset: number
+}): Promise<{ count: number; offset: number; limit: number; recordings: any[]; debug?: Record<string, unknown> }> {
+  const workBatch = await browseProducerWorksByArtist({
+    artistId: params.artistId,
+    limit: Math.max(params.limit, 25),
+    offset: 0,
+  })
+
+  const recordings: any[] = []
+  const seenRecordingIds = new Set<string>()
+  let scannedRecordings = 0
+  let worksProcessed = 0
+  const recordingByWorkUrls: string[] = []
+  const maxWorkRecordingsPages = 3
+
+  for (const work of workBatch.works) {
+    if (!work?.id) continue
+    worksProcessed += 1
+    let workOffset = 0
+    let pages = 0
+    while (pages < maxWorkRecordingsPages && recordings.length < params.offset + params.limit) {
+      recordingByWorkUrls.push(buildUrl('/recording', {
+        work: work.id,
+        limit: 25,
+        offset: workOffset,
+        fmt: 'json',
+        inc: 'artist-credits+isrcs',
+      }))
+      const workRecordings = await fetchRecordingsByWork({
+        workId: work.id,
+        limit: 25,
+        offset: workOffset,
+      })
+      pages += 1
+      scannedRecordings += workRecordings.recordings.length
+      for (const recording of workRecordings.recordings) {
+        const recordingId = recording?.id
+        if (!recordingId || seenRecordingIds.has(recordingId)) {
+          continue
+        }
+        seenRecordingIds.add(recordingId)
+        if (seenRecordingIds.size <= params.offset) {
+          continue
+        }
+        recordings.push(recording)
+        if (recordings.length >= params.offset + params.limit) {
+          break
+        }
+      }
+      if (workRecordings.recordings.length < workRecordings.limit) {
+        break
+      }
+      workOffset += workRecordings.limit
+    }
+    if (recordings.length >= params.offset + params.limit) {
+      break
+    }
+  }
+
+  return {
+    count: Math.max(params.offset + recordings.length, workBatch.count),
+    offset: params.offset,
+    limit: params.limit,
+    recordings: recordings.slice(0, params.limit),
+    debug: {
+      artistId: params.artistId,
+      worksScanned: workBatch.debug?.scannedProducerCount ?? workBatch.works.length,
+      worksProcessed,
+      recordingsScanned: scannedRecordings,
+      recordingsCollected: recordings.length,
+      workBrowse: workBatch.debug ?? null,
+      recordingByWorkUrls,
     },
   }
 }
@@ -329,6 +509,15 @@ export async function searchRecordingsByCredit(params: {
   if (params.role === 'producer') {
     const artistId = await findArtistIdByName(params.name)
     if (artistId) {
+      const workResult = await searchProducerRecordingsByWorks({
+        artistId,
+        limit: params.limit,
+        offset: params.offset,
+      })
+      if (workResult.recordings.length > 0 || (workResult.debug?.worksScanned ?? 0) > 0) {
+        return workResult
+      }
+
       return browseProducerRecordingsByArtist({
         artistId,
         limit: params.limit,
