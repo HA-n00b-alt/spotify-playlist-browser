@@ -10,24 +10,43 @@ const ROLE_FIELD_MAP: Record<string, string> = {
 }
 
 const MIN_REQUEST_INTERVAL_MS = 1100
-let lastRequestTime = 0
-let requestQueue: Promise<unknown> = Promise.resolve()
+const MB_CACHE_TTL_MS = 5 * 60 * 1000
+const COVER_CACHE_TTL_MS = 60 * 60 * 1000
+const rateLimiters = new Map<string, { lastRequestTime: number; queue: Promise<unknown> }>()
+const responseCache = new Map<string, { expiresAt: number; value: unknown }>()
+const coverArtCache = new Map<string, { expiresAt: number; value: string | null }>()
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-const scheduleRequest = async <T>(fn: () => Promise<T>): Promise<T> => {
+class MusicBrainzError extends Error {
+  status?: number
+  statusText?: string
+  url?: string
+  retryable?: boolean
+  responseText?: string
+
+  constructor(message: string, options?: Partial<MusicBrainzError>) {
+    super(message)
+    Object.assign(this, options)
+  }
+}
+
+const scheduleRequest = async <T>(url: string, fn: () => Promise<T>): Promise<T> => {
+  const host = new URL(url).host
+  const limiter = rateLimiters.get(host) || { lastRequestTime: 0, queue: Promise.resolve() }
   const run = async () => {
     const now = Date.now()
-    const waitTime = Math.max(0, MIN_REQUEST_INTERVAL_MS - (now - lastRequestTime))
+    const waitTime = Math.max(0, MIN_REQUEST_INTERVAL_MS - (now - limiter.lastRequestTime))
     if (waitTime > 0) {
       await sleep(waitTime)
     }
-    lastRequestTime = Date.now()
+    limiter.lastRequestTime = Date.now()
     return fn()
   }
 
-  requestQueue = requestQueue.then(run, run)
-  return requestQueue as Promise<T>
+  limiter.queue = limiter.queue.then(run, run)
+  rateLimiters.set(host, limiter)
+  return limiter.queue as Promise<T>
 }
 
 function buildUrl(path: string, params?: MusicBrainzParams): string {
@@ -41,7 +60,15 @@ function buildUrl(path: string, params?: MusicBrainzParams): string {
 
 export async function fetchMusicBrainzJson<T>(path: string, params?: MusicBrainzParams): Promise<T> {
   const url = buildUrl(path, params)
-  return scheduleRequest(async () => {
+  const cached = responseCache.get(url)
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value as T
+  }
+  if (cached) {
+    responseCache.delete(url)
+  }
+
+  return scheduleRequest(url, async () => {
     const maxAttempts = 3
 
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -54,7 +81,9 @@ export async function fetchMusicBrainzJson<T>(path: string, params?: MusicBrainz
       })
 
       if (response.ok) {
-        return response.json()
+        const data = await response.json()
+        responseCache.set(url, { expiresAt: Date.now() + MB_CACHE_TTL_MS, value: data })
+        return data
       }
 
       if (response.status === 429 || response.status === 503) {
@@ -68,17 +97,36 @@ export async function fetchMusicBrainzJson<T>(path: string, params?: MusicBrainz
       }
 
       const errorText = await response.text().catch(() => '')
-      throw new Error(
-        `MusicBrainz request failed: ${response.status} ${response.statusText}${errorText ? ` (${errorText.slice(0, 200)})` : ''}`
+      throw new MusicBrainzError(
+        `MusicBrainz request failed: ${response.status} ${response.statusText}${errorText ? ` (${errorText.slice(0, 200)})` : ''}`,
+        {
+          status: response.status,
+          statusText: response.statusText,
+          url,
+          retryable: false,
+          responseText: errorText,
+        }
       )
     }
 
-    throw new Error('MusicBrainz request failed: Rate limited')
+    throw new MusicBrainzError('MusicBrainz request failed: Rate limited', {
+      status: 429,
+      url,
+      retryable: true,
+    })
   })
 }
 
 export async function fetchCoverArtUrl(releaseId: string): Promise<string | null> {
   try {
+    const cached = coverArtCache.get(releaseId)
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.value
+    }
+    if (cached) {
+      coverArtCache.delete(releaseId)
+    }
+
     const response = await fetch(`https://coverartarchive.org/release/${encodeURIComponent(releaseId)}`, {
       headers: {
         Accept: 'application/json',
@@ -93,8 +141,9 @@ export async function fetchCoverArtUrl(releaseId: string): Promise<string | null
     const data = await response.json()
     const images = Array.isArray(data?.images) ? data.images : []
     const frontImage = images.find((image: any) => image?.front) || images[0]
-    if (!frontImage?.image) return null
-    return frontImage.image
+    const imageUrl = frontImage?.image || null
+    coverArtCache.set(releaseId, { expiresAt: Date.now() + COVER_CACHE_TTL_MS, value: imageUrl })
+    return imageUrl
   } catch {
     return null
   }
@@ -137,14 +186,14 @@ async function browseProducerRecordingsByArtist(params: {
   artistId: string
   limit: number
   offset: number
-}): Promise<{ count: number; offset: number; limit: number; recordings: any[] }> {
+}): Promise<{ count: number; offset: number; limit: number; recordings: any[]; debug?: Record<string, unknown> }> {
   const batchLimit = Math.min(100, Math.max(params.limit, 25))
   let rawOffset = 0
   let rawTotal = Number.POSITIVE_INFINITY
   let scannedProducerCount = 0
   const recordings: any[] = []
   let iterations = 0
-  const maxIterations = 6
+  const maxIterations = Math.max(6, Math.ceil((params.offset + params.limit) / batchLimit) + 2)
 
   while (rawOffset < rawTotal && iterations < maxIterations && recordings.length < params.offset + params.limit) {
     const data = await fetchMusicBrainzJson<any>('/recording', {
@@ -200,12 +249,83 @@ async function browseProducerRecordingsByArtist(params: {
   }
 }
 
+async function browseProducerReleasesByArtist(params: {
+  artistId: string
+  limit: number
+  offset: number
+}): Promise<{ count: number; offset: number; limit: number; releases: Array<{ id: string; title: string; date?: string }>; debug?: Record<string, unknown> }> {
+  const batchLimit = Math.min(100, Math.max(params.limit, 25))
+  let rawOffset = 0
+  let rawTotal = Number.POSITIVE_INFINITY
+  let scannedProducerCount = 0
+  const releases: Array<{ id: string; title: string; date?: string }> = []
+  let iterations = 0
+  const maxIterations = Math.max(6, Math.ceil((params.offset + params.limit) / batchLimit) + 2)
+
+  while (rawOffset < rawTotal && iterations < maxIterations && releases.length < params.offset + params.limit) {
+    const data = await fetchMusicBrainzJson<any>('/release', {
+      artist: params.artistId,
+      limit: batchLimit,
+      offset: rawOffset,
+      fmt: 'json',
+      inc: 'artist-credits+artist-rels',
+    })
+
+    const rawReleases = Array.isArray(data?.releases) ? data.releases : []
+    rawTotal = typeof data?.['release-count'] === 'number' ? data['release-count'] : rawReleases.length + rawOffset
+
+    for (const release of rawReleases) {
+      const relations = Array.isArray(release?.relations) ? release.relations : []
+      const matches = relations.some((relation: any) => isProducerRelation(relation, params.artistId))
+      if (!matches) continue
+      scannedProducerCount += 1
+      if (scannedProducerCount <= params.offset) {
+        continue
+      }
+      if (releases.length < params.offset + params.limit) {
+        releases.push({
+          id: release?.id,
+          title: release?.title || 'Unknown release',
+          date: release?.date,
+        })
+      }
+    }
+
+    if (rawReleases.length === 0) {
+      break
+    }
+    rawOffset += rawReleases.length
+    iterations += 1
+  }
+
+  const reachedEnd = rawOffset >= rawTotal || rawTotal === 0
+  const estimatedCount = reachedEnd
+    ? scannedProducerCount
+    : Math.max(scannedProducerCount, params.offset + releases.length + 1)
+
+  return {
+    count: estimatedCount,
+    offset: params.offset,
+    limit: params.limit,
+    releases: releases.slice(0, params.limit),
+    debug: {
+      artistId: params.artistId,
+      batchLimit,
+      iterations,
+      rawOffset,
+      rawTotal: Number.isFinite(rawTotal) ? rawTotal : null,
+      scannedProducerCount,
+      collectedCount: releases.length,
+    },
+  }
+}
+
 export async function searchRecordingsByCredit(params: {
   name: string
   role: string
   limit: number
   offset: number
-}): Promise<{ count: number; offset: number; limit: number; recordings: any[] }> {
+}): Promise<{ count: number; offset: number; limit: number; recordings: any[]; debug?: Record<string, unknown> }> {
   if (params.role === 'producer') {
     const artistId = await findArtistIdByName(params.name)
     if (artistId) {
@@ -248,7 +368,18 @@ export async function searchReleasesByCredit(params: {
   role: string
   limit: number
   offset: number
-}): Promise<{ count: number; offset: number; limit: number; releases: Array<{ id: string; title: string; date?: string }> }> {
+}): Promise<{ count: number; offset: number; limit: number; releases: Array<{ id: string; title: string; date?: string }>; debug?: Record<string, unknown> }> {
+  if (params.role === 'producer') {
+    const artistId = await findArtistIdByName(params.name)
+    if (artistId) {
+      return browseProducerReleasesByArtist({
+        artistId,
+        limit: params.limit,
+        offset: params.offset,
+      })
+    }
+  }
+
   const query = buildCreditQuery(params.name, params.role)
   const data = await fetchMusicBrainzJson<any>('/release', {
     query,
