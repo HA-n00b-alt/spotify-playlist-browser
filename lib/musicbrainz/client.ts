@@ -2,13 +2,17 @@ import { MB_BASE_URL, USER_AGENT } from '../musicbrainz'
 
 type MusicBrainzParams = Record<string, string | number | undefined>
 
-const ROLE_FIELD_MAP: Record<string, string> = {
-  producer: 'producer',
-  songwriter: 'writer',
-  mixer: 'mixer',
-  engineer: 'engineer',
-  artist: 'artist',
-}
+const ROLE_FIELD_MAP: Record<string, string> = new Proxy(
+  {
+    producer: 'producer',
+    songwriter: 'writer',
+    mixer: 'mixer',
+    engineer: 'engineer',
+  },
+  {
+    get: (target, prop: string) => target[prop] || 'artist',
+  }
+)
 
 const MIN_REQUEST_INTERVAL_MS = 1100
 let lastRequestTime = 0
@@ -102,98 +106,11 @@ export async function fetchCoverArtUrl(releaseId: string): Promise<string | null
 }
 
 export function buildCreditQuery(name: string, role: string): string {
-  const field = ROLE_FIELD_MAP[role] ?? 'artist'
+  const field = ROLE_FIELD_MAP[role]
   return `${field}:"${name}"`
 }
 
-function isProducerRelation(relation: any, artistId: string, artistName?: string): boolean {
-  if (!relation) return false
-  const type = typeof relation?.type === 'string' ? relation.type.toLowerCase() : ''
-  if (!type || !type.includes('producer')) return false
-  if (artistId) {
-    const relationArtistId = relation?.artist?.id || relation?.artist?.gid || relation?.target
-    if (relationArtistId && relationArtistId === artistId) return true
-  }
-  if (artistName) {
-    const relationArtistName = relation?.artist?.name || relation?.target?.name || relation?.name
-    if (typeof relationArtistName === 'string' && relationArtistName.toLowerCase().includes(artistName.toLowerCase())) {
-      return true
-    }
-  }
-  return false
-}
 
-async function findArtistIdByName(name: string): Promise<string | null> {
-  const data = await fetchMusicBrainzJson<any>('/artist', {
-    query: `artist:"${name}"`,
-    limit: 5,
-    fmt: 'json',
-  })
-  const artists = Array.isArray(data?.artists) ? data.artists : []
-  if (!artists.length) return null
-  const exact = artists.find((artist: any) => typeof artist?.name === 'string' && artist.name.toLowerCase() === name.toLowerCase())
-  if (exact?.id) return exact.id
-  return artists[0]?.id || null
-}
-
-async function browseProducerRecordingsByArtist(params: {
-  artistId: string
-  limit: number
-  offset: number
-  artistName?: string
-}): Promise<{ count: number; offset: number; limit: number; recordings: any[] }> {
-  const batchLimit = Math.min(100, Math.max(params.limit, 25))
-  let rawOffset = 0
-  let rawTotal = Number.POSITIVE_INFINITY
-  let scannedProducerCount = 0
-  const recordings: any[] = []
-  let iterations = 0
-  const maxIterations = 6
-
-  while (rawOffset < rawTotal && iterations < maxIterations && recordings.length < params.offset + params.limit) {
-    const data = await fetchMusicBrainzJson<any>('/recording', {
-      artist: params.artistId,
-      limit: batchLimit,
-      offset: rawOffset,
-      fmt: 'json',
-      inc: 'artist-credits+isrcs+artist-rels',
-    })
-
-    const rawRecordings = Array.isArray(data?.recordings) ? data.recordings : []
-    rawTotal = typeof data?.['recording-count'] === 'number' ? data['recording-count'] : rawRecordings.length + rawOffset
-
-    for (const recording of rawRecordings) {
-      const relations = Array.isArray(recording?.relations) ? recording.relations : []
-      const matches = relations.some((relation: any) => isProducerRelation(relation, params.artistId, params.artistName))
-      if (!matches) continue
-      scannedProducerCount += 1
-      if (scannedProducerCount <= params.offset) {
-        continue
-      }
-      if (recordings.length < params.offset + params.limit) {
-        recordings.push(recording)
-      }
-    }
-
-    if (rawRecordings.length === 0) {
-      break
-    }
-    rawOffset += rawRecordings.length
-    iterations += 1
-  }
-
-  const reachedEnd = rawOffset >= rawTotal || rawTotal === 0
-  const estimatedCount = reachedEnd
-    ? scannedProducerCount
-    : Math.max(scannedProducerCount, params.offset + recordings.length + 1)
-
-  return {
-    count: estimatedCount,
-    offset: params.offset,
-    limit: params.limit,
-    recordings: recordings.slice(0, params.limit),
-  }
-}
 
 export async function searchRecordingsByCredit(params: {
   name: string
@@ -201,27 +118,7 @@ export async function searchRecordingsByCredit(params: {
   limit: number
   offset: number
 }): Promise<{ count: number; offset: number; limit: number; recordings: any[] }> {
-  if (params.role === 'producer') {
-    const artistId = await findArtistIdByName(params.name)
-    if (artistId) {
-      return browseProducerRecordingsByArtist({
-        artistId,
-        limit: params.limit,
-        offset: params.offset,
-        artistName: params.name,
-      })
-    }
-  }
-
-  let query = buildCreditQuery(params.name, params.role)
-
-  if (params.role === 'artist') {
-    const artistId = await findArtistIdByName(params.name)
-    if (artistId) {
-      query = `arid:${artistId}`
-    }
-  }
-
+  const query = buildCreditQuery(params.name, params.role)
   const data = await fetchMusicBrainzJson<any>('/recording', {
     query,
     limit: params.limit,

@@ -74,7 +74,7 @@ export default function CreditsSearchClient() {
     setDebugResponse(null)
     setDebugStatus(null)
     try {
-      const url = `/api/musicbrainz/search?name=${encodeURIComponent(searchName)}&role=${encodeURIComponent(role)}&limit=${limit}&offset=${nextOffset}`
+      const url = `/api/musicbrainz/search?name=${encodeURIComponent(searchName)}&role=${encodeURIComponent(role)}&limit=${limit}&offset=${nextOffset}&debug=true`
       setDebugRequest(`GET ${url}`)
       const res = await fetch(url)
       const responseText = await res.clone().text().catch(() => '')

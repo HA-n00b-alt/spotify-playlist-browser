@@ -22,6 +22,7 @@ export async function GET(request: Request) {
   const role = searchParams.get('role')?.trim().toLowerCase() || 'producer'
   const limitParam = Number(searchParams.get('limit') ?? 25)
   const offsetParam = Number(searchParams.get('offset') ?? 0)
+  const debug = searchParams.get('debug') === 'true'
 
   if (!name) {
     return NextResponse.json({ error: 'Missing name parameter' }, { status: 400 })
@@ -67,13 +68,21 @@ export async function GET(request: Request) {
       })
     )
 
-    return NextResponse.json({
+    const payload: Record<string, any> = {
       releaseCount: recordingSearch.count,
       releaseOffset: recordingSearch.offset,
       releaseLimit: recordingSearch.limit,
       trackCount: results.length,
       results,
-    })
+    }
+    if (debug) {
+      payload.debug = {
+        role,
+        name,
+        ...(recordingSearch as any).debug,
+      }
+    }
+    return NextResponse.json(payload)
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Unknown error' },
