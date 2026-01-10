@@ -95,23 +95,12 @@ async function paginateSpotify<T>(
 export async function getAccessToken(): Promise<string | null> {
   const cookieStore = await cookies()
   const token = cookieStore.get('access_token')?.value || null
-  // TEMPORARY DEBUG
-  console.log('[Spotify API DEBUG] getAccessToken:', {
-    hasToken: !!token,
-    tokenPrefix: token ? `${token.substring(0, 20)}...` : 'none',
-  })
   return token
 }
 
 async function refreshAccessToken(): Promise<string | null> {
   const cookieStore = await cookies()
   const refreshToken = cookieStore.get('refresh_token')?.value
-
-  // TEMPORARY DEBUG
-  console.log('[Spotify API DEBUG] refreshAccessToken:', {
-    hasRefreshToken: !!refreshToken,
-    refreshTokenPrefix: refreshToken ? `${refreshToken.substring(0, 20)}...` : 'none',
-  })
 
   if (!refreshToken) {
     logWarning('No refresh token available', {
@@ -240,17 +229,6 @@ export async function makeSpotifyRequest<T>(
     ? endpoint 
     : `https://api.spotify.com/v1${endpoint}`
   
-  // TEMPORARY DEBUG: Log request details
-  const requestMethod = options.method || 'GET'
-  console.log('[Spotify API DEBUG] Request:', {
-    method: requestMethod,
-    endpoint,
-    url,
-    retryCount,
-    hasToken: !!accessToken,
-    tokenPrefix: accessToken ? `${accessToken.substring(0, 20)}...` : 'none',
-  })
-  
   const makeRequest = async (token: string): Promise<Response> => {
     return fetch(url, {
       ...options,
@@ -264,20 +242,6 @@ export async function makeSpotifyRequest<T>(
 
   let response = await makeRequest(accessToken)
   
-  // TEMPORARY DEBUG: Log response details
-  const responseHeaders: Record<string, string> = {}
-  response.headers.forEach((value, key) => {
-    responseHeaders[key] = value
-  })
-  
-  console.log('[Spotify API DEBUG] Response:', {
-    status: response.status,
-    statusText: response.statusText,
-    ok: response.ok,
-    headers: responseHeaders,
-    url: response.url,
-  })
-
   // Handle rate limiting (429) - wait for Retry-After before retrying
   if (response.status === 429) {
     const retryAfter = response.headers.get('Retry-After')
@@ -379,20 +343,15 @@ export async function makeSpotifyRequest<T>(
     try {
       // Try to get response as text first to see what we're dealing with
       responseText = await response.clone().text()
-      // TEMPORARY DEBUG: Log raw response
-      console.error('[Spotify API DEBUG] 403 Forbidden - Raw Response Text:', responseText.substring(0, 500))
       
       // Try to parse as JSON
       try {
         errorBody = JSON.parse(responseText)
-        // TEMPORARY DEBUG: Log parsed JSON error response
-        console.error('[Spotify API DEBUG] 403 Forbidden - Parsed JSON Response:', JSON.stringify(errorBody, null, 2))
         if (errorBody.error?.message && errorBody.error.message !== 'Forbidden') {
           errorMessage = errorBody.error.message
         }
       } catch (jsonError) {
         // Not JSON, try to extract meaningful message from HTML/text
-        console.error('[Spotify API DEBUG] 403 Forbidden - Response is not JSON, trying to extract message from text')
         
         // Try to find error message in HTML/text response
         const htmlMatch = responseText.match(/<title[^>]*>([^<]+)<\/title>/i) || 
@@ -435,21 +394,12 @@ export async function makeSpotifyRequest<T>(
     try {
       // Try to get response as text first
       responseText = await response.clone().text()
-      // TEMPORARY DEBUG: Log raw response
-      console.error('[Spotify API DEBUG] Error Response - Raw Text:', responseText.substring(0, 500))
       
       // Try to parse as JSON
       try {
         errorBody = JSON.parse(responseText)
-        // TEMPORARY DEBUG: Log parsed JSON error response
-        console.error('[Spotify API DEBUG] Error Response - Parsed JSON:', {
-          status: response.status,
-          statusText: response.statusText,
-          body: JSON.stringify(errorBody, null, 2),
-        })
       } catch (jsonError) {
         // Not JSON, create error object from text
-        console.error('[Spotify API DEBUG] Error Response - Not JSON, using text as message')
         errorBody = { 
           error: { 
             status: response.status, 
@@ -483,15 +433,7 @@ export async function makeSpotifyRequest<T>(
     throw error
   }
 
-  // TEMPORARY DEBUG: Log successful response (first 500 chars to avoid huge logs)
-  const responseData = await response.json()
-  const responsePreview = JSON.stringify(responseData, null, 2).substring(0, 500)
-  console.log('[Spotify API DEBUG] Success Response Preview:', {
-    length: JSON.stringify(responseData).length,
-    preview: responsePreview + (JSON.stringify(responseData).length > 500 ? '...' : ''),
-  })
-  
-  return responseData as T
+  return response.json() as Promise<T>
 }
 
 export async function getPlaylists(): Promise<any[]> {
@@ -512,7 +454,11 @@ export async function getPlaylists(): Promise<any[]> {
           }
         } catch (error) {
           // If fetching fails, continue without followers
-          console.error(`Error fetching followers for playlist ${playlist.id}:`, error)
+          logError(error, {
+            component: 'spotify.getPlaylists',
+            playlistId: playlist.id,
+            action: 'fetching_followers'
+          })
         }
       }
       return playlist
@@ -558,7 +504,10 @@ async function getCachedPlaylist(playlistId: string): Promise<{
     }
     return null
   } catch (error) {
-    console.error('[Spotify Cache] Error fetching cached playlist:', error)
+    logError(error, {
+      component: 'spotify.getCachedPlaylist',
+      playlistId,
+    })
     return null
   }
 }
@@ -583,9 +532,17 @@ async function cachePlaylist(
          updated_at = NOW()`,
       [playlistId, snapshotId, JSON.stringify(playlistData), JSON.stringify(tracksData)]
     )
-    console.log(`[Spotify Cache] Cached playlist ${playlistId} with snapshot ${snapshotId}`)
+    logInfo(`Cached playlist ${playlistId} with snapshot ${snapshotId}`, {
+      component: 'spotify.cachePlaylist',
+      playlistId,
+      snapshotId,
+    })
   } catch (error) {
-    console.error('[Spotify Cache] Error caching playlist:', error)
+    logError(error, {
+      component: 'spotify.cachePlaylist',
+      playlistId,
+      snapshotId,
+    })
     // Don't throw - caching is optional
   }
 }
@@ -600,14 +557,27 @@ export async function getPlaylist(playlistId: string, useCache = true): Promise<
         // Create a temporary request function that doesn't use cache for verification
         const currentPlaylist = await makeSpotifyRequest<any>(`/playlists/${playlistId}?fields=snapshot_id`)
         if (currentPlaylist.snapshot_id === cached.snapshotId) {
-          console.log(`[Spotify Cache] Using cached playlist ${playlistId} (snapshot matches)`)
+          logInfo(`Using cached playlist ${playlistId} (snapshot matches)`, {
+            component: 'spotify.getPlaylist',
+            playlistId,
+            cache: 'hit',
+          })
           return cached.playlist
         } else {
-          console.log(`[Spotify Cache] Playlist ${playlistId} snapshot changed, fetching fresh data`)
+          logInfo(`Playlist ${playlistId} snapshot changed, fetching fresh data`, {
+            component: 'spotify.getPlaylist',
+            playlistId,
+            cache: 'miss',
+            reason: 'snapshot_changed',
+          })
         }
       } catch (error) {
         // If API call fails, use cached data as fallback
-        console.warn(`[Spotify Cache] Failed to verify snapshot, using cached data:`, error)
+        logWarning(`Failed to verify snapshot, using cached data for playlist ${playlistId}`, {
+          component: 'spotify.getPlaylist',
+          playlistId,
+          error,
+        })
         return cached.playlist
       }
     }
@@ -658,14 +628,27 @@ export async function getPlaylistTracks(playlistId: string, useCache = true): Pr
       try {
         const currentPlaylist = await makeSpotifyRequest<any>(`/playlists/${playlistId}?fields=snapshot_id`)
         if (currentPlaylist.snapshot_id === cached.snapshotId) {
-          console.log(`[Spotify Cache] Using cached tracks for playlist ${playlistId}`)
+          logInfo(`Using cached tracks for playlist ${playlistId}`, {
+            component: 'spotify.getPlaylistTracks',
+            playlistId,
+            cache: 'hit',
+          })
           return cached.tracks
         } else {
-          console.log(`[Spotify Cache] Playlist ${playlistId} snapshot changed, fetching fresh tracks`)
+          logInfo(`Playlist ${playlistId} snapshot changed, fetching fresh tracks`, {
+            component: 'spotify.getPlaylistTracks',
+            playlistId,
+            cache: 'miss',
+            reason: 'snapshot_changed',
+          })
         }
       } catch (error) {
         // If API call fails, use cached data as fallback
-        console.warn(`[Spotify Cache] Failed to verify snapshot, using cached tracks:`, error)
+        logWarning(`Failed to verify snapshot, using cached tracks for playlist ${playlistId}`, {
+          component: 'spotify.getPlaylistTracks',
+          playlistId,
+          error,
+        })
         return cached.tracks
       }
     }

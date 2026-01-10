@@ -99,15 +99,7 @@ async function extractSpotifyIdentifiers(spotifyTrackId: string): Promise<{
   artists: string
   spotifyPreviewUrl: string | null
 }> {
-  console.log(`[BPM Module] Fetching track data from Spotify for: ${spotifyTrackId}`)
   const track = await getTrack(spotifyTrackId)
-  console.log(`[BPM Module] Track data received:`, {
-    name: track.name,
-    hasISRC: !!track.external_ids?.isrc,
-    isrc: track.external_ids?.isrc,
-    hasPreview: !!track.preview_url,
-    artists: track.artists?.map((a: any) => a.name).join(', '),
-  })
   
   return {
     isrc: track.external_ids?.isrc || null,
@@ -160,20 +152,16 @@ async function checkCache(
   spotifyTrackId: string,
   isrc: string | null
 ): Promise<CacheRecord | null> {
-  console.log(`[BPM Module] Checking cache for track: ${spotifyTrackId}, ISRC: ${isrc || 'none'}`)
-  
   // Try ISRC first if available (more accurate cross-platform matching)
   if (isrc) {
     const isrcResults = await query<CacheRecord>(
       `SELECT * FROM track_bpm_cache WHERE isrc = $1 LIMIT 1`,
       [isrc]
     )
-      console.log(`[BPM Module] ISRC cache query result: ${isrcResults.length} records`)
       if (isrcResults.length > 0) {
         const record = isrcResults[0]
         const ageDays = (Date.now() - new Date(record.updated_at).getTime()) / (1000 * 60 * 60 * 24)
         const selectedBpm = getSelectedBpm(record)
-        console.log(`[BPM Module] ISRC cache record age: ${ageDays.toFixed(2)} days, BPM: ${selectedBpm}, ISRC mismatch: ${record.isrc_mismatch}, valid: ${selectedBpm !== null && ageDays < CACHE_TTL_DAYS && !record.isrc_mismatch}`)
         // Return valid BPM records (not expired and no ISRC mismatch), or records with null BPM (for error info)
         // ISRC mismatches are treated as errors, so exclude them from valid cache
         if (selectedBpm !== null && ageDays < CACHE_TTL_DAYS && !record.isrc_mismatch) {
@@ -190,12 +178,10 @@ async function checkCache(
     `SELECT * FROM track_bpm_cache WHERE spotify_track_id = $1 LIMIT 1`,
     [spotifyTrackId]
   )
-  console.log(`[BPM Module] Track ID cache query result: ${trackResults.length} records`)
   if (trackResults.length > 0) {
     const record = trackResults[0]
     const ageDays = (Date.now() - new Date(record.updated_at).getTime()) / (1000 * 60 * 60 * 24)
     const selectedBpm = getSelectedBpm(record)
-    console.log(`[BPM Module] Track ID cache record age: ${ageDays.toFixed(2)} days, BPM: ${selectedBpm}, ISRC mismatch: ${record.isrc_mismatch}, valid: ${selectedBpm !== null && ageDays < CACHE_TTL_DAYS && !record.isrc_mismatch}`)
     // Return valid BPM records (not expired and no ISRC mismatch), or records with null BPM (for error info)
     // ISRC mismatches are treated as errors, so exclude them from valid cache
     if (selectedBpm !== null && ageDays < CACHE_TTL_DAYS && !record.isrc_mismatch) {
@@ -206,7 +192,6 @@ async function checkCache(
     }
   }
   
-  console.log(`[BPM Module] No valid cache found`)
   return null
 }
 
@@ -215,7 +200,6 @@ async function checkCache(
  */
 function getCountryCodeFromRequest(request?: Request): string {
   if (!request) {
-    console.log('[BPM Module] No request provided, defaulting to US')
     return 'us'
   }
 
@@ -224,7 +208,6 @@ function getCountryCodeFromRequest(request?: Request): string {
     const override = request.headers.get('x-country-override')
     if (override) {
       const country = override.toLowerCase()
-      console.log(`[BPM Module] Using country override from header: ${country}`)
       return country
     }
     
@@ -261,7 +244,9 @@ function getCountryCodeFromRequest(request?: Request): string {
       }
     }
   } catch (error) {
-    console.warn('[BPM Module] Error parsing Accept-Language header:', error)
+    logError(error, {
+      component: 'bpm.getCountryCodeFromRequest',
+    })
   }
   
   return 'us' // Default to US
@@ -439,14 +424,11 @@ async function resolvePreviewUrl(params: {
 }): Promise<PreviewUrlResult> {
   const { isrc, title, artists, countryCode = 'us' } = params
   
-  console.log(`[BPM Module] Resolving preview URL for: "${title}" by "${artists}" (ISRC: ${isrc || 'none'}, Country: ${countryCode})`)
-  
   const urls: PreviewUrlEntry[] = []
   
   // 1. Try Deezer ISRC lookup (most accurate)
   if (isrc) {
     try {
-      console.log(`[BPM Module] Trying Deezer ISRC lookup for: ${isrc}`)
       const deezerIsrcUrl = `https://api.deezer.com/track/isrc:${encodeURIComponent(isrc)}`
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 5000)
@@ -460,7 +442,6 @@ async function resolvePreviewUrl(params: {
         if (response.ok) {
           const trackData = await response.json() as any
           if (trackData.id && trackData.preview) {
-            console.log(`[BPM Module] Found Deezer preview URL via ISRC`)
             urls.push({ url: trackData.preview, successful: true })
             return { 
               url: trackData.preview, 
@@ -469,21 +450,22 @@ async function resolvePreviewUrl(params: {
               isrcMismatch: false // ISRC lookup is always accurate
             }
           }
-        } else if (response.status !== 404) {
-          console.log(`[BPM Module] Deezer ISRC lookup failed with status: ${response.status}`)
         }
       } catch (error) {
         clearTimeout(timeoutId)
         throw error
       }
     } catch (error) {
-      console.warn(`[BPM Module] Deezer ISRC lookup error:`, error)
+      logError(error, {
+        component: 'bpm.resolvePreviewUrl',
+        isrc,
+        action: 'deezer_isrc_lookup'
+      })
     }
   }
   
   // 2. Try iTunes search by artist + title, then match ISRC
   try {
-    console.log(`[BPM Module] Trying iTunes search for: "${artists} ${title}"`)
     const searchTerm = `${artists} ${title}`
     const itunesSearchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(searchTerm)}&media=music&entity=song&country=${countryCode}&limit=20`
     // track iTunes search attempt only via preview URL if found
@@ -499,7 +481,6 @@ async function resolvePreviewUrl(params: {
       
       if (response.ok) {
         const data = await response.json() as any
-        console.log(`[BPM Module] iTunes search result: ${data.resultCount} results`)
         if (data.resultCount > 0 && data.results) {
           // Filter to items where kind === "song" and previewUrl exists
           const tracks = data.results.filter((r: any) => 
@@ -514,11 +495,9 @@ async function resolvePreviewUrl(params: {
             if (isrc) {
               const matchingTrack = tracks.find((t: any) => t.isrc === isrc)
               if (matchingTrack) {
-                console.log(`[BPM Module] Found iTunes track with matching ISRC`)
                 selectedTrack = matchingTrack
                 isrcMismatch = false
               } else {
-                console.log(`[BPM Module] No iTunes track with matching ISRC - treating as error`)
                 isrcMismatch = true
                 // Don't return the URL if ISRC doesn't match - treat as error
                 if (selectedTrack.previewUrl) {
@@ -533,7 +512,6 @@ async function resolvePreviewUrl(params: {
               }
             }
             
-            console.log(`[BPM Module] Found iTunes preview URL via search (ISRC mismatch: ${isrcMismatch})`)
             if (selectedTrack.previewUrl) {
               urls.push({ url: selectedTrack.previewUrl, successful: true })
             }
@@ -545,20 +523,22 @@ async function resolvePreviewUrl(params: {
             }
           }
         }
-      } else {
-        console.log(`[BPM Module] iTunes search failed with status: ${response.status}`)
       }
     } catch (error) {
       clearTimeout(timeoutId)
       throw error
     }
   } catch (error) {
-    console.warn(`[BPM Module] iTunes search error:`, error)
+    logError(error, {
+      component: 'bpm.resolvePreviewUrl',
+      title,
+      artists,
+      action: 'itunes_search'
+    })
   }
   
   // 3. Try Deezer search (fallback)
   try {
-    console.log(`[BPM Module] Trying Deezer search for: "${artists} ${title}"`)
     const deezerQuery = `${artists} ${title}`
     const deezerUrl = `https://api.deezer.com/search?q=${encodeURIComponent(deezerQuery)}&limit=10`
     // track Deezer search attempt only via preview URL if found
@@ -573,7 +553,6 @@ async function resolvePreviewUrl(params: {
       
       if (response.ok) {
         const data = await response.json() as any
-        console.log(`[BPM Module] Deezer search result: ${data.data?.length || 0} results`)
         if (data.data && Array.isArray(data.data)) {
           // Filter out items missing preview
           const tracksWithPreview = data.data.filter((t: any) => t.preview)
@@ -586,11 +565,9 @@ async function resolvePreviewUrl(params: {
             if (isrc) {
               const matchingTrack = tracksWithPreview.find((t: any) => t.isrc === isrc)
               if (matchingTrack) {
-                console.log(`[BPM Module] Found Deezer track with matching ISRC`)
                 selectedTrack = matchingTrack
                 isrcMismatch = false
               } else {
-                console.log(`[BPM Module] No Deezer track with matching ISRC - treating as error`)
                 isrcMismatch = true
                 // Don't return the URL if ISRC doesn't match - treat as error
                 if (selectedTrack.preview) {
@@ -605,7 +582,6 @@ async function resolvePreviewUrl(params: {
               }
             }
             
-            console.log(`[BPM Module] Found Deezer preview URL (ISRC mismatch: ${isrcMismatch})`)
             if (selectedTrack.preview) {
               urls.push({ url: selectedTrack.preview, successful: true })
             }
@@ -617,19 +593,21 @@ async function resolvePreviewUrl(params: {
             }
           }
         }
-      } else {
-        console.log(`[BPM Module] Deezer search failed with status: ${response.status}`)
       }
     } catch (error) {
       clearTimeout(timeoutId)
       throw error
     }
   } catch (error) {
-    console.warn(`[BPM Module] Deezer search error:`, error)
+    logError(error, {
+      component: 'bpm.resolvePreviewUrl',
+      title,
+      artists,
+      action: 'deezer_search'
+    })
   }
   
   // No preview URL found
-  console.log(`[BPM Module] No preview URL found from any source`)
   return { url: null, source: 'computed_failed', urls, isrcMismatch: false }
 }
 
@@ -690,21 +668,12 @@ async function computeBpmFromService(previewUrl: string): Promise<{
 }> {
   const serviceUrl = process.env.BPM_SERVICE_URL || 'https://bpm-service-340051416180.europe-west3.run.app'
   
-  console.log(`[BPM Module] Calling external BPM service at: ${serviceUrl}`)
-  
   // Get identity token for authentication
   const idToken = await getIdentityToken(serviceUrl)
   
   // Call the service using batch endpoint (with single URL)
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 120000) // 120s timeout (2 minutes)
-  
-  console.log(`[BPM Module] Sending preview URL to BPM service:`, previewUrl)
-  console.log(`[BPM Module] URL details:`, {
-    isDeezer: previewUrl.includes('deezer') || previewUrl.includes('cdn-preview') || previewUrl.includes('cdnt-preview'),
-    hasHdnea: previewUrl.includes('hdnea'),
-    urlLength: previewUrl.length,
-  })
   
   try {
     // Step 1: Submit batch and get batch_id
@@ -728,11 +697,6 @@ async function computeBpmFromService(previewUrl: string): Promise<{
     }
     
     const batchData = await batchResponse.json()
-    console.log(`[BPM Module] Batch submitted:`, {
-      batch_id: batchData.batch_id,
-      total_urls: batchData.total_urls,
-      status: batchData.status,
-    })
     
     if (!batchData.batch_id) {
       throw new Error(`BPM service did not return batch_id: ${JSON.stringify(batchData)}`)
@@ -813,27 +777,12 @@ async function computeBpmFromService(previewUrl: string): Promise<{
     const data = batchStatus.results[firstResultKey]
     
     if (!data || typeof data !== 'object') {
-      console.error(`[BPM Module] Invalid result data:`, {
+      logError(new Error('Invalid result data from BPM service'), {
+        component: 'bpm.computeBpmFromService',
         data,
-        dataType: typeof data,
-        resultKeys,
       })
       throw new Error(`BPM service returned invalid result: ${JSON.stringify(data)}`)
     }
-    
-    console.log(`[BPM Module] BPM service response:`, {
-      bpm_essentia: data.bpm_essentia,
-      bpm_raw_essentia: data.bpm_raw_essentia,
-      bpm_confidence_essentia: data.bpm_confidence_essentia,
-      bpm_librosa: data.bpm_librosa,
-      bpm_confidence_librosa: data.bpm_confidence_librosa,
-      key_essentia: data.key_essentia,
-      scale_essentia: data.scale_essentia,
-      keyscale_confidence_essentia: data.keyscale_confidence_essentia,
-      key_librosa: data.key_librosa,
-      scale_librosa: data.scale_librosa,
-      keyscale_confidence_librosa: data.keyscale_confidence_librosa,
-    })
     
     return {
       bpmEssentia: data.bpm_essentia,
@@ -941,104 +890,56 @@ async function storeInCache(params: {
     ? selectBestKey(keyEssentia, keyscaleConfidenceEssentia, keyLibrosa, keyscaleConfidenceLibrosa)
     : null)
   
-  // Check if record exists
-  const existing = await query<CacheRecord>(
-    `SELECT id FROM track_bpm_cache WHERE spotify_track_id = $1 LIMIT 1`,
-    [spotifyTrackId]
-  )
-  
   // Convert urls array to JSON for storage
   const urlsJson = urls && urls.length > 0 ? JSON.stringify(urls) : null
 
-  if (existing.length > 0) {
-    // Update existing record - preserve manual overrides and selected values unless explicitly updating
-    await query(
-      `UPDATE track_bpm_cache 
-       SET isrc = COALESCE($1, isrc),
-           artist = $2, 
-           title = $3, 
-           bpm_essentia = COALESCE($4, bpm_essentia),
-           bpm_raw_essentia = COALESCE($5, bpm_raw_essentia),
-           bpm_confidence_essentia = COALESCE($6, bpm_confidence_essentia),
-           bpm_librosa = COALESCE($7, bpm_librosa),
-           bpm_raw_librosa = COALESCE($8, bpm_raw_librosa),
-           bpm_confidence_librosa = COALESCE($9, bpm_confidence_librosa),
-           key_essentia = COALESCE($10, key_essentia),
-           scale_essentia = COALESCE($11, scale_essentia),
-           keyscale_confidence_essentia = COALESCE($12, keyscale_confidence_essentia),
-           key_librosa = COALESCE($13, key_librosa),
-           scale_librosa = COALESCE($14, scale_librosa),
-           keyscale_confidence_librosa = COALESCE($15, keyscale_confidence_librosa),
-           bpm_selected = COALESCE($16, bpm_selected, 'essentia'),
-           key_selected = COALESCE($17, key_selected, 'essentia'),
-           source = $18, 
-           error = $19,
-           urls = COALESCE($20::jsonb, urls),
-           isrc_mismatch = $21,
-           debug_txt = COALESCE($22, debug_txt),
-           updated_at = NOW()
-       WHERE spotify_track_id = $23`,
-      [
-        isrc, artist, title,
-        bpmEssentia, bpmRawEssentia, bpmConfidenceEssentia,
-        bpmLibrosa, bpmRawLibrosa, bpmConfidenceLibrosa,
-        keyEssentia, scaleEssentia, keyscaleConfidenceEssentia,
-        keyLibrosa, scaleLibrosa, keyscaleConfidenceLibrosa,
-        finalBpmSelected, finalKeySelected,
-        source, error, urlsJson, isrcMismatch,
-        debugTxt,
-        spotifyTrackId
-      ]
-    )
-  } else {
-    // Insert new record
-    await query(
-      `INSERT INTO track_bpm_cache 
-       (spotify_track_id, isrc, artist, title, 
-        bpm_essentia, bpm_raw_essentia, bpm_confidence_essentia,
-        bpm_librosa, bpm_raw_librosa, bpm_confidence_librosa,
-        key_essentia, scale_essentia, keyscale_confidence_essentia,
-        key_librosa, scale_librosa, keyscale_confidence_librosa,
-        bpm_selected, bpm_manual, key_selected, key_manual, scale_manual,
-        source, error, urls, isrc_mismatch, 
-        debug_txt, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24::jsonb, $25, $26, NOW())
-       ON CONFLICT (spotify_track_id) DO UPDATE SET
-         isrc = COALESCE(EXCLUDED.isrc, track_bpm_cache.isrc),
-         artist = EXCLUDED.artist,
-         title = EXCLUDED.title,
-         bpm_essentia = COALESCE(EXCLUDED.bpm_essentia, track_bpm_cache.bpm_essentia),
-         bpm_raw_essentia = COALESCE(EXCLUDED.bpm_raw_essentia, track_bpm_cache.bpm_raw_essentia),
-         bpm_confidence_essentia = COALESCE(EXCLUDED.bpm_confidence_essentia, track_bpm_cache.bpm_confidence_essentia),
-         bpm_librosa = COALESCE(EXCLUDED.bpm_librosa, track_bpm_cache.bpm_librosa),
-         bpm_raw_librosa = COALESCE(EXCLUDED.bpm_raw_librosa, track_bpm_cache.bpm_raw_librosa),
-         bpm_confidence_librosa = COALESCE(EXCLUDED.bpm_confidence_librosa, track_bpm_cache.bpm_confidence_librosa),
-         key_essentia = COALESCE(EXCLUDED.key_essentia, track_bpm_cache.key_essentia),
-         scale_essentia = COALESCE(EXCLUDED.scale_essentia, track_bpm_cache.scale_essentia),
-         keyscale_confidence_essentia = COALESCE(EXCLUDED.keyscale_confidence_essentia, track_bpm_cache.keyscale_confidence_essentia),
-         key_librosa = COALESCE(EXCLUDED.key_librosa, track_bpm_cache.key_librosa),
-         scale_librosa = COALESCE(EXCLUDED.scale_librosa, track_bpm_cache.scale_librosa),
-         keyscale_confidence_librosa = COALESCE(EXCLUDED.keyscale_confidence_librosa, track_bpm_cache.keyscale_confidence_librosa),
-         bpm_selected = COALESCE(EXCLUDED.bpm_selected, track_bpm_cache.bpm_selected, 'essentia'),
-         key_selected = COALESCE(EXCLUDED.key_selected, track_bpm_cache.key_selected, 'essentia'),
-         source = EXCLUDED.source,
-         error = EXCLUDED.error,
-         urls = COALESCE(EXCLUDED.urls, track_bpm_cache.urls),
-         isrc_mismatch = EXCLUDED.isrc_mismatch,
-         debug_txt = COALESCE(EXCLUDED.debug_txt, track_bpm_cache.debug_txt),
-         updated_at = NOW()`,
-      [
-        spotifyTrackId, isrc, artist, title,
-        bpmEssentia, bpmRawEssentia, bpmConfidenceEssentia,
-        bpmLibrosa, bpmRawLibrosa, bpmConfidenceLibrosa,
-        keyEssentia, scaleEssentia, keyscaleConfidenceEssentia,
-        keyLibrosa, scaleLibrosa, keyscaleConfidenceLibrosa,
-        finalBpmSelected, bpmManual, finalKeySelected, keyManual, scaleManual,
-        source, error, urlsJson, isrcMismatch,
-        debugTxt
-      ]
-    )
-  }
+  // Insert or update the record
+  await query(
+    `INSERT INTO track_bpm_cache 
+     (spotify_track_id, isrc, artist, title, 
+      bpm_essentia, bpm_raw_essentia, bpm_confidence_essentia,
+      bpm_librosa, bpm_raw_librosa, bpm_confidence_librosa,
+      key_essentia, scale_essentia, keyscale_confidence_essentia,
+      key_librosa, scale_librosa, keyscale_confidence_librosa,
+      bpm_selected, bpm_manual, key_selected, key_manual, scale_manual,
+      source, error, urls, isrc_mismatch, 
+      debug_txt, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24::jsonb, $25, $26, NOW())
+     ON CONFLICT (spotify_track_id) DO UPDATE SET
+       isrc = COALESCE(EXCLUDED.isrc, track_bpm_cache.isrc),
+       artist = EXCLUDED.artist,
+       title = EXCLUDED.title,
+       bpm_essentia = COALESCE(EXCLUDED.bpm_essentia, track_bpm_cache.bpm_essentia),
+       bpm_raw_essentia = COALESCE(EXCLUDED.bpm_raw_essentia, track_bpm_cache.bpm_raw_essentia),
+       bpm_confidence_essentia = COALESCE(EXCLUDED.bpm_confidence_essentia, track_bpm_cache.bpm_confidence_essentia),
+       bpm_librosa = COALESCE(EXCLUDED.bpm_librosa, track_bpm_cache.bpm_librosa),
+       bpm_raw_librosa = COALESCE(EXCLUDED.bpm_raw_librosa, track_bpm_cache.bpm_raw_librosa),
+       bpm_confidence_librosa = COALESCE(EXCLUDED.bpm_confidence_librosa, track_bpm_cache.bpm_confidence_librosa),
+       key_essentia = COALESCE(EXCLUDED.key_essentia, track_bpm_cache.key_essentia),
+       scale_essentia = COALESCE(EXCLUDED.scale_essentia, track_bpm_cache.scale_essentia),
+       keyscale_confidence_essentia = COALESCE(EXCLUDED.keyscale_confidence_essentia, track_bpm_cache.keyscale_confidence_essentia),
+       key_librosa = COALESCE(EXCLUDED.key_librosa, track_bpm_cache.key_librosa),
+       scale_librosa = COALESCE(EXCLUDED.scale_librosa, track_bpm_cache.scale_librosa),
+       keyscale_confidence_librosa = COALESCE(EXCLUDED.keyscale_confidence_librosa, track_bpm_cache.keyscale_confidence_librosa),
+       bpm_selected = COALESCE(EXCLUDED.bpm_selected, track_bpm_cache.bpm_selected, 'essentia'),
+       key_selected = COALESCE(EXCLUDED.key_selected, track_bpm_cache.key_selected, 'essentia'),
+       source = EXCLUDED.source,
+       error = EXCLUDED.error,
+       urls = COALESCE(EXCLUDED.urls, track_bpm_cache.urls),
+       isrc_mismatch = EXCLUDED.isrc_mismatch,
+       debug_txt = COALESCE(EXCLUDED.debug_txt, track_bpm_cache.debug_txt),
+       updated_at = NOW()`,
+    [
+      spotifyTrackId, isrc, artist, title,
+      bpmEssentia, bpmRawEssentia, bpmConfidenceEssentia,
+      bpmLibrosa, bpmRawLibrosa, bpmConfidenceLibrosa,
+      keyEssentia, scaleEssentia, keyscaleConfidenceEssentia,
+      keyLibrosa, scaleLibrosa, keyscaleConfidenceLibrosa,
+      finalBpmSelected, bpmManual, finalKeySelected, keyManual, scaleManual,
+      source, error, urlsJson, isrcMismatch,
+      debugTxt
+    ]
+  )
 }
 
 export async function prepareBpmStreamingBatch(params: {
@@ -1221,7 +1122,7 @@ export async function getBpmForSpotifyTrack(
   request?: Request
 ): Promise<BpmResult> {
   // Import logger dynamically to avoid circular dependencies
-  const { logError, logInfo } = await import('./logger')
+  const { logError, logInfo, logWarning } = await import('./logger')
   
   // Validate track ID format
   if (!isValidSpotifyTrackId(spotifyTrackId)) {
@@ -1248,38 +1149,30 @@ export async function getBpmForSpotifyTrack(
   // Create computation promise
   const computationPromise = (async (): Promise<BpmResult> => {
     try {
-      console.log(`[BPM Module] Starting BPM computation for track: ${spotifyTrackId}`)
-      
       // 1. Extract identifiers from Spotify
-      console.log(`[BPM Module] Step 1: Extracting identifiers from Spotify...`)
       const identifiers = await extractSpotifyIdentifiers(spotifyTrackId)
-      console.log(`[BPM Module] Identifiers extracted:`, {
-        isrc: identifiers.isrc,
-        title: identifiers.title,
-        artists: identifiers.artists,
-        hasSpotifyPreview: !!identifiers.spotifyPreviewUrl,
-      })
       
       // 2. Check cache
-      console.log(`[BPM Module] Step 2: Checking cache...`)
       const cached = await checkCache(spotifyTrackId, identifiers.isrc)
       const selectedBpm = cached ? getSelectedBpm(cached) : null
       if (cached && selectedBpm !== null) {
-        console.log(`[BPM Module] Cache hit! Returning cached BPM: ${selectedBpm} (source: ${cached.source})`)
         // Parse urls JSONB if present
         let urls: PreviewUrlEntry[] | undefined
         if (cached.urls) {
           try {
             urls = Array.isArray(cached.urls) ? cached.urls : JSON.parse(cached.urls as any)
           } catch (e) {
-            console.warn('[BPM Module] Error parsing urls:', e)
+            logWarning('Error parsing urls from cache', {
+              component: 'bpm.getBpmForSpotifyTrack',
+              spotifyTrackId,
+              error: e,
+            })
           }
         }
         
         const selectedKey = getSelectedKey(cached)
         // If we have BPM but no key/scale, re-run preview URL search with new ISRC logic and fetch key/scale
         if (!selectedKey.key || !selectedKey.scale) {
-          console.log(`[BPM Module] Cache has BPM but missing key/scale. Re-running preview URL search with new ISRC logic...`)
           try {
             // Re-run preview URL resolution with new ISRC logic
             const countryCode = getCountryCodeFromRequest(request)
@@ -1291,9 +1184,7 @@ export async function getBpmForSpotifyTrack(
             })
             
             if (previewResult.url) {
-              console.log(`[BPM Module] Preview URL resolved: ${previewResult.source}, fetching key/scale...`)
               const bpmResult = await computeBpmFromService(previewResult.url)
-              console.log(`[BPM Module] Key/scale fetched: key=${bpmResult.keyEssentia || bpmResult.keyLibrosa}, scale=${bpmResult.scaleEssentia || bpmResult.scaleLibrosa}`)
               
               // Update cache with key/scale and new preview URLs
               await storeInCache({
@@ -1366,11 +1257,13 @@ export async function getBpmForSpotifyTrack(
                 scaleManual: cached.scale_manual ?? undefined,
                 debugTxt: bpmResult.debugTxt || (cached.debug_txt ?? undefined),
               }
-            } else {
-              console.warn(`[BPM Module] Could not resolve preview URL for key/scale backfill`)
             }
           } catch (error) {
-            console.warn(`[BPM Module] Failed to fetch key/scale from BPM service:`, error)
+            logWarning('Failed to fetch key/scale from BPM service', {
+              component: 'bpm.getBpmForSpotifyTrack',
+              spotifyTrackId,
+              error,
+            })
             // Continue with cached result without key/scale
           }
         }
@@ -1430,13 +1323,16 @@ export async function getBpmForSpotifyTrack(
       }
       // If cached but bpm is null, return the error if available
       if (cached && selectedBpm === null) {
-        console.log(`[BPM Module] Cache hit with null BPM. Source: ${cached.source}, Error: ${cached.error}`)
         let urls: PreviewUrlEntry[] | undefined
         if (cached.urls) {
           try {
             urls = Array.isArray(cached.urls) ? cached.urls : JSON.parse(cached.urls as any)
           } catch (e) {
-            console.warn('[BPM Module] Error parsing urls:', e)
+            logWarning('Error parsing urls from cache', {
+              component: 'bpm.getBpmForSpotifyTrack',
+              spotifyTrackId,
+              error: e,
+            })
           }
         }
         const ensured = await ensureSuccessfulPreviewUrlForTrack({
@@ -1452,10 +1348,8 @@ export async function getBpmForSpotifyTrack(
           urls: ensured.urls,
         }
       }
-      console.log(`[BPM Module] Cache miss. Cached record:`, cached)
       
       // 3. Resolve preview URL (stops at first successful source)
-      console.log(`[BPM Module] Step 3: Resolving preview URL...`)
       const countryCode = getCountryCodeFromRequest(request)
       const previewResult = await resolvePreviewUrl({
         isrc: identifiers.isrc,
@@ -1463,15 +1357,9 @@ export async function getBpmForSpotifyTrack(
         artists: identifiers.artists,
         countryCode,
       })
-      console.log(`[BPM Module] Preview URL resolved:`, {
-        hasUrl: !!previewResult.url,
-        source: previewResult.source,
-        url: previewResult.url?.substring(0, 100) + '...' || 'null',
-      })
       
       if (!previewResult.url) {
         // No preview available - cache failure
-        console.log(`[BPM Module] No preview URL found. Caching failure.`)
         
         // Generate descriptive error message based on source and ISRC mismatch
         let errorMessage = 'No preview URL found'
@@ -1505,13 +1393,10 @@ export async function getBpmForSpotifyTrack(
       }
       
       // 4. Call external BPM service (only if we have a preview URL)
-      console.log(`[BPM Module] Step 4: Calling external BPM service...`)
       try {
         const bpmResult = await computeBpmFromService(previewResult.url)
-        console.log(`[BPM Module] BPM computed by external service:`, bpmResult)
         
         // 5. Store in cache
-        console.log(`[BPM Module] Step 5: Storing in cache...`)
         await storeInCache({
           spotifyTrackId,
           isrc: identifiers.isrc,
@@ -1535,7 +1420,6 @@ export async function getBpmForSpotifyTrack(
           isrcMismatch: previewResult.isrcMismatch || false,
           debugTxt: bpmResult.debugTxt || null,
         })
-        console.log(`[BPM Module] Successfully cached BPM for ${spotifyTrackId}`)
         
         // Determine which values to return based on confidence
         const finalBpm = (bpmResult.bpmLibrosa != null && bpmResult.bpmConfidenceLibrosa != null && 
