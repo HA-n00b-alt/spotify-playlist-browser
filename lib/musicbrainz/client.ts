@@ -450,6 +450,48 @@ async function browseProducerReleasesByArtist(params: {
   }
 }
 
+async function fetchAllProducerWorks(artistId: string): Promise<{ works: any[]; debug?: Record<string, unknown> }> {
+  const batchLimit = 100
+  let rawOffset = 0
+  let rawTotal = Number.POSITIVE_INFINITY
+  const works: any[] = []
+  const requestUrls: string[] = []
+  let iterations = 0
+
+  while (rawOffset < rawTotal) {
+    const requestParams = {
+      artist: artistId,
+      limit: batchLimit,
+      offset: rawOffset,
+      fmt: 'json',
+      inc: 'artist-rels',
+    }
+    requestUrls.push(buildUrl('/work', requestParams))
+    const data = await fetchMusicBrainzJson<any>('/work', requestParams)
+    const rawWorks = Array.isArray(data?.works) ? data.works : []
+    rawTotal = typeof data?.['work-count'] === 'number' ? data['work-count'] : rawWorks.length + rawOffset
+    works.push(...rawWorks)
+    if (rawWorks.length === 0) {
+      break
+    }
+    rawOffset += rawWorks.length
+    iterations += 1
+  }
+
+  return {
+    works,
+    debug: {
+      artistId,
+      batchLimit,
+      iterations,
+      rawOffset,
+      rawTotal: Number.isFinite(rawTotal) ? rawTotal : null,
+      collectedCount: works.length,
+      requestUrls,
+    },
+  }
+}
+
 async function searchProducerRecordingsByWorks(params: {
   artistId: string
   limit: number
@@ -469,11 +511,7 @@ async function searchProducerRecordingsByWorks(params: {
     recordingByWorkUrls?: string[]
   }
 }> {
-  const workBatch = await browseProducerWorksByArtist({
-    artistId: params.artistId,
-    limit: 100,
-    offset: 0,
-  })
+  const workBatch = await fetchAllProducerWorks(params.artistId)
 
   const recordings: any[] = []
   const seenRecordingIds = new Set<string>()
@@ -524,15 +562,13 @@ async function searchProducerRecordingsByWorks(params: {
   }
 
   return {
-    count: Math.max(params.offset + recordings.length, workBatch.count),
+    count: Math.max(params.offset + recordings.length, workBatch.works.length),
     offset: params.offset,
     limit: params.limit,
     recordings: recordings.slice(0, params.limit),
     debug: {
       artistId: params.artistId,
-      worksScanned: typeof workBatch.debug?.scannedProducerCount === 'number'
-        ? workBatch.debug.scannedProducerCount
-        : workBatch.works.length,
+      worksScanned: workBatch.works.length,
       worksProcessed,
       recordingsScanned: scannedRecordings,
       recordingsCollected: recordings.length,

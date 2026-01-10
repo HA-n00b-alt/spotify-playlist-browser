@@ -258,7 +258,7 @@ export default function PageHeader({
         <div className="relative">
           <header className="fixed inset-x-0 top-0 z-40 h-16 border-b border-gray-200/80 bg-white/70 backdrop-blur">
             <div className="mx-auto flex h-full w-full max-w-7xl items-center justify-between px-4 sm:px-8 lg:px-0">
-              <nav className="flex flex-col items-start gap-1 text-xs sm:text-sm text-gray-500">
+              <nav className="flex flex-col items-start gap-2 text-xs sm:text-sm text-gray-500">
                 <div className="flex items-center gap-2">
                   <div className="relative" ref={menuRef}>
                     <button
