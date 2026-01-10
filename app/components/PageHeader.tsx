@@ -243,9 +243,12 @@ export default function PageHeader({
             <div className="mx-auto mt-2 w-full max-w-7xl px-4 sm:px-8 text-left">
               <Link
                 href={backHref}
-                className="hidden sm:inline-flex items-center text-xs font-semibold text-gray-500 hover:text-gray-700"
+                className="hidden sm:inline-flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-gray-700"
               >
-                ← Back
+                <svg viewBox="0 0 16 16" aria-hidden="true" className="h-3 w-3">
+                  <path d="M10.5 3.5 6 8l4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Back
               </Link>
             </div>
           ) : null}
@@ -435,9 +438,12 @@ export default function PageHeader({
               {showBackLink ? (
                 <Link
                   href={backHref}
-                  className="hidden sm:inline-flex items-center text-xs font-semibold text-gray-500 hover:text-gray-700"
+                  className="hidden sm:inline-flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-gray-700"
                 >
-                  ← Back
+                  <svg viewBox="0 0 16 16" aria-hidden="true" className="h-3 w-3">
+                    <path d="M10.5 3.5 6 8l4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Back
                 </Link>
               ) : null}
               {displaySubtitle ? (

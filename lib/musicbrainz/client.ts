@@ -106,6 +106,14 @@ export function buildCreditQuery(name: string, role: string): string {
   return `${field}:"${name}"`
 }
 
+function isProducerRelation(relation: any, artistId: string): boolean {
+  if (!relation || !artistId) return false
+  const type = typeof relation?.type === 'string' ? relation.type.toLowerCase() : ''
+  const relationArtistId = relation?.artist?.id
+  if (!relationArtistId || relationArtistId !== artistId) return false
+  return type === 'producer' || type.includes('producer')
+}
+
 async function findArtistIdByName(name: string): Promise<string | null> {
   const data = await fetchMusicBrainzJson<any>('/artist', {
     query: `artist:"${name}"`,
@@ -117,12 +125,81 @@ async function findArtistIdByName(name: string): Promise<string | null> {
   return artists[0].id
 }
 
+async function browseProducerRecordingsByArtist(params: {
+  artistId: string
+  limit: number
+  offset: number
+}): Promise<{ count: number; offset: number; limit: number; recordings: any[] }> {
+  const batchLimit = Math.min(100, Math.max(params.limit, 25))
+  let rawOffset = 0
+  let rawTotal = Number.POSITIVE_INFINITY
+  let scannedProducerCount = 0
+  const recordings: any[] = []
+  let iterations = 0
+  const maxIterations = 6
+
+  while (rawOffset < rawTotal && iterations < maxIterations && recordings.length < params.offset + params.limit) {
+    const data = await fetchMusicBrainzJson<any>('/recording', {
+      artist: params.artistId,
+      limit: batchLimit,
+      offset: rawOffset,
+      fmt: 'json',
+      inc: 'releases+artist-credits+isrcs+artist-rels',
+    })
+
+    const rawRecordings = Array.isArray(data?.recordings) ? data.recordings : []
+    rawTotal = typeof data?.['recording-count'] === 'number' ? data['recording-count'] : rawRecordings.length + rawOffset
+
+    for (const recording of rawRecordings) {
+      const relations = Array.isArray(recording?.relations) ? recording.relations : []
+      const matches = relations.some((relation: any) => isProducerRelation(relation, params.artistId))
+      if (!matches) continue
+      scannedProducerCount += 1
+      if (scannedProducerCount <= params.offset) {
+        continue
+      }
+      if (recordings.length < params.offset + params.limit) {
+        recordings.push(recording)
+      }
+    }
+
+    if (rawRecordings.length === 0) {
+      break
+    }
+    rawOffset += rawRecordings.length
+    iterations += 1
+  }
+
+  const reachedEnd = rawOffset >= rawTotal || rawTotal === 0
+  const estimatedCount = reachedEnd
+    ? scannedProducerCount
+    : Math.max(scannedProducerCount, params.offset + recordings.length + 1)
+
+  return {
+    count: estimatedCount,
+    offset: params.offset,
+    limit: params.limit,
+    recordings: recordings.slice(0, params.limit),
+  }
+}
+
 export async function searchRecordingsByCredit(params: {
   name: string
   role: string
   limit: number
   offset: number
 }): Promise<{ count: number; offset: number; limit: number; recordings: any[] }> {
+  if (params.role === 'producer') {
+    const artistId = await findArtistIdByName(params.name)
+    if (artistId) {
+      return browseProducerRecordingsByArtist({
+        artistId,
+        limit: params.limit,
+        offset: params.offset,
+      })
+    }
+  }
+
   let query = buildCreditQuery(params.name, params.role)
 
   if (params.role === 'artist') {
