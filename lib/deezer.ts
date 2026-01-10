@@ -14,11 +14,8 @@ export async function fetchDeezerTrackByIsrc(
   const trimmed = isrc.trim()
   if (!trimmed) return null
 
-  const url = new URL(`${DEEZER_API_BASE}/search`)
-  url.searchParams.set('q', `isrc:"${trimmed}"`)
-  url.searchParams.set('limit', '1')
-
-  const response = await fetch(url.toString(), {
+  const url = `${DEEZER_API_BASE}/track/isrc:${encodeURIComponent(trimmed)}`
+  const response = await fetch(url, {
     headers: {
       'User-Agent': 'SpotifyPlaylistBrowser/1.0.0',
       Accept: 'application/json',
@@ -31,7 +28,7 @@ export async function fetchDeezerTrackByIsrc(
   }
 
   const data = await response.json().catch(() => null)
-  const track = data?.data && Array.isArray(data.data) ? data.data[0] : null
+  const track = data && data.type === 'track' ? data : null
 
   return {
     summary: track ? {
