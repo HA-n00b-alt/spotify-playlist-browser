@@ -8,6 +8,7 @@ import {
   streamRecordingsByCredit,
 } from '@/lib/musicbrainz/client'
 import { fetchDeezerTrackByIsrc } from '@/lib/deezer'
+import { query } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
@@ -89,6 +90,8 @@ export async function GET(request: Request) {
   const debug = debugParam !== null && debugParam.toLowerCase() !== 'false'
   const streamParam = searchParams.get('stream')
   const stream = streamParam !== null && streamParam.toLowerCase() !== 'false'
+  const refreshParam = searchParams.get('refresh')
+  const refresh = refreshParam !== null && refreshParam.toLowerCase() !== 'false'
   const debugSteps: Array<{ step: number; name: string; data?: Record<string, unknown> }> = []
 
   if (!name) {
@@ -97,6 +100,122 @@ export async function GET(request: Request) {
 
   const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 50) : 25
   const offset = Number.isFinite(offsetParam) ? Math.max(offsetParam, 0) : 0
+  const nameKey = name.toLowerCase()
+
+  const loadCache = async () => {
+    try {
+      const rows = await query<{ results: any }>(
+        'SELECT results FROM credits_cache WHERE name = $1 AND role = $2 LIMIT 1',
+        [nameKey, role]
+      )
+      if (!rows.length) return null
+      const results = Array.isArray(rows[0]?.results) ? rows[0].results : null
+      return results
+    } catch {
+      return null
+    }
+  }
+
+  const saveCache = async (results: TrackResult[]) => {
+    try {
+      const isrcs = Array.from(new Set(results.map((item) => item.isrc).filter(Boolean))) as string[]
+      await query(
+        `
+        INSERT INTO credits_cache (name, role, results, isrcs, updated_at)
+        VALUES ($1, $2, $3, $4, NOW())
+        ON CONFLICT (name, role)
+        DO UPDATE SET
+          results = EXCLUDED.results,
+          isrcs = EXCLUDED.isrcs,
+          updated_at = NOW()
+        `,
+        [nameKey, role, JSON.stringify(results), isrcs]
+      )
+    } catch {
+      // ignore cache failures
+    }
+  }
+
+  const mergeResults = (existing: TrackResult[] | null, incoming: TrackResult[]) => {
+    const map = new Map<string, TrackResult>()
+    if (existing) {
+      existing.forEach((item) => {
+        map.set(`${item.id}-${item.releaseId}`, item)
+      })
+    }
+    incoming.forEach((item) => {
+      map.set(`${item.id}-${item.releaseId}`, item)
+    })
+    return Array.from(map.values())
+  }
+
+  if (stream && !refresh) {
+    const cached = await loadCache()
+    if (cached && cached.length) {
+      const encoder = new TextEncoder()
+      const streamBody = new ReadableStream({
+        start: async (controller) => {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'cached', results: cached })}\n\n`))
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done', count: cached.length })}\n\n`))
+          controller.close()
+        },
+      })
+
+      void (async () => {
+        const collected: TrackResult[] = []
+        for await (const recording of streamRecordingsByCredit({ name, role, limit, offset: 0 })) {
+          const embeddedReleases = Array.isArray(recording?.releases) ? recording.releases : []
+          const releases = embeddedReleases.length > 0
+            ? embeddedReleases
+            : (recording?.id ? await fetchReleasesByRecording(recording.id) : [])
+          const releaseSelection = selectReleaseInfo(releases)
+          const release = releaseSelection.release
+          const releaseId = release?.id || 'unknown'
+          const isrcDetails = Array.isArray((recording as any)?.isrcDetails)
+            ? (recording as any).isrcDetails
+            : undefined
+          const selectedIsrc = isrcDetails?.find((entry: any) => entry?.selected)?.value
+          const isrc = selectedIsrc ?? (Array.isArray(recording?.isrcs) ? recording.isrcs[0] : undefined)
+          const deezerTrack = isrc ? await fetchDeezerTrackByIsrc(isrc) : null
+          const coverArtUrl = deezerTrack?.coverArtUrl
+            ?? (release?.id ? await fetchCoverArtUrl(release.id) : null)
+          const year = typeof release?.date === 'string' ? release.date.split('-')[0] : ''
+          const artistCredit = Array.isArray(recording?.['artist-credit'])
+            ? recording['artist-credit']
+            : []
+          const artist = artistCredit
+            .map((credit: any) => credit?.name || credit?.artist?.name)
+            .filter(Boolean)
+            .join(', ')
+
+          collected.push({
+            id: recording.id,
+            title: deezerTrack?.title || recording?.title || 'Unknown title',
+            artist: deezerTrack?.artist || artist || 'Unknown artist',
+            album: deezerTrack?.album || release?.title || 'Unknown release',
+            releaseType: releaseSelection.releaseType,
+            year,
+            length: typeof recording?.length === 'number' ? recording.length : 0,
+            isrc,
+            isrcDetails,
+            releaseId,
+            coverArtUrl,
+            previewUrl: deezerTrack?.previewUrl || null,
+          })
+        }
+        const merged = mergeResults(cached, collected)
+        await saveCache(merged)
+      })()
+
+      return new Response(streamBody, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+        },
+      })
+    }
+  }
 
   if (stream) {
     const encoder = new TextEncoder()
@@ -117,6 +236,7 @@ export async function GET(request: Request) {
             }
           }
           let streamedCount = 0
+          const collected: TrackResult[] = []
           for await (const recording of streamRecordingsByCredit({ name, role, limit, offset })) {
             const embeddedReleases = Array.isArray(recording?.releases) ? recording.releases : []
             const releases = embeddedReleases.length > 0
@@ -159,7 +279,11 @@ export async function GET(request: Request) {
 
             send({ type: 'result', track })
             streamedCount += 1
+            collected.push(track)
           }
+          const existing = await loadCache()
+          const merged = mergeResults(existing, collected)
+          await saveCache(merged)
           send({ type: 'done', count: streamedCount })
         } catch (error) {
           send({ type: 'error', message: error instanceof Error ? error.message : 'Unknown error' })

@@ -44,6 +44,8 @@ export default function CreditsSearchClient() {
   const [showHistory, setShowHistory] = useState(false)
   const blurTimeoutRef = useRef<number | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
+  const [showingCached, setShowingCached] = useState(false)
+  const resultsRef = useRef<SearchResult[]>([])
   const [playingId, setPlayingId] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const streamRef = useRef<EventSource | null>(null)
@@ -54,12 +56,15 @@ export default function CreditsSearchClient() {
   const [currentPage, setCurrentPage] = useState(1)
   const totalWorksRef = useRef<number | null>(null)
   const autoLoadRef = useRef(true)
+  const replaceOnFirstResultRef = useRef(false)
   const [sortField, setSortField] = useState<'title' | 'artist' | 'album' | 'duration' | 'year' | 'isrc' | null>('year')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
 
   const limit = 25
   const historyKey = 'creditsSearchHistory'
   const pageSizeKey = 'credits_rows_per_page'
+  const cacheKeyFor = (searchName: string, searchRole: string) =>
+    `credits_cache_${searchRole}_${searchName.toLowerCase()}`
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -78,6 +83,10 @@ export default function CreditsSearchClient() {
       // Ignore invalid localStorage
     }
   }, [])
+
+  useEffect(() => {
+    resultsRef.current = results
+  }, [results])
 
   useEffect(() => {
     return () => {
@@ -121,7 +130,13 @@ export default function CreditsSearchClient() {
     }
   }
 
-  const fetchResultsStream = async (searchName: string, offset = 0, append = false) => {
+  const fetchResultsStream = async (
+    searchName: string,
+    offset = 0,
+    append = false,
+    refresh = false,
+    replaceOnFirstResult = false
+  ) => {
     const trimmed = searchName.trim()
     if (!trimmed) {
       setError('Enter a name to search')
@@ -143,14 +158,18 @@ export default function CreditsSearchClient() {
       totalWorksRef.current = null
       setCurrentPage(1)
       autoLoadRef.current = true
+      setShowingCached(false)
     }
+    replaceOnFirstResultRef.current = replaceOnFirstResult
     setStatusMessage(`Loading ${limit} results…`)
-    const url = `/api/musicbrainz/search?name=${encodeURIComponent(trimmed)}&role=${encodeURIComponent(role)}&limit=${limit}&offset=${offset}&stream=true`
+    const refreshParam = refresh ? '&refresh=true' : ''
+    const url = `/api/musicbrainz/search?name=${encodeURIComponent(trimmed)}&role=${encodeURIComponent(role)}&limit=${limit}&offset=${offset}&stream=true${refreshParam}`
 
     const source = new EventSource(url)
     streamRef.current = source
 
     let batchCount = 0
+    let replaced = false
     source.onmessage = (event) => {
       if (requestIdRef.current !== requestId) {
         source.close()
@@ -165,9 +184,25 @@ export default function CreditsSearchClient() {
           }
           return
         }
+        if (payload.type === 'cached' && Array.isArray(payload.results)) {
+          setResults(payload.results)
+          setTrackCount(payload.results.length)
+          setLastBatchCount(payload.results.length)
+          setShowingCached(true)
+          setLoading(false)
+          setStatusMessage('Showing cached results. Refresh to update.')
+          return
+        }
         if (payload.type === 'result' && payload.track) {
-          setResults((prev) => [...prev, payload.track])
-          setTrackCount((prev) => prev + 1)
+          if (replaceOnFirstResultRef.current && !replaced) {
+            setResults([payload.track])
+            setTrackCount(1)
+            setShowingCached(false)
+            replaced = true
+          } else {
+            setResults((prev) => [...prev, payload.track])
+            setTrackCount((prev) => prev + 1)
+          }
           batchCount += 1
           const totalLoaded = offset + batchCount
           if (typeof totalWorksRef.current === 'number') {
@@ -189,10 +224,13 @@ export default function CreditsSearchClient() {
           }
           source.close()
           streamRef.current = null
+          if (resultsRef.current.length > 0 && typeof window !== 'undefined') {
+            window.localStorage.setItem(cacheKeyFor(trimmed, role), JSON.stringify(resultsRef.current))
+          }
           if (autoLoadRef.current && streamedCount === limit) {
             window.setTimeout(() => {
               if (requestIdRef.current === requestId) {
-                fetchResultsStream(trimmed, offset + streamedCount, true)
+                fetchResultsStream(trimmed, offset + streamedCount, true, false)
               }
             }, 0)
           }
@@ -246,12 +284,30 @@ export default function CreditsSearchClient() {
       return
     }
     saveHistory(trimmed)
-    await fetchResultsStream(trimmed)
+    if (typeof window !== 'undefined') {
+      const cached = window.localStorage.getItem(cacheKeyFor(trimmed, role))
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached)
+          if (Array.isArray(parsed)) {
+            setResults(parsed)
+            setTrackCount(parsed.length)
+            setShowingCached(true)
+            setStatusMessage('Showing cached results. Refreshing…')
+            await fetchResultsStream(trimmed, 0, false, true, true)
+            return
+          }
+        } catch {
+          // ignore cache parse errors
+        }
+      }
+    }
+    await fetchResultsStream(trimmed, 0, false, true)
   }
 
   const handleLoadMore = async () => {
     const nextOffset = results.length
-    await fetchResultsStream(name, nextOffset, true)
+    await fetchResultsStream(name, nextOffset, true, false)
   }
 
   const handleHistorySelect = async (value: string) => {
@@ -260,7 +316,25 @@ export default function CreditsSearchClient() {
     setName(trimmed)
     setShowHistory(false)
     saveHistory(trimmed)
-    await fetchResultsStream(trimmed)
+    if (typeof window !== 'undefined') {
+      const cached = window.localStorage.getItem(cacheKeyFor(trimmed, role))
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached)
+          if (Array.isArray(parsed)) {
+            setResults(parsed)
+            setTrackCount(parsed.length)
+            setShowingCached(true)
+            setStatusMessage('Showing cached results. Refreshing…')
+            await fetchResultsStream(trimmed, 0, false, true, true)
+            return
+          }
+        } catch {
+          // ignore cache parse errors
+        }
+      }
+    }
+    await fetchResultsStream(trimmed, 0, false, true)
   }
 
   const handleNameFocus = () => {
@@ -431,6 +505,20 @@ export default function CreditsSearchClient() {
           <span className="text-sm text-gray-500">
             {trackCount > 0 ? `${trackCount} tracks` : 'No results yet'}
           </span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <button
+            type="button"
+            onClick={() => fetchResultsStream(name, 0, false, true)}
+            className="text-xs font-semibold text-emerald-600 hover:text-emerald-700"
+            disabled={loading || !name.trim()}
+          >
+            Refresh cache
+          </button>
+          {showingCached ? (
+            <span className="text-xs text-gray-400">Cached results</span>
+          ) : null}
         </div>
 
         <div className="flex flex-wrap items-center gap-3 mb-4">
