@@ -203,7 +203,7 @@ export async function fetchReleasesByRecording(recordingId: string): Promise<any
   return Array.isArray(data?.releases) ? data.releases : []
 }
 
-async function findArtistIdByName(name: string): Promise<string | null> {
+export async function findArtistIdByName(name: string): Promise<string | null> {
   const data = await fetchMusicBrainzJson<any>('/artist', {
     query: `artist:"${name}"`,
     limit: 5,
@@ -226,6 +226,19 @@ async function findArtistIdByName(name: string): Promise<string | null> {
     return null
   }
 
+  return null
+}
+
+export async function fetchWorkCountByArtistId(artistId: string): Promise<number | null> {
+  const data = await fetchMusicBrainzJson<any>('/work', {
+    artist: artistId,
+    limit: 1,
+    offset: 0,
+    fmt: 'json',
+  })
+  if (typeof data?.['work-count'] === 'number') {
+    return data['work-count']
+  }
   return null
 }
 

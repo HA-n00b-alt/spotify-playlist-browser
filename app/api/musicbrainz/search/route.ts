@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import {
   fetchCoverArtUrl,
   fetchReleasesByRecording,
+  fetchWorkCountByArtistId,
+  findArtistIdByName,
   searchRecordingsByCredit,
   streamRecordingsByCredit,
 } from '@/lib/musicbrainz/client'
@@ -105,6 +107,15 @@ export async function GET(request: Request) {
         }
 
         try {
+          if (role === 'producer') {
+            const artistId = await findArtistIdByName(name)
+            if (artistId) {
+              const totalWorks = await fetchWorkCountByArtistId(artistId)
+              if (typeof totalWorks === 'number') {
+                send({ type: 'meta', totalWorks })
+              }
+            }
+          }
           let streamedCount = 0
           for await (const recording of streamRecordingsByCredit({ name, role, limit, offset })) {
             const embeddedReleases = Array.isArray(recording?.releases) ? recording.releases : []
