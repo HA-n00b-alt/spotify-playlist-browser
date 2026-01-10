@@ -106,29 +106,41 @@ export function buildCreditQuery(name: string, role: string): string {
   return `${field}:"${name}"`
 }
 
-function isProducerRelation(relation: any, artistId: string): boolean {
-  if (!relation || !artistId) return false
+function isProducerRelation(relation: any, artistId: string, artistName?: string): boolean {
+  if (!relation) return false
   const type = typeof relation?.type === 'string' ? relation.type.toLowerCase() : ''
-  const relationArtistId = relation?.artist?.id
-  if (!relationArtistId || relationArtistId !== artistId) return false
-  return type === 'producer' || type.includes('producer')
+  if (!type || !type.includes('producer')) return false
+  if (artistId) {
+    const relationArtistId = relation?.artist?.id || relation?.artist?.gid || relation?.target
+    if (relationArtistId && relationArtistId === artistId) return true
+  }
+  if (artistName) {
+    const relationArtistName = relation?.artist?.name || relation?.target?.name || relation?.name
+    if (typeof relationArtistName === 'string' && relationArtistName.toLowerCase().includes(artistName.toLowerCase())) {
+      return true
+    }
+  }
+  return false
 }
 
 async function findArtistIdByName(name: string): Promise<string | null> {
   const data = await fetchMusicBrainzJson<any>('/artist', {
     query: `artist:"${name}"`,
-    limit: 1,
+    limit: 5,
     fmt: 'json',
   })
   const artists = Array.isArray(data?.artists) ? data.artists : []
-  if (!artists[0]?.id) return null
-  return artists[0].id
+  if (!artists.length) return null
+  const exact = artists.find((artist: any) => typeof artist?.name === 'string' && artist.name.toLowerCase() === name.toLowerCase())
+  if (exact?.id) return exact.id
+  return artists[0]?.id || null
 }
 
 async function browseProducerRecordingsByArtist(params: {
   artistId: string
   limit: number
   offset: number
+  artistName?: string
 }): Promise<{ count: number; offset: number; limit: number; recordings: any[] }> {
   const batchLimit = Math.min(100, Math.max(params.limit, 25))
   let rawOffset = 0
@@ -152,7 +164,7 @@ async function browseProducerRecordingsByArtist(params: {
 
     for (const recording of rawRecordings) {
       const relations = Array.isArray(recording?.relations) ? recording.relations : []
-      const matches = relations.some((relation: any) => isProducerRelation(relation, params.artistId))
+      const matches = relations.some((relation: any) => isProducerRelation(relation, params.artistId, params.artistName))
       if (!matches) continue
       scannedProducerCount += 1
       if (scannedProducerCount <= params.offset) {
@@ -196,6 +208,7 @@ export async function searchRecordingsByCredit(params: {
         artistId,
         limit: params.limit,
         offset: params.offset,
+        artistName: params.name,
       })
     }
   }
