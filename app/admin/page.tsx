@@ -14,7 +14,13 @@ export default async function AdminPage() {
   return (
     <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-transparent">
       <div className="max-w-7xl mx-auto flex-1 w-full">
-        <PageHeader subtitle="" breadcrumbs={[{ label: 'Admin' }]} />
+        <PageHeader
+          subtitle=""
+          breadcrumbs={[
+            { label: 'Home', href: '/' },
+            { label: 'Admin Users' },
+          ]}
+        />
         <AdminClient />
       </div>
       <footer className="mt-auto py-6 sm:py-8 text-center text-xs sm:text-sm text-gray-500 border-t border-gray-200">

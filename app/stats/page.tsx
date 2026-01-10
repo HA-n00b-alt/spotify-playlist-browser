@@ -18,7 +18,10 @@ export default async function StatsPage() {
       <div className="max-w-7xl mx-auto flex-1 w-full">
         <PageHeader
           subtitle="Analytics dashboard"
-          breadcrumbs={[{ label: 'Stats' }]}
+          breadcrumbs={[
+            { label: 'Home', href: '/' },
+            { label: 'Stats' },
+          ]}
         />
         
         <StatsClient />

@@ -511,68 +511,118 @@ async function searchProducerRecordingsByWorks(params: {
     recordingByWorkUrls?: string[]
   }
 }> {
-  const workBatch = await fetchAllProducerWorks(params.artistId)
-
   const recordings: any[] = []
   const seenRecordingIds = new Set<string>()
   let scannedRecordings = 0
   let worksProcessed = 0
+  let worksScanned = 0
   const recordingByWorkUrls: string[] = []
+  const workBrowseUrls: string[] = []
   const workRecordingPageLimit = 100
+  const workBatchLimit = 100
+  let rawOffset = 0
+  let rawTotal = Number.POSITIVE_INFINITY
+  let iterations = 0
 
-  for (const work of workBatch.works) {
-    if (!work?.id) continue
-    worksProcessed += 1
-    let workOffset = 0
-    let totalForWork = Number.POSITIVE_INFINITY
-    const recordingsForWork: any[] = []
+  while (rawOffset < rawTotal && recordings.length < params.offset + params.limit) {
+    const workRequestParams = {
+      artist: params.artistId,
+      limit: workBatchLimit,
+      offset: rawOffset,
+      fmt: 'json',
+      inc: 'artist-rels',
+    }
+    workBrowseUrls.push(buildUrl('/work', workRequestParams))
+    const data = await fetchMusicBrainzJson<any>('/work', workRequestParams)
+    const rawWorks = Array.isArray(data?.works) ? data.works : []
+    rawTotal = typeof data?.['work-count'] === 'number' ? data['work-count'] : rawWorks.length + rawOffset
+    worksScanned += rawWorks.length
 
-    while (workOffset < totalForWork) {
-      recordingByWorkUrls.push(buildUrl('/recording', {
-        work: work.id,
-        limit: workRecordingPageLimit,
-        offset: workOffset,
-        fmt: 'json',
-        inc: 'artist-credits+isrcs',
-      }))
-      const workRecordings = await fetchRecordingsByWork({
-        workId: work.id,
-        limit: workRecordingPageLimit,
-        offset: workOffset,
-      })
-      totalForWork = workRecordings.count
-      scannedRecordings += workRecordings.recordings.length
-      recordingsForWork.push(...workRecordings.recordings)
-      if (workRecordings.recordings.length === 0) {
+    for (const work of rawWorks) {
+      if (!work?.id) continue
+      worksProcessed += 1
+      let workOffset = 0
+      let totalForWork = Number.POSITIVE_INFINITY
+      let bestRecording: any | null = null
+      let bestNoAttributeRecording: any | null = null
+
+      while (workOffset < totalForWork) {
+        recordingByWorkUrls.push(buildUrl('/recording', {
+          work: work.id,
+          limit: workRecordingPageLimit,
+          offset: workOffset,
+          fmt: 'json',
+          inc: 'artist-credits+isrcs',
+        }))
+        const workRecordings = await fetchRecordingsByWork({
+          workId: work.id,
+          limit: workRecordingPageLimit,
+          offset: workOffset,
+        })
+        totalForWork = workRecordings.count
+        scannedRecordings += workRecordings.recordings.length
+        for (const recording of workRecordings.recordings) {
+          if (recording?.id && (!bestRecording || recording.id.localeCompare(bestRecording.id) < 0)) {
+            bestRecording = recording
+          }
+          const attributes = Array.isArray(recording?.attributes) ? recording.attributes : []
+          if (attributes.length === 0 && recording?.id) {
+            if (!bestNoAttributeRecording || recording.id.localeCompare(bestNoAttributeRecording.id) < 0) {
+              bestNoAttributeRecording = recording
+            }
+          }
+        }
+        if (workRecordings.recordings.length === 0) {
+          break
+        }
+        workOffset += workRecordings.recordings.length
+      }
+
+      const representative = bestNoAttributeRecording || bestRecording
+      const recordingId = representative?.id
+      if (!recordingId || seenRecordingIds.has(recordingId)) {
+        continue
+      }
+      seenRecordingIds.add(recordingId)
+      if (seenRecordingIds.size <= params.offset) {
+        continue
+      }
+      recordings.push(representative)
+      if (recordings.length >= params.offset + params.limit) {
         break
       }
-      workOffset += workRecordings.recordings.length
     }
 
-    const representative = selectRepresentativeRecording(recordingsForWork)
-    const recordingId = representative?.id
-    if (!recordingId || seenRecordingIds.has(recordingId)) {
-      continue
+    if (rawWorks.length === 0) {
+      break
     }
-    seenRecordingIds.add(recordingId)
-    if (seenRecordingIds.size <= params.offset) {
-      continue
-    }
-    recordings.push(representative)
+    rawOffset += rawWorks.length
+    iterations += 1
   }
 
+  const totalCount = Number.isFinite(rawTotal)
+    ? rawTotal
+    : Math.max(params.offset + recordings.length, worksScanned)
+
   return {
-    count: Math.max(params.offset + recordings.length, workBatch.works.length),
+    count: totalCount,
     offset: params.offset,
     limit: params.limit,
     recordings: recordings.slice(0, params.limit),
     debug: {
       artistId: params.artistId,
-      worksScanned: workBatch.works.length,
+      worksScanned,
       worksProcessed,
       recordingsScanned: scannedRecordings,
       recordingsCollected: recordings.length,
-      workBrowse: workBatch.debug ?? null,
+      workBrowse: {
+        batchLimit: workBatchLimit,
+        iterations,
+        rawOffset,
+        rawTotal: Number.isFinite(rawTotal) ? rawTotal : null,
+        collectedCount: worksScanned,
+        requestUrls: workBrowseUrls,
+      },
       recordingByWorkUrls,
     },
   }

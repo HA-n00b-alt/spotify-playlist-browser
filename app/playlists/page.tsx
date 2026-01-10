@@ -209,7 +209,10 @@ export default async function PlaylistsPage() {
       <div className="max-w-7xl mx-auto flex-1 w-full">
         <PageHeader
           subtitle=""
-          breadcrumbs={[{ label: 'Playlists' }]}
+          breadcrumbs={[
+            { label: 'Home', href: '/' },
+            { label: '[user] playlists' },
+          ]}
         />
         
         {playlists.length === 0 ? (

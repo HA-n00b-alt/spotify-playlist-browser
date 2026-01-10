@@ -18,7 +18,7 @@ export default async function Home({
   return (
     <main className="flex min-h-screen flex-col p-4 sm:p-8 bg-transparent">
       <div className="max-w-7xl mx-auto flex-1 w-full">
-        <PageHeader subtitle="" breadcrumbs={[{ label: 'Home' }]} />
+        <PageHeader subtitle="" breadcrumbs={[{ label: 'Home', href: '/' }]} />
 
         <div className="rounded-2xl bg-white p-6 shadow-[0_4px_24px_rgba(0,0,0,0.06)] border-t border-gray-100 sm:p-10">
           <div className="space-y-8">

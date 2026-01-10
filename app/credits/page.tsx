@@ -9,7 +9,10 @@ export default async function CreditsSearchPage() {
       <div className="max-w-7xl mx-auto flex-1 w-full">
         <PageHeader
           subtitle=""
-          breadcrumbs={[{ label: 'Credit Search' }]}
+          breadcrumbs={[
+            { label: 'Home', href: '/' },
+            { label: 'Credit Search' },
+          ]}
         />
         <CreditsSearchClient />
       </div>

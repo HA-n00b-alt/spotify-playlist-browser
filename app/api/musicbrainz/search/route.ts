@@ -4,6 +4,7 @@ import {
   fetchReleasesByRecording,
   searchRecordingsByCredit,
 } from '@/lib/musicbrainz/client'
+import { fetchDeezerTrackByIsrc } from '@/lib/deezer'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +19,7 @@ interface TrackResult {
   isrc?: string
   releaseId: string
   coverArtUrl?: string | null
+  previewUrl?: string | null
 }
 
 function getReleasePrimaryType(release: any): string | null {
@@ -141,7 +143,10 @@ export async function GET(request: Request) {
         const releaseSelection = selectReleaseInfo(releases)
         const release = releaseSelection.release
         const releaseId = release?.id || 'unknown'
-        const coverArtUrl = release?.id ? await fetchCoverArtUrl(release.id) : null
+        const isrc = Array.isArray(recording?.isrcs) ? recording.isrcs[0] : undefined
+        const deezerTrack = isrc ? await fetchDeezerTrackByIsrc(isrc) : null
+        const coverArtUrl = deezerTrack?.coverArtUrl
+          ?? (release?.id ? await fetchCoverArtUrl(release.id) : null)
         const year = typeof release?.date === 'string' ? release.date.split('-')[0] : ''
         const artistCredit = Array.isArray(recording?.['artist-credit'])
           ? recording['artist-credit']
@@ -150,19 +155,19 @@ export async function GET(request: Request) {
           .map((credit: any) => credit?.name || credit?.artist?.name)
           .filter(Boolean)
           .join(', ')
-        const isrc = Array.isArray(recording?.isrcs) ? recording.isrcs[0] : undefined
 
         return {
           id: recording.id,
-          title: recording?.title || 'Unknown title',
-          artist: artist || 'Unknown artist',
-          album: release?.title || 'Unknown release',
+          title: deezerTrack?.title || recording?.title || 'Unknown title',
+          artist: deezerTrack?.artist || artist || 'Unknown artist',
+          album: deezerTrack?.album || release?.title || 'Unknown release',
           releaseType: releaseSelection.releaseType,
           year,
           length: typeof recording?.length === 'number' ? recording.length : 0,
           isrc,
           releaseId,
           coverArtUrl,
+          previewUrl: deezerTrack?.previewUrl || null,
         } as TrackResult
       })
     )

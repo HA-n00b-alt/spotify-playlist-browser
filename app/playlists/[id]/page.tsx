@@ -2423,7 +2423,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           <PageHeader
             subtitle=""
             breadcrumbs={[
-              { label: 'Playlists', href: '/playlists' },
+              { label: 'Home', href: '/' },
+              { label: '[user] playlists', href: '/playlists' },
               { label: 'Playlist' },
             ]}
             settingsItems={bpmDebugSetting ?? undefined}
@@ -2455,7 +2456,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           <PageHeader
             subtitle="Search and sort your playlists with ease"
             breadcrumbs={[
-              { label: 'Playlists', href: '/playlists' },
+              { label: 'Home', href: '/' },
+              { label: '[user] playlists', href: '/playlists' },
               { label: 'Playlist' },
             ]}
             center
@@ -2511,7 +2513,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         <PageHeader
           subtitle=""
           breadcrumbs={[
-            { label: 'Playlists', href: '/playlists' },
+            { label: 'Home', href: '/' },
+            { label: '[user] playlists', href: '/playlists' },
             { label: playlistInfo?.name ?? 'Playlist' },
           ]}
           settingsItems={bpmDebugSetting ?? undefined}
@@ -2655,8 +2658,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         )}
 
         {playlistInfo && (
-          <div className="relative mb-6 rounded-2xl bg-white p-6 shadow-[0_4px_24px_rgba(0,0,0,0.06)] border-t border-gray-100 sm:p-10">
-            <div className="absolute right-6 top-6 flex items-center gap-2">
+          <div className="relative mb-6 rounded-2xl bg-white p-4 shadow-[0_4px_24px_rgba(0,0,0,0.06)] border-t border-gray-100 sm:p-5">
+            <div className="absolute right-4 top-4 flex items-center gap-2">
               {isCached && cachedAt && (
                 <button
                   onClick={() => setShowCacheModal(true)}
@@ -2690,27 +2693,24 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 </span>
               </button>
             </div>
-            <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
               {playlistInfo.images && playlistInfo.images[0] && (
                 <Image
                   src={playlistInfo.images[0].url}
                   alt={playlistInfo.name}
-                  width={180}
-                  height={180}
-                  className="h-[180px] w-[180px] rounded-xl object-cover shadow-[0_8px_24px_rgba(0,0,0,0.18)]"
+                  width={150}
+                  height={150}
+                  className="h-[150px] w-[150px] rounded-xl object-cover shadow-[0_6px_18px_rgba(0,0,0,0.16)]"
                 />
               )}
               <div className="flex-1 min-w-0">
-                <div className="space-y-3">
-                  <p className="text-sm text-gray-500">
-                    {loggedInUserName ?? 'User'} playlist
-                  </p>
+                <div className="space-y-2">
                   {playlistInfo.external_urls?.spotify ? (
                     <a
                       href={playlistInfo.external_urls.spotify}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="block text-[32px] font-semibold tracking-tight text-[#171923] hover:text-emerald-600"
+                      className="block text-2xl font-bold tracking-tight text-[#171923] hover:text-emerald-600"
                       onClick={(e) => {
                         e.preventDefault()
                         const spotifyUri = `spotify:playlist:${playlistInfo.id}`
@@ -2723,7 +2723,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       {playlistInfo.name}
                     </a>
                   ) : (
-                    <h1 className="text-[32px] font-semibold tracking-tight text-[#171923]">
+                    <h1 className="text-2xl font-bold tracking-tight text-[#171923]">
                       {playlistInfo.name}
                     </h1>
                   )}
@@ -2755,12 +2755,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         >
                           {playlistInfo.owner.display_name}
                         </a>
-                        <span>•</span>
+                        <span>|</span>
                       </>
                     ) : (
                       <>
                         <span>By {playlistInfo.owner.display_name}</span>
-                        <span>•</span>
+                        <span>|</span>
                       </>
                     )}
                     <span>{playlistInfo.tracks?.total ?? tracks.length} tracks</span>
@@ -2771,7 +2771,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         href={playlistInfo.external_urls.spotify}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex w-fit items-center rounded-full bg-[#1ED760] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1BC457]"
+                        className="inline-flex w-fit items-center rounded-full bg-[#1ED760] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1BC457]"
                         onClick={(e) => {
                           e.preventDefault()
                           const spotifyUri = `spotify:playlist:${playlistInfo.id}`
@@ -2789,36 +2789,40 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               </div>
             </div>
             {bpmSummary && showBpmNotice && (
-              <div className="mt-6 flex w-full items-start justify-between gap-3 rounded-lg border border-amber-100 bg-amber-50 px-4 py-2 text-xs text-amber-900">
-                <div className="flex items-start gap-2">
-                  <span className="mt-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full border border-amber-200 text-[10px] font-semibold text-amber-700">
-                    i
-                  </span>
-                  <span>
-                    {bpmSummary.shouldShowProgress
-                      ? `BPM information processing ongoing (${bpmSummary.tracksRemainingToSearch} remaining).`
-                      : bpmSummary.tracksWithNa > 0
-                        ? `${bpmSummary.tracksWithNa} of ${bpmSummary.totalTracks} tracks have no BPM information available. You can retry by clicking on the N/A value.`
-                        : `All ${bpmSummary.totalTracks} tracks have BPM information available.`}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowBpmMoreInfo(true)}
-                    className="text-amber-700 underline-offset-2 hover:text-amber-900 hover:underline"
-                  >
-                    Details
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowBpmNotice(false)}
-                    className="text-amber-700 hover:text-amber-900"
-                    aria-label="Dismiss notice"
-                  >
-                    ×
-                  </button>
-                </div>
+              <div className="mt-4 inline-flex items-start gap-2 rounded-full border border-amber-200/70 bg-amber-50/80 px-3 py-1 text-xs text-amber-700">
+                <svg viewBox="0 0 20 20" aria-hidden="true" className="mt-0.5 h-4 w-4">
+                  <path
+                    d="M10 2.5 18.5 17H1.5L10 2.5Z"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.4"
+                    strokeLinejoin="round"
+                  />
+                  <path d="M10 7.5v4.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                  <circle cx="10" cy="14.5" r="0.8" fill="currentColor" />
+                </svg>
+                <span>
+                  {bpmSummary.shouldShowProgress
+                    ? `BPM information processing (${bpmSummary.tracksRemainingToSearch} remaining).`
+                    : bpmSummary.tracksWithNa > 0
+                      ? `${bpmSummary.tracksWithNa} of ${bpmSummary.totalTracks} tracks missing BPM.`
+                      : `All ${bpmSummary.totalTracks} tracks have BPM information.`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowBpmMoreInfo(true)}
+                  className="text-amber-700 underline-offset-2 hover:text-amber-900 hover:underline"
+                >
+                  Details
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowBpmNotice(false)}
+                  className="text-amber-700 hover:text-amber-900"
+                  aria-label="Dismiss notice"
+                >
+                  ×
+                </button>
               </div>
             )}
           </div>

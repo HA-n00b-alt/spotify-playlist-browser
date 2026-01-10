@@ -179,9 +179,6 @@ export default function PageHeader({
   const displaySubtitle = subtitle.includes('[user]') && userName
     ? subtitle.replace('[user]', userName)
     : subtitle
-  const isHome = breadcrumbs?.length === 1 && breadcrumbs[0]?.label === 'Home'
-  const showBackLink = !isHome
-  const backHref = breadcrumbs && breadcrumbs.length > 1 ? breadcrumbs[breadcrumbs.length - 2]?.href || '/' : '/'
   const playlistsHref = isAuthenticated ? '/playlists' : '/api/auth/login'
 
   const handleRequestAdmin = async () => {
@@ -258,7 +255,7 @@ export default function PageHeader({
         <div className="relative">
           <header className="fixed inset-x-0 top-0 z-40 h-16 border-b border-gray-200/80 bg-white/70 backdrop-blur">
             <div className="mx-auto flex h-full w-full max-w-7xl items-center justify-between px-4 sm:px-8 lg:px-0">
-              <nav className="flex flex-col items-start gap-2 text-xs sm:text-sm text-gray-500">
+              <nav className="flex items-center gap-2 text-xs sm:text-sm text-gray-500">
                 <div className="flex items-center gap-2">
                   <div className="relative" ref={menuRef}>
                     <button
@@ -306,34 +303,28 @@ export default function PageHeader({
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    {(breadcrumbs && breadcrumbs.length > 0 ? breadcrumbs : [{ label: 'Playlists' }]).map((crumb, index, list) => (
-                      <div key={`${crumb.label}-${index}`} className="flex items-center gap-2">
-                        <span className="text-gray-300">&gt;</span>
-                        {crumb.href && index < list.length - 1 ? (
-                          <Link
-                            href={crumb.href}
-                            className="text-gray-500 hover:text-gray-700"
-                          >
-                            {crumb.label}
-                          </Link>
-                        ) : (
-                          <span className="font-semibold text-[#171923]">{crumb.label}</span>
-                        )}
-                      </div>
-                    ))}
+                    {(breadcrumbs && breadcrumbs.length > 0 ? breadcrumbs : [{ label: 'Playlists' }]).map((crumb, index, list) => {
+                      const label = userName && crumb.label.includes('[user]')
+                        ? crumb.label.replace('[user]', userName)
+                        : crumb.label
+                      return (
+                        <div key={`${crumb.label}-${index}`} className="flex items-center gap-2">
+                          {index > 0 ? <span className="text-gray-300">/</span> : null}
+                          {crumb.href && index < list.length - 1 ? (
+                            <Link
+                              href={crumb.href}
+                              className="text-gray-500 hover:text-gray-700"
+                            >
+                              {label}
+                            </Link>
+                          ) : (
+                            <span className="font-semibold text-[#171923]">{label}</span>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
-                {showBackLink ? (
-                  <Link
-                    href={backHref}
-                    className="hidden sm:inline-flex items-center gap-1 text-gray-500 hover:text-gray-700"
-                  >
-                    <svg viewBox="0 0 16 16" aria-hidden="true" className="h-3 w-3">
-                      <path d="M10.5 3.5 6 8l4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    Home
-                  </Link>
-                ) : null}
               </nav>
 
               <div className="flex items-center gap-3">

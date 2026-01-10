@@ -16,6 +16,7 @@ interface SearchResult {
   isrc?: string
   releaseId: string
   coverArtUrl?: string | null
+  previewUrl?: string | null
 }
 
 interface SearchResponse {
@@ -50,6 +51,8 @@ export default function CreditsSearchClient() {
   const [debugRequest, setDebugRequest] = useState<string | null>(null)
   const [debugResponse, setDebugResponse] = useState<string | null>(null)
   const [debugStatus, setDebugStatus] = useState<number | null>(null)
+  const [playingId, setPlayingId] = useState<string | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
   const limit = 25
   const historyKey = 'creditsSearchHistory'
@@ -67,6 +70,44 @@ export default function CreditsSearchClient() {
       // Ignore invalid localStorage
     }
   }, [])
+
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.src = ''
+        audioRef.current = null
+      }
+    }
+  }, [])
+
+  const handleTogglePreview = (track: SearchResult) => {
+    if (!track.previewUrl) return
+    if (!audioRef.current) {
+      audioRef.current = new Audio()
+    }
+
+    const audio = audioRef.current
+    const isSameTrack = playingId === track.id
+    if (isSameTrack) {
+      audio.pause()
+      audio.currentTime = 0
+      setPlayingId(null)
+      return
+    }
+
+    audio.pause()
+    audio.src = track.previewUrl
+    audio.currentTime = 0
+    audio.play().then(() => {
+      setPlayingId(track.id)
+    }).catch(() => {
+      setPlayingId(null)
+    })
+    audio.onended = () => {
+      setPlayingId(null)
+    }
+  }
 
   const fetchResults = async (nextOffset: number, append: boolean, searchName = name) => {
     setLoading(true)
@@ -289,15 +330,36 @@ export default function CreditsSearchClient() {
                         No image
                       </div>
                     )}
-                    <div className="min-w-0">
-                      <a
-                        href={`https://musicbrainz.org/recording/${encodeURIComponent(track.id)}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="font-semibold text-gray-900 text-sm hover:text-green-700 hover:underline"
-                      >
-                        {track.title}
-                      </a>
+                  <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={`https://musicbrainz.org/recording/${encodeURIComponent(track.id)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-semibold text-gray-900 text-sm hover:text-green-700 hover:underline"
+                        >
+                          {track.title}
+                        </a>
+                        {track.previewUrl ? (
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePreview(track)}
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 text-gray-600 hover:text-gray-900"
+                            aria-label={playingId === track.id ? 'Pause preview' : 'Play preview'}
+                          >
+                            {playingId === track.id ? (
+                              <svg viewBox="0 0 16 16" className="h-3 w-3" aria-hidden="true">
+                                <rect x="3.5" y="3" width="3" height="10" rx="0.5" fill="currentColor" />
+                                <rect x="9.5" y="3" width="3" height="10" rx="0.5" fill="currentColor" />
+                              </svg>
+                            ) : (
+                              <svg viewBox="0 0 16 16" className="h-3 w-3" aria-hidden="true">
+                                <path d="M5 3.5 12 8l-7 4.5z" fill="currentColor" />
+                              </svg>
+                            )}
+                          </button>
+                        ) : null}
+                      </div>
                       <div className="text-xs text-gray-600 truncate">{track.artist}</div>
                       <div className="text-xs text-gray-500 truncate">
                         {track.album} {track.year ? `• ${track.year}` : ''}
@@ -336,6 +398,9 @@ export default function CreditsSearchClient() {
                       </th>
                       <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700">
                         Year
+                      </th>
+                      <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 w-16">
+                        Preview
                       </th>
                       <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 hidden lg:table-cell">
                         ISRC
@@ -384,6 +449,29 @@ export default function CreditsSearchClient() {
                         </td>
                         <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm">
                           {track.year || '-'}
+                        </td>
+                        <td className="px-3 lg:px-4 py-2 lg:py-3">
+                          {track.previewUrl ? (
+                            <button
+                              type="button"
+                              onClick={() => handleTogglePreview(track)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-600 hover:text-gray-900"
+                              aria-label={playingId === track.id ? 'Pause preview' : 'Play preview'}
+                            >
+                              {playingId === track.id ? (
+                                <svg viewBox="0 0 16 16" className="h-3 w-3" aria-hidden="true">
+                                  <rect x="3.5" y="3" width="3" height="10" rx="0.5" fill="currentColor" />
+                                  <rect x="9.5" y="3" width="3" height="10" rx="0.5" fill="currentColor" />
+                                </svg>
+                              ) : (
+                                <svg viewBox="0 0 16 16" className="h-3 w-3" aria-hidden="true">
+                                  <path d="M5 3.5 12 8l-7 4.5z" fill="currentColor" />
+                                </svg>
+                              )}
+                            </button>
+                          ) : (
+                            <span className="text-xs text-gray-400">-</span>
+                          )}
                         </td>
                         <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden lg:table-cell">
                           {track.isrc || '-'}
