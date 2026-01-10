@@ -14,6 +14,7 @@ interface SearchResult {
   year: string
   length: number
   isrc?: string
+  isrcDetails?: Array<{ value: string; hasDeezer: boolean; selected?: boolean; reason?: string }>
   releaseId: string
   coverArtUrl?: string | null
   previewUrl?: string | null
@@ -37,9 +38,7 @@ export default function CreditsSearchClient() {
   const [history, setHistory] = useState<string[]>([])
   const [showHistory, setShowHistory] = useState(false)
   const blurTimeoutRef = useRef<number | null>(null)
-  const [debugRequest, setDebugRequest] = useState<string | null>(null)
-  const [debugResponse, setDebugResponse] = useState<string | null>(null)
-  const [debugStatus, setDebugStatus] = useState<number | null>(null)
+  const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [playingId, setPlayingId] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const streamRef = useRef<EventSource | null>(null)
@@ -124,10 +123,8 @@ export default function CreditsSearchClient() {
       setTrackCount(0)
       setLastBatchCount(0)
     }
-    setDebugStatus(null)
+    setStatusMessage('Searching credits… results will appear as they are found.')
     const url = `/api/musicbrainz/search?name=${encodeURIComponent(trimmed)}&role=${encodeURIComponent(role)}&limit=${limit}&offset=${offset}&stream=true`
-    setDebugRequest(`GET ${url}`)
-    setDebugResponse('Streaming results...')
 
     const source = new EventSource(url)
     streamRef.current = source
@@ -148,7 +145,7 @@ export default function CreditsSearchClient() {
           const streamedCount = typeof payload.count === 'number' ? payload.count : 0
           setLastBatchCount(streamedCount)
           setLoading(false)
-          setDebugResponse(`Streamed ${streamedCount} results.`)
+          setStatusMessage(streamedCount > 0 ? null : 'No results found yet.')
           source.close()
           streamRef.current = null
           return
@@ -156,12 +153,14 @@ export default function CreditsSearchClient() {
         if (payload.type === 'error') {
           setError(payload.message || 'MusicBrainz search failed')
           setLoading(false)
+          setStatusMessage(null)
           source.close()
           streamRef.current = null
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'MusicBrainz search failed')
         setLoading(false)
+        setStatusMessage(null)
         source.close()
         streamRef.current = null
       }
@@ -174,6 +173,7 @@ export default function CreditsSearchClient() {
       }
       setError('MusicBrainz search failed')
       setLoading(false)
+      setStatusMessage(null)
       source.close()
       streamRef.current = null
     }
@@ -300,31 +300,9 @@ export default function CreditsSearchClient() {
         <p className="mt-3 text-xs text-gray-500">
           Searches MusicBrainz recordings by credit type and name.
         </p>
-        {(debugRequest || debugResponse) && (
-          <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
-            {debugRequest && (
-              <div className="mb-2">
-                <span className="font-semibold text-gray-700">Request:</span> {debugRequest}
-              </div>
-            )}
-            {debugStatus !== null && (
-              <div className="mb-2">
-                <span className="font-semibold text-gray-700">Status:</span> {debugStatus}
-              </div>
-            )}
-            {debugResponse && (
-              <div className="max-h-56 overflow-auto rounded border border-gray-200 bg-white p-2 text-[11px] text-gray-600">
-                <pre className="whitespace-pre-wrap">
-                  {(() => {
-                    try {
-                      return JSON.stringify(JSON.parse(debugResponse), null, 2)
-                    } catch {
-                      return debugResponse
-                    }
-                  })()}
-                </pre>
-              </div>
-            )}
+        {loading && statusMessage && (
+          <div className="mt-4 text-xs text-gray-500">
+            {statusMessage}
           </div>
         )}
       </form>
@@ -404,6 +382,15 @@ export default function CreditsSearchClient() {
                       <div className="text-xs text-gray-500">
                         {track.length ? formatDuration(track.length) : '-'} {track.isrc ? `• ${track.isrc}` : ''}
                       </div>
+                      {track.isrcDetails && track.isrcDetails.length > 0 && (
+                        <div className="mt-1 text-[11px] text-gray-400">
+                          {track.isrcDetails.map((entry) => {
+                            const label = entry.selected ? `${entry.value}*` : entry.value
+                            const suffix = entry.hasDeezer ? ' (D)' : ''
+                            return `${label}${suffix}`
+                          }).join(', ')}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -511,7 +498,31 @@ export default function CreditsSearchClient() {
                           )}
                         </td>
                         <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden lg:table-cell">
-                          {track.isrc || '-'}
+                          {track.isrcDetails && track.isrcDetails.length > 0 ? (
+                            <div className="space-y-1">
+                              {track.isrcDetails.map((entry) => (
+                                <div
+                                  key={entry.value}
+                                  className={`inline-flex items-center gap-1 ${entry.selected ? 'text-gray-900' : ''}`}
+                                  title={entry.reason}
+                                >
+                                  <span>{entry.value}</span>
+                                  {entry.hasDeezer ? (
+                                    <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-700">
+                                      Deezer
+                                    </span>
+                                  ) : null}
+                                  {entry.selected ? (
+                                    <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-700">
+                                      Selected
+                                    </span>
+                                  ) : null}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            track.isrc || '-'
+                          )}
                         </td>
                       </tr>
                     ))}

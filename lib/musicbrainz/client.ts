@@ -713,6 +713,7 @@ async function* streamProducerRecordingsByWorks(params: {
       let bestRecording: any | null = null
       let bestNoAttributeRecording: any | null = null
       let bestNoAttributeHasDeezer = false
+      const isrcMap = new Map<string, boolean>()
 
       while (workOffset < totalForWork) {
         const workRecordings = await fetchRecordingsByWork({
@@ -722,6 +723,15 @@ async function* streamProducerRecordingsByWorks(params: {
         })
         totalForWork = workRecordings.count
         for (const recording of workRecordings.recordings) {
+          const isrcs = Array.isArray(recording?.isrcs) ? recording.isrcs : []
+          for (const isrc of isrcs) {
+            if (!isrc || typeof isrc !== 'string') continue
+            if (isrcMap.has(isrc)) continue
+            const cached = deezerIsrcCache.get(isrc)
+            const hasDeezer = cached ?? Boolean(await fetchDeezerTrackByIsrc(isrc))
+            deezerIsrcCache.set(isrc, hasDeezer)
+            isrcMap.set(isrc, hasDeezer)
+          }
           if (recording?.id && (!bestRecording || recording.id.localeCompare(bestRecording.id) < 0)) {
             bestRecording = recording
           }
@@ -759,6 +769,20 @@ async function* streamProducerRecordingsByWorks(params: {
       if (!recordingId || seenRecordingIds.has(recordingId)) {
         continue
       }
+      const representativeIsrc = Array.isArray(representative?.isrcs) ? representative.isrcs[0] : undefined
+      const selectedReason = bestNoAttributeHasDeezer
+        ? 'Selected a no-attribute recording with a Deezer match'
+        : bestNoAttributeRecording
+          ? 'Selected the first no-attribute recording (lowest MBID)'
+          : 'Selected the first recording (lowest MBID)'
+      const isrcDetails = Array.from(isrcMap.entries()).map(([value, hasDeezer]) => ({
+        value,
+        hasDeezer,
+        selected: value === representativeIsrc,
+        reason: value === representativeIsrc ? selectedReason : undefined,
+      }))
+      representative.isrcDetails = isrcDetails
+      representative.selectedIsrcReason = selectedReason
       seenRecordingIds.add(recordingId)
       seenCount += 1
       if (seenCount <= params.offset) {

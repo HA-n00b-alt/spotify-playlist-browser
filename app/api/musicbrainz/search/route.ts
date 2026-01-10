@@ -18,6 +18,7 @@ interface TrackResult {
   year: string
   length: number
   isrc?: string
+  isrcDetails?: Array<{ value: string; hasDeezer: boolean; selected?: boolean; reason?: string }>
   releaseId: string
   coverArtUrl?: string | null
   previewUrl?: string | null
@@ -108,7 +109,11 @@ export async function GET(request: Request) {
             const releaseSelection = selectReleaseInfo(releases)
             const release = releaseSelection.release
             const releaseId = release?.id || 'unknown'
-            const isrc = Array.isArray(recording?.isrcs) ? recording.isrcs[0] : undefined
+            const isrcDetails = Array.isArray((recording as any)?.isrcDetails)
+              ? (recording as any).isrcDetails
+              : undefined
+            const selectedIsrc = isrcDetails?.find((entry: any) => entry?.selected)?.value
+            const isrc = selectedIsrc ?? (Array.isArray(recording?.isrcs) ? recording.isrcs[0] : undefined)
             const deezerTrack = isrc ? await fetchDeezerTrackByIsrc(isrc) : null
             const coverArtUrl = deezerTrack?.coverArtUrl
               ?? (release?.id ? await fetchCoverArtUrl(release.id) : null)
@@ -130,6 +135,7 @@ export async function GET(request: Request) {
               year,
               length: typeof recording?.length === 'number' ? recording.length : 0,
               isrc,
+              isrcDetails,
               releaseId,
               coverArtUrl,
               previewUrl: deezerTrack?.previewUrl || null,
