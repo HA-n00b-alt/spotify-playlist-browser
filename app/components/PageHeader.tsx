@@ -233,7 +233,7 @@ export default function PageHeader({
   }
 
   return (
-    <div className="mb-4 sm:mb-6">
+    <div className="mb-2 sm:mb-3">
       {center ? (
         /* Centered layout for login/error pages */
         <div className="text-center">
@@ -434,7 +434,7 @@ export default function PageHeader({
           </header>
           <div className="h-16" />
           {(showBackLink || displaySubtitle) ? (
-            <div className="mx-auto w-full max-w-7xl px-8 sm:px-12 lg:px-14 pt-1">
+            <div className="mx-auto w-full max-w-7xl px-8 sm:px-12 lg:px-14 pt-0">
               {showBackLink ? (
                 <Link
                   href={backHref}

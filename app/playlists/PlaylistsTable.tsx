@@ -432,7 +432,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                           {playlistHeaderName.toUpperCase()}
                         </span>
                       ) : null}
-                      <span className={`flex-shrink-0${playlistHeaderName ? ' ml-1' : ''}`}>PLAYLIST</span>
+                      <span className={`flex-shrink-0${playlistHeaderName ? ' ml-1' : ''}`}>PLAYLISTS</span>
                     </div>
                     <SortIcon field="name" />
                   </div>
