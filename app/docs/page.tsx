@@ -8,14 +8,46 @@ export default function DocumentationPage() {
       <div className="max-w-7xl mx-auto flex-1 w-full">
         <PageHeader subtitle="Documentation" breadcrumbs={[{ label: 'Documentation' }]} />
         <div className="rounded-2xl bg-white p-6 shadow-[0_4px_24px_rgba(0,0,0,0.06)] border-t border-gray-100 sm:p-10">
-          <div className="max-w-2xl space-y-3 text-sm text-gray-600">
-            <h2 className="text-lg font-semibold text-[#171923]">Getting Started</h2>
-            <p>
-              Documentation is coming soon. This page will cover login, playlist browsing, BPM/key insights, and credits lookup.
-            </p>
-            <p className="text-xs text-gray-500">
-              If you need immediate help, email <a href="mailto:delman@delman.it" className="text-emerald-600 hover:text-emerald-700 underline">delman@delman.it</a>.
-            </p>
+          <div className="max-w-2xl space-y-6 text-sm text-gray-600">
+            <div className="space-y-2">
+              <h2 className="text-lg font-semibold text-[#171923]">Overview</h2>
+              <p>
+                Spotify Playlist Tools helps you browse playlists, inspect BPM/key, and view credits in a clean, modern interface.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-[#171923]">Key Features</h3>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Search and sort playlists and tracks.</li>
+                <li>Filter by BPM, year, and popularity.</li>
+                <li>View BPM/key details with sources.</li>
+                <li>Open tracks, artists, and playlists in Spotify.</li>
+                <li>Fetch song credits (producer, writer, mixer, mastering).</li>
+              </ul>
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-[#171923]">How to Use</h3>
+              <ol className="list-decimal pl-5 space-y-1">
+                <li>Sign in with Spotify.</li>
+                <li>Select a playlist from the list view.</li>
+                <li>Use the search bar and filters to refine results.</li>
+                <li>Click BPM or Key to open details.</li>
+                <li>Use the track menu for Spotify links or credits.</li>
+              </ol>
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-[#171923]">Access & Privacy</h3>
+              <p>
+                Due to Spotify API access policies, this app is available only to a small group of authorized users.
+                Request access at <a href="mailto:delman@delman.it" className="text-emerald-600 hover:text-emerald-700 underline">delman@delman.it</a>.
+              </p>
+              <p>
+                Spotify login is used only to fetch playlists. No playlist or user data is stored. BPM/key results are cached per track for performance.
+              </p>
+            </div>
           </div>
         </div>
       </div>

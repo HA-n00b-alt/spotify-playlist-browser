@@ -172,53 +172,24 @@ export default function PageHeader({
           <header className="fixed inset-x-0 top-0 z-40 h-16 border-b border-gray-200/80 bg-white/70 backdrop-blur">
             <div className="mx-auto flex h-full w-full max-w-7xl items-center justify-between px-4 sm:px-8">
               <nav className="flex items-center gap-2 text-xs sm:text-sm text-gray-500">
-                <Link
-                  href="/"
-                  aria-label="Home"
-                  className="inline-flex h-5 w-5 items-center justify-center"
-                >
-                  <Image
-                    src="/playlist-tools-logo.svg"
-                    alt="Spotify Playlist Tools"
-                    width={20}
-                    height={20}
-                    className="h-5 w-5 opacity-70"
-                  />
-                </Link>
-                {(breadcrumbs && breadcrumbs.length > 0 ? breadcrumbs : [{ label: 'Playlists' }]).map((crumb, index, list) => (
-                  <div key={`${crumb.label}-${index}`} className="flex items-center gap-2">
-                    <span className="text-gray-300">&gt;</span>
-                    {crumb.href && index < list.length - 1 ? (
-                      <Link
-                        href={crumb.href}
-                        className="text-gray-500 hover:text-gray-700"
-                      >
-                        {crumb.label}
-                      </Link>
-                    ) : (
-                      <span className="font-semibold text-[#171923]">{crumb.label}</span>
-                    )}
-                  </div>
-                ))}
-              </nav>
-
-              <div className="flex items-center gap-3" ref={menuRef}>
-                <div className="relative">
+                <div className="relative" ref={menuRef}>
                   <button
                     type="button"
-                    onClick={() => setIsMenuOpen((prev) => !prev)}
                     aria-label="Open menu"
                     aria-expanded={isMenuOpen}
-                    className="inline-flex h-6 w-6 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                    onClick={() => setIsMenuOpen((prev) => !prev)}
+                    className="inline-flex h-5 w-5 items-center justify-center"
                   >
-                    <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
-                      <circle cx="12" cy="5" r="2" />
-                      <circle cx="12" cy="12" r="2" />
-                      <circle cx="12" cy="19" r="2" />
-                    </svg>
+                    <Image
+                      src="/playlist-tools-logo.svg"
+                      alt="Spotify Playlist Tools"
+                      width={20}
+                      height={20}
+                      className="h-5 w-5 opacity-70"
+                    />
                   </button>
                   {isMenuOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-56 rounded-2xl border border-gray-200 bg-white p-2 text-sm shadow-xl">
+                    <div className="absolute left-0 top-full mt-2 w-56 rounded-2xl border border-gray-200 bg-white p-2 text-sm shadow-xl">
                       <Link
                         href="/"
                         className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
@@ -252,6 +223,24 @@ export default function PageHeader({
                     </div>
                   )}
                 </div>
+                {(breadcrumbs && breadcrumbs.length > 0 ? breadcrumbs : [{ label: 'Playlists' }]).map((crumb, index, list) => (
+                  <div key={`${crumb.label}-${index}`} className="flex items-center gap-2">
+                    <span className="text-gray-300">&gt;</span>
+                    {crumb.href && index < list.length - 1 ? (
+                      <Link
+                        href={crumb.href}
+                        className="text-gray-500 hover:text-gray-700"
+                      >
+                        {crumb.label}
+                      </Link>
+                    ) : (
+                      <span className="font-semibold text-[#171923]">{crumb.label}</span>
+                    )}
+                  </div>
+                ))}
+              </nav>
+
+              <div className="flex items-center gap-3">
                 <div className="relative" ref={settingsRef}>
                   <button
                     type="button"

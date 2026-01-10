@@ -10,6 +10,27 @@ const ROLE_FIELD_MAP: Record<string, string> = {
   artist: 'artist',
 }
 
+const MIN_REQUEST_INTERVAL_MS = 1100
+let lastRequestTime = 0
+let requestQueue: Promise<unknown> = Promise.resolve()
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+const scheduleRequest = async <T>(fn: () => Promise<T>): Promise<T> => {
+  const run = async () => {
+    const now = Date.now()
+    const waitTime = Math.max(0, MIN_REQUEST_INTERVAL_MS - (now - lastRequestTime))
+    if (waitTime > 0) {
+      await sleep(waitTime)
+    }
+    lastRequestTime = Date.now()
+    return fn()
+  }
+
+  requestQueue = requestQueue.then(run, run)
+  return requestQueue as Promise<T>
+}
+
 function buildUrl(path: string, params?: MusicBrainzParams): string {
   const url = new URL(`${MB_BASE_URL}${path}`)
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -21,20 +42,40 @@ function buildUrl(path: string, params?: MusicBrainzParams): string {
 
 export async function fetchMusicBrainzJson<T>(path: string, params?: MusicBrainzParams): Promise<T> {
   const url = buildUrl(path, params)
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': USER_AGENT,
-      Accept: 'application/json',
-    },
-    cache: 'no-store',
+  return scheduleRequest(async () => {
+    const maxAttempts = 3
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': USER_AGENT,
+          Accept: 'application/json',
+        },
+        cache: 'no-store',
+      })
+
+      if (response.ok) {
+        return response.json()
+      }
+
+      if (response.status === 429 || response.status === 503) {
+        const retryAfter = response.headers.get('Retry-After')
+        const retrySeconds = retryAfter ? Number(retryAfter) : NaN
+        const backoffMs = Number.isFinite(retrySeconds)
+          ? retrySeconds * 1000
+          : 500 * Math.pow(2, attempt)
+        await sleep(backoffMs)
+        continue
+      }
+
+      const errorText = await response.text().catch(() => '')
+      throw new Error(
+        `MusicBrainz request failed: ${response.status} ${response.statusText}${errorText ? ` (${errorText.slice(0, 200)})` : ''}`
+      )
+    }
+
+    throw new Error('MusicBrainz request failed: Rate limited')
   })
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => '')
-    throw new Error(`MusicBrainz request failed: ${response.status} ${response.statusText}${errorText ? ` (${errorText.slice(0, 200)})` : ''}`)
-  }
-
-  return response.json()
 }
 
 export async function fetchCoverArtUrl(releaseId: string): Promise<string | null> {

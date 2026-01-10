@@ -19,6 +19,9 @@ export default async function Home({
             <div className="space-y-2">
               <h2 className="text-lg font-semibold text-[#171923]">Spotify Playlist Tools</h2>
               <p>
+                Browse and search your playlists, see BPM/key insights, and pull song credits in a single place.
+              </p>
+              <p>
                 Due to{' '}
                 <a
                   href="https://developer.spotify.com/blog/2025-04-15-updating-the-criteria-for-web-api-extended-access"
