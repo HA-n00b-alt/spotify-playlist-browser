@@ -54,8 +54,8 @@ export default function CreditsSearchClient() {
   const [currentPage, setCurrentPage] = useState(1)
   const totalWorksRef = useRef<number | null>(null)
   const autoLoadRef = useRef(true)
-  const [sortField, setSortField] = useState<'title' | 'artist' | 'album' | 'duration' | 'year' | 'isrc' | null>(null)
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+  const [sortField, setSortField] = useState<'title' | 'artist' | 'album' | 'duration' | 'year' | 'isrc' | null>('year')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
 
   const limit = 25
   const historyKey = 'creditsSearchHistory'
@@ -358,7 +358,7 @@ export default function CreditsSearchClient() {
               onBlur={handleNameBlur}
               list="credit-search-history"
               placeholder="e.g., Rick Rubin"
-              className="w-full bg-transparent px-3 py-2 text-sm text-gray-900 placeholder-gray-500 border-b border-gray-300 focus:outline-none focus:border-gray-500"
+              className="w-full bg-transparent px-0 py-2 text-sm text-gray-900 placeholder-gray-500 border-b border-gray-300 focus:outline-none focus:border-gray-500"
             />
             <datalist id="credit-search-history">
               {history.map((item) => (
@@ -392,7 +392,7 @@ export default function CreditsSearchClient() {
             <select
               value={role}
               onChange={(event) => setRole(event.target.value as RoleOption)}
-              className="w-full px-3 py-2 border-b border-gray-300 bg-transparent text-sm text-gray-900 focus:outline-none focus:border-gray-500"
+              className="w-full px-0 py-2 border-b border-gray-300 bg-transparent text-sm text-gray-900 focus:outline-none focus:border-gray-500"
             >
               {ROLE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>

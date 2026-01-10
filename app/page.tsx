@@ -20,7 +20,7 @@ export default async function Home({
       <div className="max-w-7xl mx-auto flex-1 w-full">
         <PageHeader subtitle="" breadcrumbs={[{ label: 'Home', href: '/' }]} />
 
-        <div className="rounded-2xl bg-white p-6 border border-gray-200 sm:p-10">
+        <div className="rounded-2xl bg-white p-6 border border-gray-100 sm:p-10">
           <div className="space-y-8">
             <div className="space-y-3">
               <h2 className="text-2xl sm:text-3xl font-semibold text-[#171923]">Choose your tool</h2>
@@ -39,7 +39,7 @@ export default async function Home({
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
               <Link
                 href={spotifyToolsHref}
-                className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-br from-white via-white to-emerald-50/60 p-6 sm:p-8 transition hover:-translate-y-0.5"
+                className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-gradient-to-br from-white via-white to-emerald-50/30 p-6 sm:p-8 transition hover:-translate-y-0.5"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-3">
@@ -57,14 +57,14 @@ export default async function Home({
                     </svg>
                   </div>
                 </div>
-                <div className="mt-6 text-[11px] text-gray-400">
+                <div className="mt-6 text-sm font-medium text-emerald-600 transition group-hover:text-emerald-700 group-hover:underline">
                   {isAuthenticated ? 'Open playlist tool' : 'Click to authenticate'}
                 </div>
               </Link>
 
               <Link
                 href="/credits"
-                className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-br from-white via-white to-slate-50 p-6 sm:p-8 transition hover:-translate-y-0.5"
+                className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-gradient-to-br from-white via-white to-slate-50 p-6 sm:p-8 transition hover:-translate-y-0.5"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-3">
@@ -82,7 +82,9 @@ export default async function Home({
                     </svg>
                   </div>
                 </div>
-                <div className="mt-6 text-[11px] text-gray-400">Open credits search</div>
+                <div className="mt-6 text-sm font-medium text-emerald-600 transition group-hover:text-emerald-700 group-hover:underline">
+                  Open credits search
+                </div>
               </Link>
             </div>
 
