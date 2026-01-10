@@ -680,6 +680,126 @@ export async function searchRecordingsByCredit(params: {
   }
 }
 
+async function* streamProducerRecordingsByWorks(params: {
+  artistId: string
+  limit: number
+  offset: number
+}): AsyncGenerator<any> {
+  const seenRecordingIds = new Set<string>()
+  let seenCount = 0
+  let yieldedCount = 0
+  const workBatchLimit = 100
+  const workRecordingPageLimit = 100
+  let rawOffset = 0
+  let rawTotal = Number.POSITIVE_INFINITY
+
+  while (rawOffset < rawTotal && yieldedCount < params.limit) {
+    const data = await fetchMusicBrainzJson<any>('/work', {
+      artist: params.artistId,
+      limit: workBatchLimit,
+      offset: rawOffset,
+      fmt: 'json',
+      inc: 'artist-rels',
+    })
+    const rawWorks = Array.isArray(data?.works) ? data.works : []
+    rawTotal = typeof data?.['work-count'] === 'number' ? data['work-count'] : rawWorks.length + rawOffset
+
+    for (const work of rawWorks) {
+      if (!work?.id) continue
+      let workOffset = 0
+      let totalForWork = Number.POSITIVE_INFINITY
+      let bestRecording: any | null = null
+      let bestNoAttributeRecording: any | null = null
+
+      while (workOffset < totalForWork) {
+        const workRecordings = await fetchRecordingsByWork({
+          workId: work.id,
+          limit: workRecordingPageLimit,
+          offset: workOffset,
+        })
+        totalForWork = workRecordings.count
+        for (const recording of workRecordings.recordings) {
+          if (recording?.id && (!bestRecording || recording.id.localeCompare(bestRecording.id) < 0)) {
+            bestRecording = recording
+          }
+          const attributes = Array.isArray(recording?.attributes) ? recording.attributes : []
+          if (attributes.length === 0 && recording?.id) {
+            if (!bestNoAttributeRecording || recording.id.localeCompare(bestNoAttributeRecording.id) < 0) {
+              bestNoAttributeRecording = recording
+            }
+          }
+        }
+        if (workRecordings.recordings.length === 0) {
+          break
+        }
+        workOffset += workRecordings.recordings.length
+      }
+
+      const representative = bestNoAttributeRecording || bestRecording
+      const recordingId = representative?.id
+      if (!recordingId || seenRecordingIds.has(recordingId)) {
+        continue
+      }
+      seenRecordingIds.add(recordingId)
+      seenCount += 1
+      if (seenCount <= params.offset) {
+        continue
+      }
+      yield representative
+      yieldedCount += 1
+      if (yieldedCount >= params.limit) {
+        break
+      }
+    }
+
+    if (rawWorks.length === 0) {
+      break
+    }
+    rawOffset += rawWorks.length
+  }
+}
+
+export async function* streamRecordingsByCredit(params: {
+  name: string
+  role: string
+  limit: number
+  offset: number
+}): AsyncGenerator<any> {
+  if (params.role === 'producer') {
+    const artistId = await findArtistIdByName(params.name)
+    if (!artistId) return
+    for await (const recording of streamProducerRecordingsByWorks({
+      artistId,
+      limit: params.limit,
+      offset: params.offset,
+    })) {
+      yield recording
+    }
+    return
+  }
+
+  let query = buildCreditQuery(params.name, params.role)
+
+  if (params.role === 'artist') {
+    const artistId = await findArtistIdByName(params.name)
+    if (artistId) {
+      query = `arid:${artistId}`
+    }
+  }
+
+  const data = await fetchMusicBrainzJson<any>('/recording', {
+    query,
+    limit: params.limit,
+    offset: params.offset,
+    fmt: 'json',
+    inc: 'artist-credits+isrcs',
+  })
+  const recordings = Array.isArray(data?.recordings) ? data.recordings : []
+  for (const recording of recordings) {
+    yield recording
+  }
+}
+
 export async function searchReleasesByCredit(params: {
   name: string
   role: string

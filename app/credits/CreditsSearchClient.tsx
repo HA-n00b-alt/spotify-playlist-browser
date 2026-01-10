@@ -19,14 +19,6 @@ interface SearchResult {
   previewUrl?: string | null
 }
 
-interface SearchResponse {
-  releaseCount: number
-  releaseOffset: number
-  releaseLimit: number
-  trackCount: number
-  results: SearchResult[]
-}
-
 const ROLE_OPTIONS: Array<{ value: RoleOption; label: string }> = [
   { value: 'producer', label: 'Producer' },
   { value: 'songwriter', label: 'Songwriter' },
@@ -39,9 +31,6 @@ export default function CreditsSearchClient() {
   const [name, setName] = useState('')
   const [role, setRole] = useState<RoleOption>('producer')
   const [results, setResults] = useState<SearchResult[]>([])
-  const [releaseCount, setReleaseCount] = useState(0)
-  const [releaseOffset, setReleaseOffset] = useState(0)
-  const [releaseLimit, setReleaseLimit] = useState(25)
   const [trackCount, setTrackCount] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -53,6 +42,9 @@ export default function CreditsSearchClient() {
   const [debugStatus, setDebugStatus] = useState<number | null>(null)
   const [playingId, setPlayingId] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const streamRef = useRef<EventSource | null>(null)
+  const requestIdRef = useRef(0)
+  const [lastBatchCount, setLastBatchCount] = useState(0)
 
   const limit = 25
   const historyKey = 'creditsSearchHistory'
@@ -77,6 +69,10 @@ export default function CreditsSearchClient() {
         audioRef.current.pause()
         audioRef.current.src = ''
         audioRef.current = null
+      }
+      if (streamRef.current) {
+        streamRef.current.close()
+        streamRef.current = null
       }
     }
   }, [])
@@ -109,34 +105,77 @@ export default function CreditsSearchClient() {
     }
   }
 
-  const fetchResults = async (nextOffset: number, append: boolean, searchName = name) => {
+  const fetchResultsStream = async (searchName: string, offset = 0, append = false) => {
+    const trimmed = searchName.trim()
+    if (!trimmed) {
+      setError('Enter a name to search')
+      return
+    }
+    if (streamRef.current) {
+      streamRef.current.close()
+      streamRef.current = null
+    }
+    const requestId = requestIdRef.current + 1
+    requestIdRef.current = requestId
     setLoading(true)
     setError(null)
-    setDebugResponse(null)
+    if (!append) {
+      setResults([])
+      setTrackCount(0)
+      setLastBatchCount(0)
+    }
     setDebugStatus(null)
-    try {
-      const url = `/api/musicbrainz/search?name=${encodeURIComponent(searchName)}&role=${encodeURIComponent(role)}&limit=${limit}&offset=${nextOffset}&debug=true`
-      setDebugRequest(`GET ${url}`)
-      const res = await fetch(url)
-      const responseText = await res.clone().text().catch(() => '')
-      setDebugStatus(res.status)
-      setDebugResponse(responseText)
-      if (!res.ok) {
-        const payload = await res.json().catch(() => ({}))
-        const message =
-          typeof payload?.error === 'string' ? payload.error : 'MusicBrainz search failed'
-        throw new Error(message)
+    const url = `/api/musicbrainz/search?name=${encodeURIComponent(trimmed)}&role=${encodeURIComponent(role)}&limit=${limit}&offset=${offset}&stream=true`
+    setDebugRequest(`GET ${url}`)
+    setDebugResponse('Streaming results...')
+
+    const source = new EventSource(url)
+    streamRef.current = source
+
+    source.onmessage = (event) => {
+      if (requestIdRef.current !== requestId) {
+        source.close()
+        return
       }
-      const data = (await res.json()) as SearchResponse
-      setReleaseCount(data.releaseCount || 0)
-      setReleaseOffset(data.releaseOffset || 0)
-      setReleaseLimit(data.releaseLimit || limit)
-      setTrackCount((prev) => (append ? prev + (data.trackCount || data.results.length) : (data.trackCount || data.results.length)))
-      setResults((prev) => (append ? [...prev, ...data.results] : data.results))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'MusicBrainz search failed')
-    } finally {
+      try {
+        const payload = JSON.parse(event.data)
+        if (payload.type === 'result' && payload.track) {
+          setResults((prev) => [...prev, payload.track])
+          setTrackCount((prev) => prev + 1)
+          return
+        }
+        if (payload.type === 'done') {
+          const streamedCount = typeof payload.count === 'number' ? payload.count : 0
+          setLastBatchCount(streamedCount)
+          setLoading(false)
+          setDebugResponse(`Streamed ${streamedCount} results.`)
+          source.close()
+          streamRef.current = null
+          return
+        }
+        if (payload.type === 'error') {
+          setError(payload.message || 'MusicBrainz search failed')
+          setLoading(false)
+          source.close()
+          streamRef.current = null
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'MusicBrainz search failed')
+        setLoading(false)
+        source.close()
+        streamRef.current = null
+      }
+    }
+
+    source.onerror = () => {
+      if (requestIdRef.current !== requestId) {
+        source.close()
+        return
+      }
+      setError('MusicBrainz search failed')
       setLoading(false)
+      source.close()
+      streamRef.current = null
     }
   }
 
@@ -159,12 +198,12 @@ export default function CreditsSearchClient() {
       return
     }
     saveHistory(trimmed)
-    await fetchResults(0, false, trimmed)
+    await fetchResultsStream(trimmed)
   }
 
   const handleLoadMore = async () => {
-    const nextOffset = releaseOffset + releaseLimit
-    await fetchResults(nextOffset, true)
+    const nextOffset = results.length
+    await fetchResultsStream(name, nextOffset, true)
   }
 
   const handleHistorySelect = async (value: string) => {
@@ -173,7 +212,7 @@ export default function CreditsSearchClient() {
     setName(trimmed)
     setShowHistory(false)
     saveHistory(trimmed)
-    await fetchResults(0, false, trimmed)
+    await fetchResultsStream(trimmed)
   }
 
   const handleNameFocus = () => {
@@ -189,7 +228,7 @@ export default function CreditsSearchClient() {
     }, 150)
   }
 
-  const hasMore = releaseOffset + releaseLimit < releaseCount
+  const hasMore = lastBatchCount === limit
 
   return (
     <div className="space-y-6">
@@ -300,9 +339,7 @@ export default function CreditsSearchClient() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
           <h2 className="text-lg font-semibold text-gray-900">Results</h2>
           <span className="text-sm text-gray-500">
-            {releaseCount > 0
-              ? `${trackCount} tracks across ${releaseCount} releases`
-              : 'No results yet'}
+            {trackCount > 0 ? `${trackCount} tracks` : 'No results yet'}
           </span>
         </div>
 

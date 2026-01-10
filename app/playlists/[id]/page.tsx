@@ -2771,7 +2771,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         href={playlistInfo.external_urls.spotify}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex w-fit items-center rounded-full bg-[#1ED760] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1BC457]"
+                        className="inline-flex w-fit items-center rounded-full bg-[#1DB954] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#179e49]"
                         onClick={(e) => {
                           e.preventDefault()
                           const spotifyUri = `spotify:playlist:${playlistInfo.id}`
@@ -2830,7 +2830,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
         <div className="mb-4 sm:mb-6 space-y-3 sm:space-y-4">
           <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-300">
               <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="11" cy="11" r="7" />
                 <path d="M20 20l-3.5-3.5" strokeLinecap="round" />
@@ -2842,13 +2842,13 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               ref={searchInputRef}
-              className="w-full rounded-lg bg-[#F6F7F9] py-3 pl-10 pr-11 text-sm text-gray-900 placeholder-gray-500 ring-1 ring-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+              className="w-full bg-transparent py-3 pl-10 pr-11 text-sm text-gray-900 placeholder-gray-500 border-b border-gray-300 focus:outline-none focus:border-gray-500"
             />
             <button
               type="button"
               onClick={() => setShowAdvanced((prev) => !prev)}
-              className={`absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:text-gray-800 ${
-                showAdvanced ? 'bg-gray-100 text-gray-800' : 'bg-white'
+              className={`absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-400 hover:text-gray-700 ${
+                showAdvanced ? 'bg-gray-100 text-gray-700' : 'bg-white'
               }`}
               aria-label={showAdvanced ? 'Hide advanced filters' : 'Show advanced filters'}
             >
@@ -2856,49 +2856,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10 6h10M4 6h2M10 12h10M4 12h2M10 18h10M4 18h2" />
               </svg>
             </button>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="text-xs sm:text-sm text-gray-600">Per page</label>
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                const value = e.target.value
-                setPageSize(value === 'all' ? 'all' : Number(value))
-              }}
-              className="px-2 py-1 border border-gray-300 rounded text-gray-900 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-            >
-              <option value="10">10</option>
-              <option value="20">20</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
-              <option value="all">All</option>
-            </select>
-            {pageSize !== 'all' && (
-              <div
-                className={`flex items-center gap-2 ml-auto text-xs sm:text-sm text-gray-600 ${
-                  totalPages <= 1 ? 'opacity-50 pointer-events-none' : ''
-                }`}
-              >
-                <button
-                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                  disabled={safePage <= 1}
-                  className="px-2 py-1 border border-gray-300 rounded disabled:text-gray-400 disabled:border-gray-200"
-                >
-                  Prev
-                </button>
-                <span>
-                  Page {safePage} of {totalPages}
-                </span>
-                <button
-                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                  disabled={safePage >= totalPages}
-                  className="px-2 py-1 border border-gray-300 rounded disabled:text-gray-400 disabled:border-gray-200"
-                >
-                  Next
-                </button>
-              </div>
-            )}
           </div>
 
           {showAdvanced && (
@@ -3660,9 +3617,52 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 Close
               </button>
             </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="text-xs sm:text-sm text-gray-600">Per page</label>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                const value = e.target.value
+                setPageSize(value === 'all' ? 'all' : Number(value))
+              }}
+              className="px-2 py-1 border border-gray-300 rounded text-gray-900 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="all">All</option>
+            </select>
+            {pageSize !== 'all' && (
+              <div
+                className={`flex items-center gap-2 ml-auto text-xs sm:text-sm text-gray-600 ${
+                  totalPages <= 1 ? 'opacity-50 pointer-events-none' : ''
+                }`}
+              >
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  disabled={safePage <= 1}
+                  className="px-2 py-1 border border-gray-300 rounded disabled:text-gray-400 disabled:border-gray-200"
+                >
+                  Prev
+                </button>
+                <span>
+                  Page {safePage} of {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                  disabled={safePage >= totalPages}
+                  className="px-2 py-1 border border-gray-300 rounded disabled:text-gray-400 disabled:border-gray-200"
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </div>
-        </div>
-      )}
 
       {/* BPM Details Modal */}
       {bpmModalData && selectedBpmTrack && (

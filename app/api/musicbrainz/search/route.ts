@@ -3,6 +3,7 @@ import {
   fetchCoverArtUrl,
   fetchReleasesByRecording,
   searchRecordingsByCredit,
+  streamRecordingsByCredit,
 } from '@/lib/musicbrainz/client'
 import { fetchDeezerTrackByIsrc } from '@/lib/deezer'
 
@@ -78,6 +79,8 @@ export async function GET(request: Request) {
   const offsetParam = Number(searchParams.get('offset') ?? 0)
   const debugParam = searchParams.get('debug')
   const debug = debugParam !== null && debugParam.toLowerCase() !== 'false'
+  const streamParam = searchParams.get('stream')
+  const stream = streamParam !== null && streamParam.toLowerCase() !== 'false'
   const debugSteps: Array<{ step: number; name: string; data?: Record<string, unknown> }> = []
 
   if (!name) {
@@ -86,6 +89,73 @@ export async function GET(request: Request) {
 
   const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 50) : 25
   const offset = Number.isFinite(offsetParam) ? Math.max(offsetParam, 0) : 0
+
+  if (stream) {
+    const encoder = new TextEncoder()
+    const streamBody = new ReadableStream({
+      start: async (controller) => {
+        const send = (payload: Record<string, unknown>) => {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`))
+        }
+
+        try {
+          let streamedCount = 0
+          for await (const recording of streamRecordingsByCredit({ name, role, limit, offset })) {
+            const embeddedReleases = Array.isArray(recording?.releases) ? recording.releases : []
+            const releases = embeddedReleases.length > 0
+              ? embeddedReleases
+              : (recording?.id ? await fetchReleasesByRecording(recording.id) : [])
+            const releaseSelection = selectReleaseInfo(releases)
+            const release = releaseSelection.release
+            const releaseId = release?.id || 'unknown'
+            const isrc = Array.isArray(recording?.isrcs) ? recording.isrcs[0] : undefined
+            const deezerTrack = isrc ? await fetchDeezerTrackByIsrc(isrc) : null
+            const coverArtUrl = deezerTrack?.coverArtUrl
+              ?? (release?.id ? await fetchCoverArtUrl(release.id) : null)
+            const year = typeof release?.date === 'string' ? release.date.split('-')[0] : ''
+            const artistCredit = Array.isArray(recording?.['artist-credit'])
+              ? recording['artist-credit']
+              : []
+            const artist = artistCredit
+              .map((credit: any) => credit?.name || credit?.artist?.name)
+              .filter(Boolean)
+              .join(', ')
+
+            const track: TrackResult = {
+              id: recording.id,
+              title: deezerTrack?.title || recording?.title || 'Unknown title',
+              artist: deezerTrack?.artist || artist || 'Unknown artist',
+              album: deezerTrack?.album || release?.title || 'Unknown release',
+              releaseType: releaseSelection.releaseType,
+              year,
+              length: typeof recording?.length === 'number' ? recording.length : 0,
+              isrc,
+              releaseId,
+              coverArtUrl,
+              previewUrl: deezerTrack?.previewUrl || null,
+            }
+
+            send({ type: 'result', track })
+            streamedCount += 1
+          }
+          send({ type: 'done', count: streamedCount })
+        } catch (error) {
+          send({ type: 'error', message: error instanceof Error ? error.message : 'Unknown error' })
+        } finally {
+          controller.close()
+        }
+      },
+    })
+
+    return new Response(streamBody, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+      },
+    })
+  }
+
   if (debug) {
     debugSteps.push({
       step: 1,
