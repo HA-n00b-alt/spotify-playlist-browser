@@ -123,12 +123,13 @@ export default function CreditsSearchClient() {
       setTrackCount(0)
       setLastBatchCount(0)
     }
-    setStatusMessage('Searching credits… results will appear as they are found.')
+    setStatusMessage(`Loading ${limit} results…`)
     const url = `/api/musicbrainz/search?name=${encodeURIComponent(trimmed)}&role=${encodeURIComponent(role)}&limit=${limit}&offset=${offset}&stream=true`
 
     const source = new EventSource(url)
     streamRef.current = source
 
+    let batchCount = 0
     source.onmessage = (event) => {
       if (requestIdRef.current !== requestId) {
         source.close()
@@ -139,13 +140,16 @@ export default function CreditsSearchClient() {
         if (payload.type === 'result' && payload.track) {
           setResults((prev) => [...prev, payload.track])
           setTrackCount((prev) => prev + 1)
+          batchCount += 1
+          const totalLoaded = offset + batchCount
+          setStatusMessage(`Loaded ${batchCount} of ${limit} (total ${totalLoaded})…`)
           return
         }
         if (payload.type === 'done') {
           const streamedCount = typeof payload.count === 'number' ? payload.count : 0
           setLastBatchCount(streamedCount)
           setLoading(false)
-          setStatusMessage(streamedCount > 0 ? null : 'No results found yet.')
+          setStatusMessage(streamedCount > 0 ? `Loaded ${streamedCount} results.` : 'No results found yet.')
           source.close()
           streamRef.current = null
           return

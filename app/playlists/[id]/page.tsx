@@ -3899,57 +3899,58 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         </div>
                       )}
                       
-                      {/* Manual BPM Override */}
-                      <div className={`p-3 rounded border-2 ${bpmModalData.bpmSelected === 'manual' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-semibold text-gray-700">Manual Override:</span>
-                          {bpmModalData.bpmSelected === 'manual' && bpmModalData.fullData?.bpmManual != null && (
-                            <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">Selected: {Math.round(bpmModalData.fullData.bpmManual)}</span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            value={manualBpm || bpmModalData.fullData?.bpmManual || ''}
-                            onChange={(e) => setManualBpm(e.target.value)}
-                            placeholder="Enter BPM"
-                            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
-                            min="1"
-                            max="300"
-                          />
-                          <button
-                            onClick={async () => {
-                              const bpmValue = parseFloat(manualBpm || String(bpmModalData.fullData?.bpmManual || ''))
-                              if (isNaN(bpmValue) || bpmValue < 1 || bpmValue > 300) {
-                                alert('Please enter a valid BPM between 1 and 300')
-                                return
-                              }
-                              setIsUpdatingSelection(true)
-                              try {
-                                const res = await fetch('/api/bpm/update-selection', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({
-                                    spotifyTrackId: bpmModalData.trackId,
-                                    bpmSelected: 'manual',
-                                    bpmManual: bpmValue,
-                                  }),
-                                })
-                                if (res.ok) {
-                                  await fetchBpmsBatch()
-                                  setManualBpm('')
+                      {isAdmin && (
+                        <div className={`p-3 rounded border-2 ${bpmModalData.bpmSelected === 'manual' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-semibold text-gray-700">Manual Override:</span>
+                            {bpmModalData.bpmSelected === 'manual' && bpmModalData.fullData?.bpmManual != null && (
+                              <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">Selected: {Math.round(bpmModalData.fullData.bpmManual)}</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              value={manualBpm || bpmModalData.fullData?.bpmManual || ''}
+                              onChange={(e) => setManualBpm(e.target.value)}
+                              placeholder="Enter BPM"
+                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                              min="1"
+                              max="300"
+                            />
+                            <button
+                              onClick={async () => {
+                                const bpmValue = parseFloat(manualBpm || String(bpmModalData.fullData?.bpmManual || ''))
+                                if (isNaN(bpmValue) || bpmValue < 1 || bpmValue > 300) {
+                                  alert('Please enter a valid BPM between 1 and 300')
+                                  return
                                 }
-                              } finally {
-                                setIsUpdatingSelection(false)
-                              }
-                            }}
-                            disabled={isUpdatingSelection || (!manualBpm && !bpmModalData.fullData?.bpmManual)}
-                            className="text-xs bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white px-3 py-1 rounded transition-colors"
-                          >
-                            {isUpdatingSelection ? 'Saving...' : 'Save Manual'}
-                          </button>
+                                setIsUpdatingSelection(true)
+                                try {
+                                  const res = await fetch('/api/bpm/update-selection', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      spotifyTrackId: bpmModalData.trackId,
+                                      bpmSelected: 'manual',
+                                      bpmManual: bpmValue,
+                                    }),
+                                  })
+                                  if (res.ok) {
+                                    await fetchBpmsBatch()
+                                    setManualBpm('')
+                                  }
+                                } finally {
+                                  setIsUpdatingSelection(false)
+                                }
+                              }}
+                              disabled={isUpdatingSelection || (!manualBpm && !bpmModalData.fullData?.bpmManual)}
+                              className="text-xs bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white px-3 py-1 rounded transition-colors"
+                            >
+                              {isUpdatingSelection ? 'Saving...' : 'Save Manual'}
+                            </button>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   </div>
 
@@ -4057,71 +4058,72 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         </div>
                       )}
                       
-                      {/* Manual Key Override */}
-                      <div className={`p-3 rounded border-2 ${bpmModalData.keySelected === 'manual' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-semibold text-gray-700">Manual Override:</span>
-                          {bpmModalData.keySelected === 'manual' && bpmModalData.fullData?.keyManual && (
-                            <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">
-                              Selected: {bpmModalData.fullData.keyManual} {bpmModalData.fullData.scaleManual}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <select
-                            value={manualKey || bpmModalData.fullData?.keyManual || ''}
-                            onChange={(e) => setManualKey(e.target.value)}
-                            className="px-2 py-1 border border-gray-300 rounded text-sm"
-                          >
-                            <option value="">Select Key</option>
-                            {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].map(k => (
-                              <option key={k} value={k}>{k}</option>
-                            ))}
-                          </select>
+                      {isAdmin && (
+                        <div className={`p-3 rounded border-2 ${bpmModalData.keySelected === 'manual' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-semibold text-gray-700">Manual Override:</span>
+                            {bpmModalData.keySelected === 'manual' && bpmModalData.fullData?.keyManual && (
+                              <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">
+                                Selected: {bpmModalData.fullData.keyManual} {bpmModalData.fullData.scaleManual}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={manualKey || bpmModalData.fullData?.keyManual || ''}
+                              onChange={(e) => setManualKey(e.target.value)}
+                              className="px-2 py-1 border border-gray-300 rounded text-sm"
+                            >
+                              <option value="">Select Key</option>
+                              {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].map(k => (
+                                <option key={k} value={k}>{k}</option>
+                              ))}
+                            </select>
                             <select
                               value={manualScale || bpmModalData.fullData?.scaleManual || 'major'}
-                            onChange={(e) => setManualScale(e.target.value)}
-                            className="px-2 py-1 border border-gray-300 rounded text-sm"
-                          >
-                            <option value="major">Major</option>
-                            <option value="minor">Minor</option>
-                          </select>
-                          <button
-                            onClick={async () => {
-                              const key = manualKey || bpmModalData.fullData?.keyManual
-                              const scale = manualScale || bpmModalData.fullData?.scaleManual || 'major'
-                              if (!key) {
-                                alert('Please select a key')
-                                return
-                              }
-                              setIsUpdatingSelection(true)
-                              try {
-                                const res = await fetch('/api/bpm/update-selection', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({
-                                    spotifyTrackId: bpmModalData.trackId,
-                                    keySelected: 'manual',
-                                    keyManual: key,
-                                    scaleManual: scale,
-                                  }),
-                                })
-                                if (res.ok) {
-                                  await fetchBpmsBatch()
-                                  setManualKey('')
-                                  setManualScale('major')
+                              onChange={(e) => setManualScale(e.target.value)}
+                              className="px-2 py-1 border border-gray-300 rounded text-sm"
+                            >
+                              <option value="major">Major</option>
+                              <option value="minor">Minor</option>
+                            </select>
+                            <button
+                              onClick={async () => {
+                                const key = manualKey || bpmModalData.fullData?.keyManual
+                                const scale = manualScale || bpmModalData.fullData?.scaleManual || 'major'
+                                if (!key) {
+                                  alert('Please select a key')
+                                  return
                                 }
-                              } finally {
-                                setIsUpdatingSelection(false)
-                              }
-                            }}
-                            disabled={isUpdatingSelection || (!manualKey && !bpmModalData.fullData?.keyManual)}
-                            className="text-xs bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white px-3 py-1 rounded transition-colors"
-                          >
-                            {isUpdatingSelection ? 'Saving...' : 'Save Manual'}
-                          </button>
+                                setIsUpdatingSelection(true)
+                                try {
+                                  const res = await fetch('/api/bpm/update-selection', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      spotifyTrackId: bpmModalData.trackId,
+                                      keySelected: 'manual',
+                                      keyManual: key,
+                                      scaleManual: scale,
+                                    }),
+                                  })
+                                  if (res.ok) {
+                                    await fetchBpmsBatch()
+                                    setManualKey('')
+                                    setManualScale('major')
+                                  }
+                                } finally {
+                                  setIsUpdatingSelection(false)
+                                }
+                              }}
+                              disabled={isUpdatingSelection || (!manualKey && !bpmModalData.fullData?.keyManual)}
+                              className="text-xs bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white px-3 py-1 rounded transition-colors"
+                            >
+                              {isUpdatingSelection ? 'Saving...' : 'Save Manual'}
+                            </button>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   </div>
 
