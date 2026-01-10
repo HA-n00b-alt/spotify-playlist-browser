@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getCurrentUserId, isSuperAdminUser } from '@/lib/analytics'
+import { getCurrentUserId, getCurrentUserProfile, isSuperAdminUser } from '@/lib/analytics'
 import { query } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
@@ -13,10 +13,12 @@ export async function GET() {
   const rows = await query<{
     id: number
     spotify_user_id: string
+    display_name: string | null
+    email: string | null
     status: string
     requested_at: string
   }>(
-    `SELECT id, spotify_user_id, status, requested_at
+    `SELECT id, spotify_user_id, display_name, email, status, requested_at
      FROM admin_access_requests
      WHERE status = 'pending'
      ORDER BY requested_at DESC`
@@ -26,7 +28,8 @@ export async function GET() {
 }
 
 export async function POST() {
-  const userId = await getCurrentUserId()
+  const profile = await getCurrentUserProfile()
+  const userId = profile?.id || (await getCurrentUserId())
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -48,8 +51,8 @@ export async function POST() {
   }
 
   await query(
-    'INSERT INTO admin_access_requests (spotify_user_id) VALUES ($1)',
-    [userId]
+    'INSERT INTO admin_access_requests (spotify_user_id, display_name, email) VALUES ($1, $2, $3)',
+    [userId, profile?.display_name || null, profile?.email || null]
   )
 
   return NextResponse.json({ status: 'requested' })
@@ -69,8 +72,14 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Missing requestId or action' }, { status: 400 })
   }
 
-  const rows = await query<{ id: number; spotify_user_id: string; status: string }>(
-    'SELECT id, spotify_user_id, status FROM admin_access_requests WHERE id = $1',
+  const rows = await query<{
+    id: number
+    spotify_user_id: string
+    display_name: string | null
+    email: string | null
+    status: string
+  }>(
+    'SELECT id, spotify_user_id, display_name, email, status FROM admin_access_requests WHERE id = $1',
     [requestId]
   )
   const requestRow = rows[0]
@@ -82,8 +91,14 @@ export async function PATCH(request: Request) {
 
   if (action === 'approve') {
     await query(
-      'INSERT INTO admin_users (spotify_user_id, active) VALUES ($1, TRUE) ON CONFLICT (spotify_user_id) DO UPDATE SET active = TRUE',
-      [requestRow.spotify_user_id]
+      `INSERT INTO admin_users (spotify_user_id, active, display_name, email)
+       VALUES ($1, TRUE, $2, $3)
+       ON CONFLICT (spotify_user_id)
+       DO UPDATE SET
+         active = TRUE,
+         display_name = COALESCE(EXCLUDED.display_name, admin_users.display_name),
+         email = COALESCE(EXCLUDED.email, admin_users.email)`,
+      [requestRow.spotify_user_id, requestRow.display_name, requestRow.email]
     )
     await query(
       `UPDATE admin_access_requests

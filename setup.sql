@@ -145,6 +145,8 @@ CREATE TABLE IF NOT EXISTS admin_users (
   spotify_user_id VARCHAR(255) PRIMARY KEY,
   active BOOLEAN NOT NULL DEFAULT TRUE,
   is_super_admin BOOLEAN NOT NULL DEFAULT FALSE,
+  display_name TEXT,
+  email TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -157,6 +159,8 @@ COMMENT ON TABLE admin_users IS 'Spotify user IDs allowed to access admin featur
 CREATE TABLE IF NOT EXISTS admin_access_requests (
   id SERIAL PRIMARY KEY,
   spotify_user_id VARCHAR(255) NOT NULL,
+  display_name TEXT,
+  email TEXT,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'denied')),
   requested_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   resolved_at TIMESTAMP WITH TIME ZONE,

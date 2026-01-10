@@ -102,6 +102,42 @@ export async function getCurrentUserId(): Promise<string | null> {
   }
 }
 
+export async function getCurrentUserProfile(): Promise<{
+  id: string
+  display_name: string | null
+  email: string | null
+} | null> {
+  try {
+    const { cookies } = await import('next/headers')
+    const cookieStore = await cookies()
+    const accessToken = cookieStore.get('access_token')?.value
+
+    if (!accessToken) {
+      return null
+    }
+
+    const response = await fetch('https://api.spotify.com/v1/me', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+
+    if (!response.ok) {
+      return null
+    }
+
+    const user = await response.json()
+    return {
+      id: user.id,
+      display_name: user.display_name || null,
+      email: user.email || null,
+    }
+  } catch (error) {
+    console.error('[Analytics] Error getting user profile:', error)
+    return null
+  }
+}
+
 /**
  * Check if the current user is the admin (delman-it)
  */
@@ -140,4 +176,3 @@ export async function isSuperAdminUser(): Promise<boolean> {
     return false
   }
 }
-

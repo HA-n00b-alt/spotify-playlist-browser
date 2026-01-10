@@ -2,6 +2,8 @@
 CREATE TABLE IF NOT EXISTS admin_access_requests (
   id SERIAL PRIMARY KEY,
   spotify_user_id VARCHAR(255) NOT NULL,
+  display_name TEXT,
+  email TEXT,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'denied')),
   requested_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   resolved_at TIMESTAMP WITH TIME ZONE,
