@@ -6,9 +6,9 @@ export default function DocumentationPage() {
   return (
     <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-transparent">
       <div className="max-w-7xl mx-auto flex-1 w-full">
-        <PageHeader subtitle="Documentation" breadcrumbs={[{ label: 'Documentation' }]} />
+        <PageHeader subtitle="" breadcrumbs={[{ label: 'Documentation' }]} />
         <div className="rounded-2xl bg-white p-6 shadow-[0_4px_24px_rgba(0,0,0,0.06)] border-t border-gray-100 sm:p-10">
-          <div className="max-w-2xl space-y-6 text-sm text-gray-600">
+          <div className="space-y-6 text-sm text-gray-600">
             <div className="space-y-2">
               <h2 className="text-lg font-semibold text-[#171923]">Overview</h2>
               <p>
@@ -45,7 +45,17 @@ export default function DocumentationPage() {
                 Request access at <a href="mailto:delman@delman.it" className="text-emerald-600 hover:text-emerald-700 underline">delman@delman.it</a>.
               </p>
               <p>
-                Spotify login is used only to fetch playlists. No playlist or user data is stored. BPM/key results are cached per track for performance.
+                Spotify login is used only to fetch playlists. BPM/key results are cached per track for performance.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-[#171923]">Processing & Credits</h3>
+              <p>
+                New playlists or newly added tracks may take a few minutes to fully populate while BPM/key calculations run in the background.
+              </p>
+              <p>
+                Credits are retrieved from MusicBrainz today, and may be incomplete or missing. Additional credit sources will be added in the future.
               </p>
             </div>
           </div>
