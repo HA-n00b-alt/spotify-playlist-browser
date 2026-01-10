@@ -2936,6 +2936,49 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               )}
             </div>
           )}
+
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="text-xs sm:text-sm text-gray-600">Per page</label>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                const value = e.target.value
+                setPageSize(value === 'all' ? 'all' : Number(value))
+              }}
+              className="px-2 py-1 border border-gray-300 rounded text-gray-900 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="all">All</option>
+            </select>
+            {pageSize !== 'all' && (
+              <div
+                className={`flex items-center gap-2 ml-auto text-xs sm:text-sm text-gray-600 ${
+                  totalPages <= 1 ? 'opacity-50 pointer-events-none' : ''
+                }`}
+              >
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  disabled={safePage <= 1}
+                  className="px-2 py-1 border border-gray-300 rounded disabled:text-gray-400 disabled:border-gray-200"
+                >
+                  Prev
+                </button>
+                <span>
+                  Page {safePage} of {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                  disabled={safePage >= totalPages}
+                  className="px-2 py-1 border border-gray-300 rounded disabled:text-gray-400 disabled:border-gray-200"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Cached Data Indicator moved to header */}
@@ -3620,49 +3663,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               </div>
             </div>
           )}
-
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="text-xs sm:text-sm text-gray-600">Per page</label>
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                const value = e.target.value
-                setPageSize(value === 'all' ? 'all' : Number(value))
-              }}
-              className="px-2 py-1 border border-gray-300 rounded text-gray-900 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-            >
-              <option value="10">10</option>
-              <option value="20">20</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
-              <option value="all">All</option>
-            </select>
-            {pageSize !== 'all' && (
-              <div
-                className={`flex items-center gap-2 ml-auto text-xs sm:text-sm text-gray-600 ${
-                  totalPages <= 1 ? 'opacity-50 pointer-events-none' : ''
-                }`}
-              >
-                <button
-                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                  disabled={safePage <= 1}
-                  className="px-2 py-1 border border-gray-300 rounded disabled:text-gray-400 disabled:border-gray-200"
-                >
-                  Prev
-                </button>
-                <span>
-                  Page {safePage} of {totalPages}
-                </span>
-                <button
-                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                  disabled={safePage >= totalPages}
-                  className="px-2 py-1 border border-gray-300 rounded disabled:text-gray-400 disabled:border-gray-200"
-                >
-                  Next
-                </button>
-              </div>
-            )}
-          </div>
 
       {/* BPM Details Modal */}
       {bpmModalData && selectedBpmTrack && (
