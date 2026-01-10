@@ -2,6 +2,7 @@ import { query } from './db'
 import { getTrack } from './spotify'
 import { GoogleAuth } from 'google-auth-library'
 import { isValidSpotifyTrackId } from './spotify-validation'
+import { logError } from './logger'
 
 type PreviewUrlEntry = {
   url: string
