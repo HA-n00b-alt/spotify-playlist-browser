@@ -26,6 +26,7 @@ export async function GET(request: Request) {
   const offsetParam = Number(searchParams.get('offset') ?? 0)
   const debugParam = searchParams.get('debug')
   const debug = debugParam !== null && debugParam.toLowerCase() !== 'false'
+  const debugSteps: Array<{ step: number; name: string; data?: Record<string, unknown> }> = []
 
   if (!name) {
     return NextResponse.json({ error: 'Missing name parameter' }, { status: 400 })
@@ -33,13 +34,46 @@ export async function GET(request: Request) {
 
   const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 50) : 25
   const offset = Number.isFinite(offsetParam) ? Math.max(offsetParam, 0) : 0
+  if (debug) {
+    debugSteps.push({
+      step: 1,
+      name: 'Parse request params',
+      data: { name, role, limit, offset },
+    })
+  }
   try {
+    if (debug) {
+      debugSteps.push({
+        step: 2,
+        name: 'Dispatch search',
+        data: { method: 'searchRecordingsByCredit' },
+      })
+    }
     const recordingSearch = await searchRecordingsByCredit({
       name,
       role,
       limit,
       offset,
     })
+    if (debug) {
+      debugSteps.push({
+        step: 3,
+        name: 'Resolve producer artist MBID (when role=producer)',
+        data: { artistId: (recordingSearch as any).debug?.artistId ?? null },
+      })
+      debugSteps.push({
+        step: 4,
+        name: 'Browse recordings for artist and collect producer relations',
+        data: {
+          batchLimit: (recordingSearch as any).debug?.batchLimit ?? null,
+          iterations: (recordingSearch as any).debug?.iterations ?? null,
+          rawOffset: (recordingSearch as any).debug?.rawOffset ?? null,
+          rawTotal: (recordingSearch as any).debug?.rawTotal ?? null,
+          scannedProducerCount: (recordingSearch as any).debug?.scannedProducerCount ?? null,
+          collectedCount: (recordingSearch as any).debug?.collectedCount ?? null,
+        },
+      })
+    }
 
     const results = await Promise.all(
       recordingSearch.recordings.map(async (recording) => {
@@ -70,6 +104,13 @@ export async function GET(request: Request) {
         } as TrackResult
       })
     )
+    if (debug) {
+      debugSteps.push({
+        step: 5,
+        name: 'Normalize recording results',
+        data: { resultsCount: results.length },
+      })
+    }
 
     const payload: Record<string, any> = {
       releaseCount: recordingSearch.count,
@@ -83,6 +124,12 @@ export async function GET(request: Request) {
         role,
         name,
         ...(recordingSearch as any).debug,
+        steps: [
+          ...debugSteps,
+          { step: 6, name: 'Attach response metadata', data: { releaseCount: recordingSearch.count, trackCount: results.length } },
+          { step: 7, name: 'Return JSON response', data: { ok: true } },
+          { step: 8, name: 'Client renders results', data: { note: 'Client receives and renders results.' } },
+        ],
       }
     }
     return NextResponse.json(payload)
