@@ -1,4 +1,5 @@
 import { MB_BASE_URL, USER_AGENT } from '../musicbrainz'
+import { fetchDeezerTrackByIsrc } from '../deezer'
 
 type MusicBrainzParams = Record<string, string | number | undefined>
 
@@ -686,6 +687,7 @@ async function* streamProducerRecordingsByWorks(params: {
   offset: number
 }): AsyncGenerator<any> {
   const seenRecordingIds = new Set<string>()
+  const deezerIsrcCache = new Map<string, boolean>()
   let seenCount = 0
   let yieldedCount = 0
   const workBatchLimit = 100
@@ -710,6 +712,7 @@ async function* streamProducerRecordingsByWorks(params: {
       let totalForWork = Number.POSITIVE_INFINITY
       let bestRecording: any | null = null
       let bestNoAttributeRecording: any | null = null
+      let bestNoAttributeHasDeezer = false
 
       while (workOffset < totalForWork) {
         const workRecordings = await fetchRecordingsByWork({
@@ -724,10 +727,26 @@ async function* streamProducerRecordingsByWorks(params: {
           }
           const attributes = Array.isArray(recording?.attributes) ? recording.attributes : []
           if (attributes.length === 0 && recording?.id) {
+            if (!bestNoAttributeHasDeezer) {
+              const isrc = Array.isArray(recording?.isrcs) ? recording.isrcs[0] : undefined
+              if (typeof isrc === 'string' && isrc.trim()) {
+                const cached = deezerIsrcCache.get(isrc)
+                const hasDeezer = cached ?? Boolean(await fetchDeezerTrackByIsrc(isrc))
+                deezerIsrcCache.set(isrc, hasDeezer)
+                if (hasDeezer) {
+                  bestNoAttributeRecording = recording
+                  bestNoAttributeHasDeezer = true
+                  continue
+                }
+              }
+            }
             if (!bestNoAttributeRecording || recording.id.localeCompare(bestNoAttributeRecording.id) < 0) {
               bestNoAttributeRecording = recording
             }
           }
+        }
+        if (bestNoAttributeHasDeezer) {
+          break
         }
         if (workRecordings.recordings.length === 0) {
           break
