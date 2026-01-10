@@ -20,7 +20,7 @@ export default async function Home({
       <div className="max-w-7xl mx-auto flex-1 w-full">
         <PageHeader subtitle="" breadcrumbs={[{ label: 'Home', href: '/' }]} />
 
-        <div className="rounded-2xl bg-white p-6 shadow-[0_4px_24px_rgba(0,0,0,0.06)] border-t border-gray-100 sm:p-10">
+        <div className="rounded-2xl bg-white p-6 border border-gray-200 sm:p-10">
           <div className="space-y-8">
             <div className="space-y-3">
               <h2 className="text-2xl sm:text-3xl font-semibold text-[#171923]">Choose your tool</h2>
@@ -39,15 +39,15 @@ export default async function Home({
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
               <Link
                 href={spotifyToolsHref}
-                className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-gradient-to-br from-white via-white to-emerald-50 p-6 sm:p-8 shadow-[0_4px_18px_rgba(0,0,0,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.08)]"
+                className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-br from-white via-white to-emerald-50/60 p-6 sm:p-8 transition hover:-translate-y-0.5"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-3">
                     <div className="inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-emerald-700">
                       Spotify Playlist Tools
                     </div>
-                    <h3 className="text-xl font-semibold text-[#171923]">Playlists, BPM, and key insights</h3>
-                    <p className="text-sm text-gray-600">
+                    <h3 className="text-2xl font-semibold text-[#171923]">Playlists, BPM, and key insights</h3>
+                    <p className="text-[13px] text-gray-500">
                       Search and sort your playlists, analyze tempo/key, and keep track-level insights tidy.
                     </p>
                   </div>
@@ -64,15 +64,15 @@ export default async function Home({
 
               <Link
                 href="/credits"
-                className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-gradient-to-br from-white via-white to-slate-50 p-6 sm:p-8 shadow-[0_4px_18px_rgba(0,0,0,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.08)]"
+                className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-br from-white via-white to-slate-50 p-6 sm:p-8 transition hover:-translate-y-0.5"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-3">
                     <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-600">
                       Credit Search Tools
                     </div>
-                    <h3 className="text-xl font-semibold text-[#171923]">Find producer, writer, and mixer credits</h3>
-                    <p className="text-sm text-gray-600">
+                    <h3 className="text-2xl font-semibold text-[#171923]">Find producer, writer, and mixer credits</h3>
+                    <p className="text-[13px] text-gray-500">
                       Search MusicBrainz credits without logging in and export data for deeper research.
                     </p>
                   </div>
@@ -86,7 +86,7 @@ export default async function Home({
               </Link>
             </div>
 
-            <div className="space-y-4 text-sm text-gray-600">
+            <div className="space-y-3 text-xs text-gray-400">
               <p>
                 Due to{' '}
                 <a
@@ -104,8 +104,8 @@ export default async function Home({
                 </a>
                 .
               </p>
-              <p className="text-sm text-gray-600">
-                <span className="font-semibold text-[#171923]">Privacy Notice:</span> Spotify login is used only to
+              <p className="text-xs text-gray-400">
+                <span className="font-semibold text-gray-500">Privacy Notice:</span> Spotify login is used only to
                 fetch your playlists. BPM/key results are cached per track to improve performance.
               </p>
             </div>

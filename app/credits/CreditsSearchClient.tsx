@@ -53,6 +53,9 @@ export default function CreditsSearchClient() {
   const [pageSize, setPageSize] = useState<number>(25)
   const [currentPage, setCurrentPage] = useState(1)
   const totalWorksRef = useRef<number | null>(null)
+  const autoLoadRef = useRef(true)
+  const [sortField, setSortField] = useState<'title' | 'artist' | 'album' | 'duration' | 'year' | 'isrc' | null>(null)
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
   const limit = 25
   const historyKey = 'creditsSearchHistory'
@@ -139,6 +142,7 @@ export default function CreditsSearchClient() {
       setTotalWorks(null)
       totalWorksRef.current = null
       setCurrentPage(1)
+      autoLoadRef.current = true
     }
     setStatusMessage(`Loading ${limit} results…`)
     const url = `/api/musicbrainz/search?name=${encodeURIComponent(trimmed)}&role=${encodeURIComponent(role)}&limit=${limit}&offset=${offset}&stream=true`
@@ -185,6 +189,13 @@ export default function CreditsSearchClient() {
           }
           source.close()
           streamRef.current = null
+          if (autoLoadRef.current && streamedCount === limit) {
+            window.setTimeout(() => {
+              if (requestIdRef.current === requestId) {
+                fetchResultsStream(trimmed, offset + streamedCount, true)
+              }
+            }, 0)
+          }
           return
         }
         if (payload.type === 'error') {
@@ -270,7 +281,66 @@ export default function CreditsSearchClient() {
   const safePage = Math.min(currentPage, totalPages)
   const startIndex = (safePage - 1) * pageSize
   const endIndex = startIndex + pageSize
-  const visibleResults = results.slice(startIndex, endIndex)
+  const sortedResults = [...results].sort((a, b) => {
+    if (!sortField) return 0
+    const aValue = (() => {
+      switch (sortField) {
+        case 'title':
+          return a.title.toLowerCase()
+        case 'artist':
+          return a.artist.toLowerCase()
+        case 'album':
+          return a.album.toLowerCase()
+        case 'duration':
+          return a.length ?? 0
+        case 'year':
+          return a.year ? Number(a.year) : 0
+        case 'isrc':
+          return a.isrc ?? ''
+        default:
+          return ''
+      }
+    })()
+    const bValue = (() => {
+      switch (sortField) {
+        case 'title':
+          return b.title.toLowerCase()
+        case 'artist':
+          return b.artist.toLowerCase()
+        case 'album':
+          return b.album.toLowerCase()
+        case 'duration':
+          return b.length ?? 0
+        case 'year':
+          return b.year ? Number(b.year) : 0
+        case 'isrc':
+          return b.isrc ?? ''
+        default:
+          return ''
+      }
+    })()
+    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1
+    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1
+    return 0
+  })
+  const visibleResults = sortedResults.slice(startIndex, endIndex)
+
+  const handleSort = (field: typeof sortField) => {
+    if (!field) return
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+      return
+    }
+    setSortField(field)
+    setSortDirection('asc')
+  }
+
+  const SortIcon = ({ field }: { field: typeof sortField }) => {
+    if (sortField !== field) {
+      return <span className="ml-1 text-gray-300 text-[10px]">↕</span>
+    }
+    return <span className="ml-1 text-gray-600 text-[10px]">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+  }
 
   return (
     <div className="space-y-6">
@@ -322,7 +392,7 @@ export default function CreditsSearchClient() {
             <select
               value={role}
               onChange={(event) => setRole(event.target.value as RoleOption)}
-              className="w-full px-3 py-2 border border-gray-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="w-full px-3 py-2 border-b border-gray-300 bg-transparent text-sm text-gray-900 focus:outline-none focus:border-gray-500"
             >
               {ROLE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -334,7 +404,7 @@ export default function CreditsSearchClient() {
           <button
             type="submit"
             disabled={loading}
-            className="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-5 rounded transition-colors disabled:opacity-60"
+            className="inline-flex items-center justify-center rounded-full border border-emerald-500 px-5 py-2 text-sm font-semibold text-emerald-600 transition hover:border-emerald-600 hover:text-emerald-700 disabled:opacity-60"
           >
             {loading ? 'Searching...' : 'Search'}
           </button>
@@ -420,17 +490,17 @@ export default function CreditsSearchClient() {
                   onClick={() => handleTogglePreview(track)}
                 >
                   <div className="flex gap-3">
-                    {track.coverArtUrl ? (
-                      <Image
-                        src={track.coverArtUrl}
-                        alt={track.album}
-                        width={56}
-                        height={56}
-                        className="w-14 h-14 rounded object-cover"
-                      />
-                    ) : (
-                      <div className="w-14 h-14 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-400">
-                        No image
+                      {track.coverArtUrl ? (
+                        <Image
+                          src={track.coverArtUrl}
+                          alt={track.album}
+                          width={56}
+                          height={56}
+                          className="w-14 h-14 rounded-md object-cover"
+                        />
+                      ) : (
+                        <div className="w-14 h-14 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-400">
+                          No image
                       </div>
                     )}
                     <div className="min-w-0">
@@ -466,7 +536,7 @@ export default function CreditsSearchClient() {
             <div className="hidden sm:block overflow-hidden rounded-2xl bg-white shadow-[0_4px_24px_rgba(0,0,0,0.06)] border-t border-gray-100">
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-white/70 border-b border-gray-100">
+                  <thead className="bg-white/70">
                     <tr>
                       <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] w-12">
                         #
@@ -474,23 +544,59 @@ export default function CreditsSearchClient() {
                       <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] w-12 lg:w-16">
                         Cover
                       </th>
-                      <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0]">
-                        Track
+                      <th
+                        className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none"
+                        onClick={() => handleSort('title')}
+                      >
+                        <div className="flex items-center">
+                          Track
+                          <SortIcon field="title" />
+                        </div>
                       </th>
-                      <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden md:table-cell max-w-[140px]">
-                        Artist
+                      <th
+                        className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden md:table-cell max-w-[140px] cursor-pointer hover:text-gray-700 select-none"
+                        onClick={() => handleSort('artist')}
+                      >
+                        <div className="flex items-center">
+                          Artist
+                          <SortIcon field="artist" />
+                        </div>
                       </th>
-                      <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden lg:table-cell max-w-[160px]">
-                        Release
+                      <th
+                        className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden lg:table-cell max-w-[160px] cursor-pointer hover:text-gray-700 select-none"
+                        onClick={() => handleSort('album')}
+                      >
+                        <div className="flex items-center">
+                          Release
+                          <SortIcon field="album" />
+                        </div>
                       </th>
-                      <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden md:table-cell">
-                        Duration
+                      <th
+                        className="px-3 lg:px-4 py-2 lg:py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden md:table-cell cursor-pointer hover:text-gray-700 select-none"
+                        onClick={() => handleSort('duration')}
+                      >
+                        <div className="flex items-center justify-end">
+                          Duration
+                          <SortIcon field="duration" />
+                        </div>
                       </th>
-                      <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0]">
-                        Year
+                      <th
+                        className="px-3 lg:px-4 py-2 lg:py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none"
+                        onClick={() => handleSort('year')}
+                      >
+                        <div className="flex items-center justify-end">
+                          Year
+                          <SortIcon field="year" />
+                        </div>
                       </th>
-                      <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden lg:table-cell">
-                        ISRC
+                      <th
+                        className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden lg:table-cell cursor-pointer hover:text-gray-700 select-none"
+                        onClick={() => handleSort('isrc')}
+                      >
+                        <div className="flex items-center">
+                          ISRC
+                          <SortIcon field="isrc" />
+                        </div>
                       </th>
                     </tr>
                   </thead>
@@ -511,10 +617,10 @@ export default function CreditsSearchClient() {
                               alt={track.album}
                               width={40}
                               height={40}
-                              className="w-8 h-8 sm:w-10 sm:h-10 object-cover rounded"
+                              className="w-8 h-8 sm:w-10 sm:h-10 object-cover rounded-md"
                             />
                           ) : (
-                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 rounded flex items-center justify-center">
+                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 rounded-md flex items-center justify-center">
                               <span className="text-gray-400 text-xs">No image</span>
                             </div>
                           )}
@@ -536,10 +642,10 @@ export default function CreditsSearchClient() {
                         <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-700 text-xs sm:text-sm hidden lg:table-cell max-w-[160px] truncate">
                           {track.album}
                         </td>
-                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden md:table-cell">
+                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-right text-gray-600 text-xs sm:text-sm hidden md:table-cell">
                           {track.length ? formatDuration(track.length) : '-'}
                         </td>
-                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm">
+                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-right text-gray-600 text-xs sm:text-sm">
                           {track.year || '-'}
                         </td>
                         <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden lg:table-cell">
