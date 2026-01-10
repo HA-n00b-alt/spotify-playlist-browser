@@ -256,6 +256,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       .then((data) => {
         if (data?.authenticated && data?.user) {
           setLoggedInUserName(data.user.display_name || data.user.id || null)
+          return
+        }
+        if (!data?.authenticated) {
+          window.location.href = '/'
         }
       })
       .catch(() => {})
@@ -303,7 +307,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       queryClient.clear()
       // Redirect to login
       setTimeout(() => {
-        window.location.href = '/api/auth/login'
+        window.location.href = '/'
       }, 1000)
     }
   }, [error, queryClient])

@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { cookies } from 'next/headers'
 import PageHeader from './components/PageHeader'
 
 export default async function Home({
@@ -8,34 +9,24 @@ export default async function Home({
 }) {
   const params = await searchParams
   const error = params?.error
+  const cookieStore = await cookies()
+  const isAuthenticated = Boolean(
+    cookieStore.get('access_token')?.value || cookieStore.get('refresh_token')?.value
+  )
+  const spotifyToolsHref = isAuthenticated ? '/playlists' : '/api/auth/login'
 
   return (
     <main className="flex min-h-screen flex-col p-4 sm:p-8 bg-transparent">
       <div className="max-w-7xl mx-auto flex-1 w-full">
-        <PageHeader subtitle="Welcome" breadcrumbs={[{ label: 'Home' }]} />
+        <PageHeader subtitle="" breadcrumbs={[{ label: 'Home' }]} />
 
         <div className="rounded-2xl bg-white p-6 shadow-[0_4px_24px_rgba(0,0,0,0.06)] border-t border-gray-100 sm:p-10">
-          <div className="max-w-2xl space-y-6 text-sm text-gray-600">
-            <div className="space-y-2">
-              <h2 className="text-lg font-semibold text-[#171923]">Spotify Playlist Tools</h2>
-              <p>
-                Browse and search your playlists, see BPM/key insights, and pull song credits in a single place.
-              </p>
-              <p>
-                Due to{' '}
-                <a
-                  href="https://developer.spotify.com/blog/2025-04-15-updating-the-criteria-for-web-api-extended-access"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-emerald-600 hover:text-emerald-700 underline"
-                >
-                  new policies
-                </a>{' '}
-                from Spotify, this app is open only to a few authorized users. If you are interested in using it, email{' '}
-                <a href="mailto:delman@delman.it" className="text-emerald-600 hover:text-emerald-700 underline">
-                  delman@delman.it
-                </a>
-                .
+          <div className="space-y-8">
+            <div className="space-y-3">
+              <h2 className="text-2xl sm:text-3xl font-semibold text-[#171923]">Choose your workspace</h2>
+              <p className="text-sm sm:text-base text-gray-600">
+                Spotify Playlist Tools focuses on BPM/key insights inside your playlists. Credit Search Tools lets
+                you find production credits without Spotify authentication.
               </p>
             </div>
 
@@ -49,23 +40,91 @@ export default async function Home({
               </div>
             )}
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
               <Link
-                href="/api/auth/login"
-                className="inline-flex items-center rounded-full bg-[#18B45A] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#149A4C]"
+                href={spotifyToolsHref}
+                className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-gradient-to-br from-white via-white to-emerald-50 p-6 sm:p-8 shadow-[0_4px_18px_rgba(0,0,0,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.08)]"
               >
-                Login with Spotify
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-3">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-emerald-700">
+                      Spotify Playlist Tools
+                    </div>
+                    {!isAuthenticated && (
+                      <div className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-700">
+                        Login required
+                      </div>
+                    )}
+                    <h3 className="text-xl font-semibold text-[#171923]">Playlists, BPM, and key insights</h3>
+                    <p className="text-sm text-gray-600">
+                      Search and sort your playlists, analyze tempo/key, and keep track-level insights tidy.
+                    </p>
+                  </div>
+                  <div className="hidden sm:flex h-11 w-11 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
+                      <path d="M12 3a9 9 0 1 0 9 9 9 9 0 0 0-9-9Zm4.2 13.2a.9.9 0 0 1-1.24.34 7.5 7.5 0 0 0-6.12-1.2.9.9 0 0 1-.42-1.75 9.3 9.3 0 0 1 7.6 1.48.9.9 0 0 1 .34 1.13Zm1.56-3.52a1 1 0 0 1-1.4.38 9.7 9.7 0 0 0-8.06-1.43 1 1 0 1 1-.5-1.94 11.7 11.7 0 0 1 9.67 1.68 1 1 0 0 1 .3 1.31Zm.24-3.7a1.2 1.2 0 0 1-1.62.46 12.1 12.1 0 0 0-10.02-1.51 1.2 1.2 0 0 1-.7-2.29 14.5 14.5 0 0 1 12 1.82 1.2 1.2 0 0 1 .34 1.52Z" />
+                    </svg>
+                  </div>
+                </div>
+                <div className="mt-6 flex items-center gap-3 text-xs text-gray-500">
+                  <span className="rounded-full bg-gray-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]">
+                    {isAuthenticated ? 'Authenticated' : 'Spotify login required'}
+                  </span>
+                  <span className="text-[11px] text-gray-400">Click to {isAuthenticated ? 'open playlists' : 'authenticate'}</span>
+                </div>
               </Link>
-              <span className="text-xs text-gray-500">
-                You&apos;ll be redirected to Spotify to authorize this application.
-              </span>
+
+              <Link
+                href="/credits"
+                className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-gradient-to-br from-white via-white to-slate-50 p-6 sm:p-8 shadow-[0_4px_18px_rgba(0,0,0,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.08)]"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-3">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-600">
+                      Credit Search Tools
+                    </div>
+                    <h3 className="text-xl font-semibold text-[#171923]">Find producer, writer, and mixer credits</h3>
+                    <p className="text-sm text-gray-600">
+                      Search MusicBrainz credits without logging in and export data for deeper research.
+                    </p>
+                  </div>
+                  <div className="hidden sm:flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-600">
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
+                      <path d="M11 3a8 8 0 1 0 4.9 14.3l4.4 4.4 1.4-1.4-4.4-4.4A8 8 0 0 0 11 3Zm0 2a6 6 0 1 1 0 12 6 6 0 0 1 0-12Z" />
+                    </svg>
+                  </div>
+                </div>
+                <div className="mt-6 flex items-center gap-3 text-xs text-gray-500">
+                  <span className="rounded-full bg-gray-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]">
+                    Available now
+                  </span>
+                  <span className="text-[11px] text-gray-400">Open credit search</span>
+                </div>
+              </Link>
             </div>
 
-            <div className="rounded-lg border border-gray-100 bg-[#F5F5F7] px-4 py-3 text-xs text-gray-600">
-              <span className="font-semibold text-[#171923]">Privacy Notice:</span> Your Spotify login is used only to
-              temporarily fetch your playlists. No data about your playlists or the association between songs and
-              playlists is stored. Only BPM information for individual songs is cached (not linked to playlists or
-              users) to improve performance.
+            <div className="space-y-4 text-sm text-gray-600">
+              <p>
+                Due to{' '}
+                <a
+                  href="https://developer.spotify.com/blog/2025-04-15-updating-the-criteria-for-web-api-extended-access"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-emerald-600 hover:text-emerald-700 underline"
+                >
+                  new policies
+                </a>{' '}
+                from Spotify, Spotify Playlist Tools is open only to a few authorized users. If you are interested in
+                using it, email{' '}
+                <a href="mailto:delman@delman.it" className="text-emerald-600 hover:text-emerald-700 underline">
+                  delman@delman.it
+                </a>
+                .
+              </p>
+              <div className="rounded-lg border border-gray-100 bg-[#F5F5F7] px-4 py-3 text-xs text-gray-600">
+                <span className="font-semibold text-[#171923]">Privacy Notice:</span> Spotify login is used only to
+                fetch your playlists. BPM/key results are cached per track to improve performance.
+              </div>
             </div>
           </div>
         </div>

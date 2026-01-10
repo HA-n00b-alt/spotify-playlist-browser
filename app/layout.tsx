@@ -5,6 +5,7 @@ import './globals.css'
 import PageViewTracker from './components/PageViewTracker'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { QueryProvider } from './providers/QueryProvider'
+import CookieBanner from './components/CookieBanner'
 
 export const metadata: Metadata = {
   title: 'Spotify Playlist Browser',
@@ -52,6 +53,7 @@ export default function RootLayout({
           <QueryProvider>
             <PageViewTracker />
             {children}
+            <CookieBanner />
             <SpeedInsights />
           </QueryProvider>
         </ErrorBoundary>
