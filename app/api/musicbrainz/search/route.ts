@@ -225,7 +225,11 @@ export async function GET(request: Request) {
         const releaseSelection = selectReleaseInfo(releases)
         const release = releaseSelection.release
         const releaseId = release?.id || 'unknown'
-        const isrc = Array.isArray(recording?.isrcs) ? recording.isrcs[0] : undefined
+        const isrcDetails = Array.isArray((recording as any)?.isrcDetails)
+          ? (recording as any).isrcDetails
+          : undefined
+        const selectedIsrc = isrcDetails?.find((entry: any) => entry?.selected)?.value
+        const isrc = selectedIsrc ?? (Array.isArray(recording?.isrcs) ? recording.isrcs[0] : undefined)
         const deezerTrack = isrc ? await fetchDeezerTrackByIsrc(isrc) : null
         const coverArtUrl = deezerTrack?.summary.coverArtUrl
           ?? (release?.id ? await fetchCoverArtUrl(release.id) : null)
