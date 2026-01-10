@@ -47,9 +47,7 @@ export default function UserMenu() {
     }
   }, [isOpen])
 
-  if (!user) {
-    return null
-  }
+  const isAuthenticated = Boolean(user)
 
   const getInitial = (name: string): string => {
     if (!name) return '?'
@@ -66,6 +64,10 @@ export default function UserMenu() {
     form.submit()
   }
 
+  const handleLogin = () => {
+    router.push('/api/auth/login')
+  }
+
   const handleOpenSpotify = () => {
     window.open('https://open.spotify.com', '_blank')
   }
@@ -78,32 +80,43 @@ export default function UserMenu() {
     <div className="relative" ref={menuRef}>
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => (isAuthenticated ? setIsOpen(!isOpen) : handleLogin())}
         onMouseEnter={() => !isOpen && setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
-        className="w-8 h-8 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white font-semibold text-sm hover:scale-105 transition-transform focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 shadow-sm"
-        aria-label={user.display_name || 'User menu'}
+        className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm shadow-sm transition-transform focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+          isAuthenticated
+            ? 'bg-gradient-to-br from-green-400 to-green-600 text-white hover:scale-105 focus:ring-green-500'
+            : 'bg-white text-gray-500 border border-gray-200 hover:scale-105 focus:ring-gray-300'
+        }`}
+        aria-label={isAuthenticated ? (user?.display_name || 'User menu') : 'Login with Spotify'}
         aria-expanded={isOpen}
       >
-        {getInitial(user.display_name || user.id)}
+        {isAuthenticated ? (
+          getInitial(user?.display_name || user?.id || '')
+        ) : (
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M8 11V8a4 4 0 1 1 8 0v3" strokeLinecap="round" strokeLinejoin="round" />
+            <rect x="5" y="11" width="14" height="9" rx="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
       </button>
 
       {/* Tooltip on hover (only when menu is closed) */}
       {showTooltip && !isOpen && (
         <div className="absolute right-0 top-full mt-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded whitespace-nowrap z-50 pointer-events-none animate-fade-in">
-          {user.display_name || user.id}
+          {isAuthenticated ? (user?.display_name || user?.id) : 'Login with Spotify'}
           <div className="absolute -top-1 right-3 w-2 h-2 bg-gray-900 rotate-45"></div>
         </div>
       )}
 
       {/* Dropdown menu */}
-      {isOpen && (
+      {isOpen && isAuthenticated && (
         <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-lg shadow-2xl border border-gray-200 py-1 z-50 animate-fade-in">
           <div className="px-4 py-3 border-b border-gray-200">
             <p className="text-sm font-semibold text-gray-900 truncate">
-              {user.display_name || user.id}
+              {user?.display_name || user?.id}
             </p>
-            {user.email && (
+            {user?.email && (
               <p className="text-xs text-gray-500 truncate mt-0.5">{user.email}</p>
             )}
           </div>
@@ -134,4 +147,3 @@ export default function UserMenu() {
     </div>
   )
 }
-

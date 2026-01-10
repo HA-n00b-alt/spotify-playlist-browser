@@ -46,11 +46,6 @@ export default async function Home({
                     <div className="inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-emerald-700">
                       Spotify Playlist Tools
                     </div>
-                    {!isAuthenticated && (
-                      <div className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-700">
-                        Login required
-                      </div>
-                    )}
                     <h3 className="text-xl font-semibold text-[#171923]">Playlists, BPM, and key insights</h3>
                     <p className="text-sm text-gray-600">
                       Search and sort your playlists, analyze tempo/key, and keep track-level insights tidy.

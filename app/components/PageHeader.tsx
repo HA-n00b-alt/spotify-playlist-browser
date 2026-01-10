@@ -173,6 +173,9 @@ export default function PageHeader({
   const displaySubtitle = subtitle.includes('[user]') && userName
     ? subtitle.replace('[user]', userName)
     : subtitle
+  const showBackLink = !center && breadcrumbs && breadcrumbs.length > 1
+  const backHref = showBackLink ? breadcrumbs[breadcrumbs.length - 2]?.href || '/' : '/'
+  const playlistsHref = isAuthenticated ? '/playlists' : '/api/auth/login'
 
   return (
     <div className="mb-4 sm:mb-6">
@@ -213,7 +216,7 @@ export default function PageHeader({
                         Home
                       </Link>
                       <Link
-                        href="/playlists"
+                        href={playlistsHref}
                         className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
                       >
                         Playlists
@@ -324,9 +327,21 @@ export default function PageHeader({
             </div>
           </header>
           <div className="h-16" />
-          {displaySubtitle ? (
+          {(showBackLink || displaySubtitle) ? (
             <div className="mx-auto w-full max-w-7xl px-4 sm:px-8 pt-2">
-              <p className="text-[11px] text-gray-400">{displaySubtitle}</p>
+              {showBackLink ? (
+                <Link
+                  href={backHref}
+                  className="inline-flex items-center text-xs font-semibold text-gray-500 hover:text-gray-700"
+                >
+                  ← Back
+                </Link>
+              ) : null}
+              {displaySubtitle ? (
+                <p className={`text-[11px] text-gray-400${showBackLink ? ' mt-1' : ''}`}>
+                  {displaySubtitle}
+                </p>
+              ) : null}
             </div>
           ) : null}
         </div>
