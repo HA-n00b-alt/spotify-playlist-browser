@@ -14,7 +14,13 @@ interface SearchResult {
   year: string
   length: number
   isrc?: string
-  isrcDetails?: Array<{ value: string; hasDeezer: boolean; selected?: boolean; reason?: string }>
+  isrcDetails?: Array<{
+    value: string
+    hasDeezer: boolean
+    selected?: boolean
+    reason?: string
+    deezerResponse?: unknown
+  }>
   releaseId: string
   coverArtUrl?: string | null
   previewUrl?: string | null
@@ -387,12 +393,32 @@ export default function CreditsSearchClient() {
                         {track.length ? formatDuration(track.length) : '-'} {track.isrc ? `• ${track.isrc}` : ''}
                       </div>
                       {track.isrcDetails && track.isrcDetails.length > 0 && (
-                        <div className="mt-1 text-[11px] text-gray-400">
-                          {track.isrcDetails.map((entry) => {
-                            const label = entry.selected ? `${entry.value}*` : entry.value
-                            const suffix = entry.hasDeezer ? ' (D)' : ''
-                            return `${label}${suffix}`
-                          }).join(', ')}
+                        <div className="mt-1 space-y-2 text-[11px] text-gray-400">
+                          {track.isrcDetails.map((entry) => (
+                            <div key={entry.value} className="space-y-1">
+                              <div className="flex flex-wrap items-center gap-1">
+                                <span className={entry.selected ? 'text-gray-900' : ''}>{entry.value}</span>
+                                {entry.hasDeezer ? (
+                                  <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-700">
+                                    Deezer
+                                  </span>
+                                ) : null}
+                                {entry.selected ? (
+                                  <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-700">
+                                    Selected
+                                  </span>
+                                ) : null}
+                              </div>
+                              {entry.deezerResponse ? (
+                                <pre
+                                  className="max-h-24 overflow-auto rounded border border-gray-200 bg-white p-2 text-[10px] text-gray-500"
+                                  title="Deezer response"
+                                >
+                                  {JSON.stringify(entry.deezerResponse, null, 2)}
+                                </pre>
+                              ) : null}
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -503,23 +529,32 @@ export default function CreditsSearchClient() {
                         </td>
                         <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden lg:table-cell">
                           {track.isrcDetails && track.isrcDetails.length > 0 ? (
-                            <div className="space-y-1">
+                            <div className="space-y-2">
                               {track.isrcDetails.map((entry) => (
-                                <div
-                                  key={entry.value}
-                                  className={`inline-flex items-center gap-1 ${entry.selected ? 'text-gray-900' : ''}`}
-                                  title={entry.reason}
-                                >
-                                  <span>{entry.value}</span>
-                                  {entry.hasDeezer ? (
-                                    <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-700">
-                                      Deezer
-                                    </span>
-                                  ) : null}
-                                  {entry.selected ? (
-                                    <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-700">
-                                      Selected
-                                    </span>
+                                <div key={entry.value} className="space-y-1">
+                                  <div
+                                    className={`flex flex-wrap items-center gap-1 ${entry.selected ? 'text-gray-900' : ''}`}
+                                    title={entry.reason}
+                                  >
+                                    <span>{entry.value}</span>
+                                    {entry.hasDeezer ? (
+                                      <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-700">
+                                        Deezer
+                                      </span>
+                                    ) : null}
+                                    {entry.selected ? (
+                                      <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-700">
+                                        Selected
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  {entry.deezerResponse ? (
+                                    <pre
+                                      className="max-h-24 overflow-auto rounded border border-gray-200 bg-white p-2 text-[10px] text-gray-500"
+                                      title="Deezer response"
+                                    >
+                                      {JSON.stringify(entry.deezerResponse, null, 2)}
+                                    </pre>
                                   ) : null}
                                 </div>
                               ))}

@@ -18,7 +18,13 @@ interface TrackResult {
   year: string
   length: number
   isrc?: string
-  isrcDetails?: Array<{ value: string; hasDeezer: boolean; selected?: boolean; reason?: string }>
+  isrcDetails?: Array<{
+    value: string
+    hasDeezer: boolean
+    selected?: boolean
+    reason?: string
+    deezerResponse?: unknown
+  }>
   releaseId: string
   coverArtUrl?: string | null
   previewUrl?: string | null
@@ -115,7 +121,7 @@ export async function GET(request: Request) {
             const selectedIsrc = isrcDetails?.find((entry: any) => entry?.selected)?.value
             const isrc = selectedIsrc ?? (Array.isArray(recording?.isrcs) ? recording.isrcs[0] : undefined)
             const deezerTrack = isrc ? await fetchDeezerTrackByIsrc(isrc) : null
-            const coverArtUrl = deezerTrack?.coverArtUrl
+            const coverArtUrl = deezerTrack?.summary.coverArtUrl
               ?? (release?.id ? await fetchCoverArtUrl(release.id) : null)
             const year = typeof release?.date === 'string' ? release.date.split('-')[0] : ''
             const artistCredit = Array.isArray(recording?.['artist-credit'])
@@ -128,9 +134,9 @@ export async function GET(request: Request) {
 
             const track: TrackResult = {
               id: recording.id,
-              title: deezerTrack?.title || recording?.title || 'Unknown title',
-              artist: deezerTrack?.artist || artist || 'Unknown artist',
-              album: deezerTrack?.album || release?.title || 'Unknown release',
+              title: deezerTrack?.summary.title || recording?.title || 'Unknown title',
+              artist: deezerTrack?.summary.artist || artist || 'Unknown artist',
+              album: deezerTrack?.summary.album || release?.title || 'Unknown release',
               releaseType: releaseSelection.releaseType,
               year,
               length: typeof recording?.length === 'number' ? recording.length : 0,
@@ -138,7 +144,7 @@ export async function GET(request: Request) {
               isrcDetails,
               releaseId,
               coverArtUrl,
-              previewUrl: deezerTrack?.previewUrl || null,
+              previewUrl: deezerTrack?.summary.previewUrl || null,
             }
 
             send({ type: 'result', track })
@@ -221,7 +227,7 @@ export async function GET(request: Request) {
         const releaseId = release?.id || 'unknown'
         const isrc = Array.isArray(recording?.isrcs) ? recording.isrcs[0] : undefined
         const deezerTrack = isrc ? await fetchDeezerTrackByIsrc(isrc) : null
-        const coverArtUrl = deezerTrack?.coverArtUrl
+        const coverArtUrl = deezerTrack?.summary.coverArtUrl
           ?? (release?.id ? await fetchCoverArtUrl(release.id) : null)
         const year = typeof release?.date === 'string' ? release.date.split('-')[0] : ''
         const artistCredit = Array.isArray(recording?.['artist-credit'])
@@ -234,16 +240,17 @@ export async function GET(request: Request) {
 
         return {
           id: recording.id,
-          title: deezerTrack?.title || recording?.title || 'Unknown title',
-          artist: deezerTrack?.artist || artist || 'Unknown artist',
-          album: deezerTrack?.album || release?.title || 'Unknown release',
+          title: deezerTrack?.summary.title || recording?.title || 'Unknown title',
+          artist: deezerTrack?.summary.artist || artist || 'Unknown artist',
+          album: deezerTrack?.summary.album || release?.title || 'Unknown release',
           releaseType: releaseSelection.releaseType,
           year,
           length: typeof recording?.length === 'number' ? recording.length : 0,
           isrc,
+          isrcDetails,
           releaseId,
           coverArtUrl,
-          previewUrl: deezerTrack?.previewUrl || null,
+          previewUrl: deezerTrack?.summary.previewUrl || null,
         } as TrackResult
       })
     )
