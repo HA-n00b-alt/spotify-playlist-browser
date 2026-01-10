@@ -86,6 +86,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
   const [playlists, setPlaylists] = useState<Playlist[]>(initialPlaylists)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [lastVisitTimestamp, setLastVisitTimestamp] = useState<number | null>(null)
+  const [playlistHeaderName, setPlaylistHeaderName] = useState<string | null>(null)
   
   const STORAGE_KEY_LAST_VISIT = 'playlist_last_visit'
 
@@ -107,6 +108,17 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
     // Playlists from API are in Spotify's order
     setPlaylists(initialPlaylists)
   }, [initialPlaylists])
+
+  useEffect(() => {
+    fetch('/api/auth/status')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.authenticated && data?.user) {
+          setPlaylistHeaderName(data.user.display_name || data.user.id || null)
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   // Check if playlist is new (not seen before on this page load)
   // A playlist is "new" if it's not in the seen list when the page first loads
@@ -414,7 +426,14 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                   onClick={() => handleSort('name')}
                 >
                   <div className="flex items-center">
-                    Playlist
+                    <div className="flex min-w-0 items-center">
+                      {playlistHeaderName ? (
+                        <span className="min-w-0 truncate" title={playlistHeaderName.toUpperCase()}>
+                          {playlistHeaderName.toUpperCase()}
+                        </span>
+                      ) : null}
+                      <span className={`flex-shrink-0${playlistHeaderName ? ' ml-1' : ''}`}>PLAYLIST</span>
+                    </div>
                     <SortIcon field="name" />
                   </div>
                 </th>

@@ -240,7 +240,7 @@ export default function PageHeader({
           <h1 className="text-2xl sm:text-3xl font-bold text-[#171923]">Spotify Playlist Tools</h1>
           <p className="text-sm text-gray-500 mt-1">{displaySubtitle}</p>
           {showBackLink ? (
-            <div className="mx-auto mt-2 w-full max-w-7xl px-4 sm:px-8 text-left">
+            <div className="mx-auto mt-2 w-full max-w-7xl px-8 sm:px-12 lg:px-14 text-left">
               <Link
                 href={backHref}
                 className="hidden sm:inline-flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-gray-700"
@@ -257,7 +257,7 @@ export default function PageHeader({
         /* Default layout for authenticated pages */
         <div className="relative">
           <header className="fixed inset-x-0 top-0 z-40 h-16 border-b border-gray-200/80 bg-white/70 backdrop-blur">
-            <div className="mx-auto flex h-full w-full max-w-7xl items-center justify-between px-4 sm:px-8">
+            <div className="mx-auto flex h-full w-full max-w-7xl items-center justify-between px-8 sm:px-12 lg:px-14">
               <nav className="flex items-center gap-2 text-xs sm:text-sm text-gray-500">
                 <div className="relative" ref={menuRef}>
                   <button
@@ -434,7 +434,7 @@ export default function PageHeader({
           </header>
           <div className="h-16" />
           {(showBackLink || displaySubtitle) ? (
-            <div className="mx-auto w-full max-w-7xl px-4 sm:px-8 pt-2">
+            <div className="mx-auto w-full max-w-7xl px-8 sm:px-12 lg:px-14 pt-1">
               {showBackLink ? (
                 <Link
                   href={backHref}
@@ -447,7 +447,7 @@ export default function PageHeader({
                 </Link>
               ) : null}
               {displaySubtitle ? (
-                <p className={`text-[11px] text-gray-400${showBackLink ? ' mt-1' : ''}`}>
+                <p className={`text-[11px] text-gray-400${showBackLink ? ' mt-0.5' : ''}`}>
                   {displaySubtitle}
                 </p>
               ) : null}

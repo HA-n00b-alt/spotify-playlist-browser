@@ -425,7 +425,21 @@ async function searchProducerRecordingsByWorks(params: {
   artistId: string
   limit: number
   offset: number
-}): Promise<{ count: number; offset: number; limit: number; recordings: any[]; debug?: Record<string, unknown> }> {
+}): Promise<{
+  count: number
+  offset: number
+  limit: number
+  recordings: any[]
+  debug?: {
+    artistId?: string
+    worksScanned?: number
+    worksProcessed?: number
+    recordingsScanned?: number
+    recordingsCollected?: number
+    workBrowse?: Record<string, unknown> | null
+    recordingByWorkUrls?: string[]
+  }
+}> {
   const workBatch = await browseProducerWorksByArtist({
     artistId: params.artistId,
     limit: Math.max(params.limit, 25),
@@ -490,7 +504,9 @@ async function searchProducerRecordingsByWorks(params: {
     recordings: recordings.slice(0, params.limit),
     debug: {
       artistId: params.artistId,
-      worksScanned: workBatch.debug?.scannedProducerCount ?? workBatch.works.length,
+      worksScanned: typeof workBatch.debug?.scannedProducerCount === 'number'
+        ? workBatch.debug.scannedProducerCount
+        : workBatch.works.length,
       worksProcessed,
       recordingsScanned: scannedRecordings,
       recordingsCollected: recordings.length,
