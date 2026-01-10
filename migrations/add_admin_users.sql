@@ -1,11 +1,3 @@
--- Create admin users table
-CREATE TABLE IF NOT EXISTS admin_users (
-  spotify_user_id VARCHAR(255) PRIMARY KEY,
-  active BOOLEAN NOT NULL DEFAULT TRUE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Seed initial admin
-INSERT INTO admin_users (spotify_user_id, active)
-VALUES ('delman-it', TRUE)
-ON CONFLICT (spotify_user_id) DO NOTHING;
+-- Add super admin flag to existing admin users table
+ALTER TABLE admin_users
+ADD COLUMN IF NOT EXISTS is_super_admin BOOLEAN NOT NULL DEFAULT FALSE;

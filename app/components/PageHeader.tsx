@@ -44,13 +44,9 @@ export default function PageHeader({
             .then((res) => res.json())
             .then((adminData) => {
               setIsAdmin(Boolean(adminData?.isAdmin))
+              setIsSuperAdmin(Boolean(adminData?.isSuperAdmin))
             })
             .catch(() => {})
-          if (data.user.id === 'delman-it') {
-            setIsSuperAdmin(true)
-          } else {
-            setIsSuperAdmin(false)
-          }
           return
         }
         setIsAuthenticated(false)
@@ -228,22 +224,6 @@ export default function PageHeader({
                       >
                         Credit Search
                       </Link>
-                      {isAuthenticated && isAdmin && (
-                        <Link
-                          href="/stats"
-                          className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-                        >
-                          Stats
-                        </Link>
-                      )}
-                      {isAuthenticated && isSuperAdmin && (
-                        <Link
-                          href="/admin"
-                          className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-                        >
-                          Admin
-                        </Link>
-                      )}
                       <Link
                         href="/docs"
                         className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
@@ -306,6 +286,32 @@ export default function PageHeader({
                           <>
                             <div className="h-px bg-gray-100" />
                             <div className="space-y-2">{settingsItems}</div>
+                          </>
+                        )}
+                        {isAuthenticated && (isAdmin || isSuperAdmin) && (
+                          <>
+                            <div className="h-px bg-gray-100" />
+                            <div className="space-y-2">
+                              <div className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-400">
+                                Admin
+                              </div>
+                              {isAdmin && (
+                                <Link
+                                  href="/stats"
+                                  className="block rounded-lg px-2 py-1 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                                >
+                                  Stats
+                                </Link>
+                              )}
+                              {isSuperAdmin && (
+                                <Link
+                                  href="/admin"
+                                  className="block rounded-lg px-2 py-1 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                                >
+                                  Admin Users
+                                </Link>
+                              )}
+                            </div>
                           </>
                         )}
                       </div>

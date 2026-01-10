@@ -6,6 +6,7 @@ interface AdminEntry {
   spotify_user_id: string
   active: boolean
   created_at: string
+  is_super_admin?: boolean
 }
 
 export default function AdminClient() {
@@ -137,7 +138,7 @@ export default function AdminClient() {
                     {admin.active ? 'Active' : 'Inactive'}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    {admin.spotify_user_id === 'delman-it' ? (
+                    {admin.is_super_admin ? (
                       <span className="text-xs text-gray-400">Super admin</span>
                     ) : (
                       <button

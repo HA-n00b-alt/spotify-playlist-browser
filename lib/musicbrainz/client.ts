@@ -106,6 +106,49 @@ export function buildCreditQuery(name: string, role: string): string {
   return `${field}:"${name}"`
 }
 
+async function findArtistIdByName(name: string): Promise<string | null> {
+  const data = await fetchMusicBrainzJson<any>('/artist', {
+    query: `artist:"${name}"`,
+    limit: 1,
+    fmt: 'json',
+  })
+  const artists = Array.isArray(data?.artists) ? data.artists : []
+  if (!artists[0]?.id) return null
+  return artists[0].id
+}
+
+export async function searchRecordingsByCredit(params: {
+  name: string
+  role: string
+  limit: number
+  offset: number
+}): Promise<{ count: number; offset: number; limit: number; recordings: any[] }> {
+  let query = buildCreditQuery(params.name, params.role)
+
+  if (params.role === 'artist') {
+    const artistId = await findArtistIdByName(params.name)
+    if (artistId) {
+      query = `arid:${artistId}`
+    }
+  }
+
+  const data = await fetchMusicBrainzJson<any>('/recording', {
+    query,
+    limit: params.limit,
+    offset: params.offset,
+    fmt: 'json',
+    inc: 'releases+artist-credits+isrcs',
+  })
+
+  const recordings = Array.isArray(data?.recordings) ? data.recordings : []
+  return {
+    count: typeof data?.count === 'number' ? data.count : recordings.length,
+    offset: typeof data?.offset === 'number' ? data.offset : params.offset,
+    limit: typeof data?.limit === 'number' ? data.limit : params.limit,
+    recordings,
+  }
+}
+
 export async function searchReleasesByCredit(params: {
   name: string
   role: string

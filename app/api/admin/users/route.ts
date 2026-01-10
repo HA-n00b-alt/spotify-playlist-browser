@@ -10,8 +10,8 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const rows = await query<{ spotify_user_id: string; active: boolean; created_at: string }>(
-    'SELECT spotify_user_id, active, created_at FROM admin_users ORDER BY spotify_user_id ASC'
+  const rows = await query<{ spotify_user_id: string; active: boolean; created_at: string; is_super_admin: boolean }>(
+    'SELECT spotify_user_id, active, created_at, is_super_admin FROM admin_users ORDER BY spotify_user_id ASC'
   )
   return NextResponse.json({ admins: rows })
 }
@@ -48,7 +48,11 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Missing spotifyUserId' }, { status: 400 })
   }
 
-  if (rawId === 'delman-it') {
+  const rows = await query<{ is_super_admin: boolean }>(
+    'SELECT is_super_admin FROM admin_users WHERE spotify_user_id = $1',
+    [rawId]
+  )
+  if (rows[0]?.is_super_admin) {
     return NextResponse.json({ error: 'Cannot remove super admin' }, { status: 400 })
   }
 

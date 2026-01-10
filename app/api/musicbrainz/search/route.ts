@@ -1,10 +1,7 @@
 import { NextResponse } from 'next/server'
 import {
   fetchCoverArtUrl,
-  fetchReleaseDetails,
-  recordingMatchesCreditName,
-  releaseMatchesCreditName,
-  searchReleasesByCredit,
+  searchRecordingsByCredit,
 } from '@/lib/musicbrainz/client'
 
 interface TrackResult {
@@ -32,72 +29,48 @@ export async function GET(request: Request) {
 
   const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 50) : 25
   const offset = Number.isFinite(offsetParam) ? Math.max(offsetParam, 0) : 0
-  const nameLower = name.toLowerCase()
-
   try {
-    const releaseSearch = await searchReleasesByCredit({
+    const recordingSearch = await searchRecordingsByCredit({
       name,
       role,
       limit,
       offset,
     })
 
-    const releaseDetails = await Promise.all(
-      releaseSearch.releases.map(async (release) => {
-        const [detail, coverArtUrl] = await Promise.all([
-          fetchReleaseDetails(release.id),
-          fetchCoverArtUrl(release.id),
-        ])
-        return { detail, coverArtUrl }
+    const results = await Promise.all(
+      recordingSearch.recordings.map(async (recording) => {
+        const releases = Array.isArray(recording?.releases) ? recording.releases : []
+        const release = releases[0]
+        const releaseId = release?.id || 'unknown'
+        const coverArtUrl = release?.id ? await fetchCoverArtUrl(release.id) : null
+        const year = typeof release?.date === 'string' ? release.date.split('-')[0] : ''
+        const artistCredit = Array.isArray(recording?.['artist-credit'])
+          ? recording['artist-credit']
+          : []
+        const artist = artistCredit
+          .map((credit: any) => credit?.name || credit?.artist?.name)
+          .filter(Boolean)
+          .join(', ')
+        const isrc = Array.isArray(recording?.isrcs) ? recording.isrcs[0] : undefined
+
+        return {
+          id: recording.id,
+          title: recording?.title || 'Unknown title',
+          artist: artist || 'Unknown artist',
+          album: release?.title || 'Unknown release',
+          year,
+          length: typeof recording?.length === 'number' ? recording.length : 0,
+          isrc,
+          releaseId,
+          coverArtUrl,
+        } as TrackResult
       })
     )
 
-    const results: TrackResult[] = []
-
-    releaseDetails.forEach(({ detail, coverArtUrl }) => {
-      if (!detail?.id) return
-      const releaseMatches = releaseMatchesCreditName(detail, nameLower)
-      const year = typeof detail?.date === 'string' ? detail.date.split('-')[0] : ''
-
-      const media = Array.isArray(detail?.media) ? detail.media : []
-      media.forEach((disc: any) => {
-        const tracks = Array.isArray(disc?.tracks) ? disc.tracks : []
-        tracks.forEach((track: any) => {
-          const recording = track?.recording
-          if (!recording?.id) return
-          const trackMatches = recordingMatchesCreditName(recording, nameLower)
-          if (!trackMatches && !releaseMatches) return
-
-          const artistCredit = Array.isArray(recording?.['artist-credit'])
-            ? recording['artist-credit']
-            : Array.isArray(detail?.['artist-credit'])
-              ? detail['artist-credit']
-              : []
-          const artist = artistCredit
-            .map((credit: any) => credit?.name || credit?.artist?.name)
-            .filter(Boolean)
-            .join(', ')
-          const isrc = Array.isArray(recording?.isrcs) ? recording.isrcs[0] : undefined
-
-          results.push({
-            id: recording.id,
-            title: recording?.title || track?.title || 'Unknown title',
-            artist: artist || 'Unknown artist',
-            album: detail?.title || 'Unknown release',
-            year,
-            length: typeof recording?.length === 'number' ? recording.length : 0,
-            isrc,
-            releaseId: detail.id,
-            coverArtUrl,
-          })
-        })
-      })
-    })
-
     return NextResponse.json({
-      releaseCount: releaseSearch.count,
-      releaseOffset: releaseSearch.offset,
-      releaseLimit: releaseSearch.limit,
+      releaseCount: recordingSearch.count,
+      releaseOffset: recordingSearch.offset,
+      releaseLimit: recordingSearch.limit,
       trackCount: results.length,
       results,
     })
