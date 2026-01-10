@@ -10,12 +10,12 @@ export interface DeezerTrackSummary {
 
 export async function fetchDeezerTrackByIsrc(
   isrc: string
-): Promise<{ summary: DeezerTrackSummary | null; raw: unknown } | null> {
+): Promise<DeezerTrackSummary | null> {
   const trimmed = isrc.trim()
   if (!trimmed) return null
 
-  const url = `${DEEZER_API_BASE}/track/isrc:${encodeURIComponent(trimmed)}`
-  const response = await fetch(url, {
+  const trackUrl = `${DEEZER_API_BASE}/track/isrc:${encodeURIComponent(trimmed)}`
+  const response = await fetch(trackUrl, {
     headers: {
       'User-Agent': 'SpotifyPlaylistBrowser/1.0.0',
       Accept: 'application/json',
@@ -23,21 +23,34 @@ export async function fetchDeezerTrackByIsrc(
     cache: 'no-store',
   })
 
-  if (!response.ok) {
-    return null
+  let data = response.ok ? await response.json().catch(() => null) : null
+  let track = data && data.type === 'track' ? data : null
+
+  if (!track) {
+    const searchUrl = new URL(`${DEEZER_API_BASE}/search`)
+    searchUrl.searchParams.set('q', `isrc:"${trimmed}"`)
+    searchUrl.searchParams.set('limit', '1')
+    const searchResponse = await fetch(searchUrl.toString(), {
+      headers: {
+        'User-Agent': 'SpotifyPlaylistBrowser/1.0.0',
+        Accept: 'application/json',
+      },
+      cache: 'no-store',
+    })
+    if (!searchResponse.ok) {
+      return null
+    }
+    data = await searchResponse.json().catch(() => null)
+    track = data?.data && Array.isArray(data.data) ? data.data[0] : null
   }
 
-  const data = await response.json().catch(() => null)
-  const track = data && data.type === 'track' ? data : null
+  if (!track) return null
 
   return {
-    summary: track ? {
-      title: track.title || '',
-      artist: track.artist?.name || '',
-      album: track.album?.title || '',
-      coverArtUrl: track.album?.cover_medium || track.album?.cover || null,
-      previewUrl: track.preview || null,
-    } : null,
-    raw: data,
+    title: track.title || '',
+    artist: track.artist?.name || '',
+    album: track.album?.title || '',
+    coverArtUrl: track.album?.cover_medium || track.album?.cover || null,
+    previewUrl: track.preview || null,
   }
 }

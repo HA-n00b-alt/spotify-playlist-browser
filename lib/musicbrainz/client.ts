@@ -687,7 +687,7 @@ async function* streamProducerRecordingsByWorks(params: {
   offset: number
 }): AsyncGenerator<any> {
   const seenRecordingIds = new Set<string>()
-  const deezerIsrcCache = new Map<string, { hasDeezer: boolean; raw: unknown | null }>()
+  const deezerIsrcCache = new Map<string, boolean>()
   let seenCount = 0
   let yieldedCount = 0
   const workBatchLimit = 100
@@ -713,7 +713,7 @@ async function* streamProducerRecordingsByWorks(params: {
       let bestRecording: any | null = null
       let bestNoAttributeRecording: any | null = null
       let bestNoAttributeHasDeezer = false
-      const isrcMap = new Map<string, { hasDeezer: boolean; deezerResponse?: unknown }>()
+      const isrcMap = new Map<string, boolean>()
 
       while (workOffset < totalForWork) {
         const workRecordings = await fetchRecordingsByWork({
@@ -728,14 +728,9 @@ async function* streamProducerRecordingsByWorks(params: {
             if (!isrc || typeof isrc !== 'string') continue
             if (isrcMap.has(isrc)) continue
             const cached = deezerIsrcCache.get(isrc)
-            const deezerResult = cached === undefined ? await fetchDeezerTrackByIsrc(isrc) : null
-            const hasDeezer = cached ? cached.hasDeezer : Boolean(deezerResult?.summary)
-            const raw = cached ? cached.raw : (deezerResult?.raw ?? null)
-            deezerIsrcCache.set(isrc, { hasDeezer, raw })
-            isrcMap.set(isrc, {
-              hasDeezer,
-              deezerResponse: raw,
-            })
+            const hasDeezer = cached ?? Boolean(await fetchDeezerTrackByIsrc(isrc))
+            deezerIsrcCache.set(isrc, hasDeezer)
+            isrcMap.set(isrc, hasDeezer)
           }
           if (recording?.id && (!bestRecording || recording.id.localeCompare(bestRecording.id) < 0)) {
             bestRecording = recording
@@ -746,10 +741,8 @@ async function* streamProducerRecordingsByWorks(params: {
               const isrc = Array.isArray(recording?.isrcs) ? recording.isrcs[0] : undefined
               if (typeof isrc === 'string' && isrc.trim()) {
                 const cached = deezerIsrcCache.get(isrc)
-                const deezerResult = cached === undefined ? await fetchDeezerTrackByIsrc(isrc) : null
-                const hasDeezer = cached ? cached.hasDeezer : Boolean(deezerResult?.summary)
-                const raw = cached ? cached.raw : (deezerResult?.raw ?? null)
-                deezerIsrcCache.set(isrc, { hasDeezer, raw })
+                const hasDeezer = cached ?? Boolean(await fetchDeezerTrackByIsrc(isrc))
+                deezerIsrcCache.set(isrc, hasDeezer)
                 if (hasDeezer) {
                   bestNoAttributeRecording = recording
                   bestNoAttributeHasDeezer = true
@@ -782,12 +775,11 @@ async function* streamProducerRecordingsByWorks(params: {
         : bestNoAttributeRecording
           ? 'Selected the first no-attribute recording (lowest MBID)'
           : 'Selected the first recording (lowest MBID)'
-      const isrcDetails = Array.from(isrcMap.entries()).map(([value, data]) => ({
+      const isrcDetails = Array.from(isrcMap.entries()).map(([value, hasDeezer]) => ({
         value,
-        hasDeezer: data.hasDeezer,
+        hasDeezer,
         selected: value === representativeIsrc,
         reason: value === representativeIsrc ? selectedReason : undefined,
-        deezerResponse: data.deezerResponse ?? null,
       }))
       representative.isrcDetails = isrcDetails
       representative.selectedIsrcReason = selectedReason
