@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import {
   fetchCoverArtUrl,
+  fetchReleasesByRecording,
   searchRecordingsByCredit,
 } from '@/lib/musicbrainz/client'
 
@@ -133,7 +134,10 @@ export async function GET(request: Request) {
 
     const results = await Promise.all(
       recordingSearch.recordings.map(async (recording) => {
-        const releases = Array.isArray(recording?.releases) ? recording.releases : []
+        const embeddedReleases = Array.isArray(recording?.releases) ? recording.releases : []
+        const releases = embeddedReleases.length > 0
+          ? embeddedReleases
+          : (recording?.id ? await fetchReleasesByRecording(recording.id) : [])
         const releaseSelection = selectReleaseInfo(releases)
         const release = releaseSelection.release
         const releaseId = release?.id || 'unknown'

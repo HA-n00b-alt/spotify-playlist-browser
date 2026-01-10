@@ -179,7 +179,7 @@ async function fetchRecordingsByWork(params: {
     limit: params.limit,
     offset: params.offset,
     fmt: 'json',
-    inc: 'artist-credits+isrcs+releases+release-groups',
+    inc: 'artist-credits+isrcs',
   })
 
   const recordings = Array.isArray(data?.recordings) ? data.recordings : []
@@ -189,6 +189,17 @@ async function fetchRecordingsByWork(params: {
     limit: typeof data?.limit === 'number' ? data.limit : params.limit,
     recordings,
   }
+}
+
+export async function fetchReleasesByRecording(recordingId: string): Promise<any[]> {
+  const data = await fetchMusicBrainzJson<any>('/release', {
+    recording: recordingId,
+    limit: 50,
+    offset: 0,
+    fmt: 'json',
+    inc: 'release-groups',
+  })
+  return Array.isArray(data?.releases) ? data.releases : []
 }
 
 async function findArtistIdByName(name: string): Promise<string | null> {
@@ -484,7 +495,7 @@ async function searchProducerRecordingsByWorks(params: {
         limit: workRecordingPageLimit,
         offset: workOffset,
         fmt: 'json',
-        inc: 'artist-credits+isrcs+releases+release-groups',
+        inc: 'artist-credits+isrcs',
       }))
       const workRecordings = await fetchRecordingsByWork({
         workId: work.id,
