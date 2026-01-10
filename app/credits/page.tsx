@@ -8,7 +8,7 @@ export default async function CreditsSearchPage() {
     <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-transparent">
       <div className="max-w-7xl mx-auto flex-1 w-full">
         <PageHeader
-          subtitle="MusicBrainz credits search"
+          subtitle=""
           breadcrumbs={[{ label: 'Credit Search' }]}
         />
         <CreditsSearchClient />
@@ -21,6 +21,9 @@ export default async function CreditsSearchPage() {
         . Powered by{' '}
         <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
           Spotify
+        </a>{' '}and{' '}
+        <a href="https://musicbrainz.org" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
+          Musicbrainz
         </a>
         .
       </footer>

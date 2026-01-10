@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { formatDuration } from '@/lib/musicbrainz'
 
 type RoleOption = 'producer' | 'songwriter' | 'mixer' | 'engineer' | 'artist'
@@ -44,15 +44,33 @@ export default function CreditsSearchClient() {
   const [trackCount, setTrackCount] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [history, setHistory] = useState<string[]>([])
+  const [showHistory, setShowHistory] = useState(false)
+  const blurTimeoutRef = useRef<number | null>(null)
 
   const limit = 25
+  const historyKey = 'creditsSearchHistory'
 
-  const fetchResults = async (nextOffset: number, append: boolean) => {
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const stored = window.localStorage.getItem(historyKey)
+      if (!stored) return
+      const parsed = JSON.parse(stored)
+      if (Array.isArray(parsed)) {
+        setHistory(parsed.filter((item) => typeof item === 'string'))
+      }
+    } catch {
+      // Ignore invalid localStorage
+    }
+  }, [])
+
+  const fetchResults = async (nextOffset: number, append: boolean, searchName = name) => {
     setLoading(true)
     setError(null)
     try {
       const res = await fetch(
-        `/api/musicbrainz/search?name=${encodeURIComponent(name)}&role=${encodeURIComponent(role)}&limit=${limit}&offset=${nextOffset}`
+        `/api/musicbrainz/search?name=${encodeURIComponent(searchName)}&role=${encodeURIComponent(role)}&limit=${limit}&offset=${nextOffset}`
       )
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}))
@@ -73,18 +91,53 @@ export default function CreditsSearchClient() {
     }
   }
 
+  const saveHistory = (value: string) => {
+    if (typeof window === 'undefined') return
+    const trimmed = value.trim()
+    if (!trimmed) return
+    setHistory((prev) => {
+      const next = [trimmed, ...prev.filter((item) => item.toLowerCase() !== trimmed.toLowerCase())].slice(0, 100)
+      window.localStorage.setItem(historyKey, JSON.stringify(next))
+      return next
+    })
+  }
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
-    if (!name.trim()) {
+    const trimmed = name.trim()
+    if (!trimmed) {
       setError('Enter a name to search')
       return
     }
-    await fetchResults(0, false)
+    saveHistory(trimmed)
+    await fetchResults(0, false, trimmed)
   }
 
   const handleLoadMore = async () => {
     const nextOffset = releaseOffset + releaseLimit
     await fetchResults(nextOffset, true)
+  }
+
+  const handleHistorySelect = async (value: string) => {
+    const trimmed = value.trim()
+    if (!trimmed) return
+    setName(trimmed)
+    setShowHistory(false)
+    saveHistory(trimmed)
+    await fetchResults(0, false, trimmed)
+  }
+
+  const handleNameFocus = () => {
+    if (blurTimeoutRef.current) {
+      window.clearTimeout(blurTimeoutRef.current)
+    }
+    setShowHistory(true)
+  }
+
+  const handleNameBlur = () => {
+    blurTimeoutRef.current = window.setTimeout(() => {
+      setShowHistory(false)
+    }, 150)
   }
 
   const hasMore = releaseOffset + releaseLimit < releaseCount
@@ -93,7 +146,7 @@ export default function CreditsSearchClient() {
     <div className="space-y-6">
       <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow p-4 sm:p-6">
         <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
-          <div className="flex-1">
+          <div className="flex-1 relative">
             <label className="block text-sm font-semibold text-gray-700 mb-1">
               Name
             </label>
@@ -101,9 +154,36 @@ export default function CreditsSearchClient() {
               type="text"
               value={name}
               onChange={(event) => setName(event.target.value)}
+              onFocus={handleNameFocus}
+              onBlur={handleNameBlur}
+              list="credit-search-history"
               placeholder="e.g., Rick Rubin"
               className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-green-500"
             />
+            <datalist id="credit-search-history">
+              {history.map((item) => (
+                <option key={item} value={item} />
+              ))}
+            </datalist>
+            {showHistory && history.length > 0 && (
+              <div className="absolute z-20 mt-2 w-full rounded-lg border border-gray-200 bg-white shadow-lg">
+                <div className="px-3 py-2 text-[11px] uppercase tracking-[0.08em] text-gray-400">
+                  Recent searches
+                </div>
+                <div className="max-h-48 overflow-auto">
+                  {history.slice(0, 5).map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      onMouseDown={() => handleHistorySelect(item)}
+                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <span className="truncate">{item}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <div className="sm:w-48">
             <label className="block text-sm font-semibold text-gray-700 mb-1">

@@ -33,6 +33,8 @@ export default function PageHeader({
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [adminRequestStatus, setAdminRequestStatus] = useState<'idle' | 'requested' | 'pending' | 'already_admin' | 'error'>('idle')
   const [adminRequestMessage, setAdminRequestMessage] = useState<string | null>(null)
+  const [adminRequestName, setAdminRequestName] = useState('')
+  const [adminRequestEmail, setAdminRequestEmail] = useState('')
 
   useEffect(() => {
     // Fetch user info for subtitle
@@ -42,6 +44,8 @@ export default function PageHeader({
         if (data.authenticated && data.user) {
           setIsAuthenticated(true)
           setUserName(data.user.display_name || data.user.id || null)
+          setAdminRequestName(data.user.display_name || data.user.id || '')
+          setAdminRequestEmail(data.user.email || '')
           fetch('/api/auth/is-admin')
             .then((res) => res.json())
             .then((adminData) => {
@@ -175,8 +179,9 @@ export default function PageHeader({
   const displaySubtitle = subtitle.includes('[user]') && userName
     ? subtitle.replace('[user]', userName)
     : subtitle
-  const showBackLink = !center && breadcrumbs && breadcrumbs.length > 1
-  const backHref = showBackLink ? breadcrumbs[breadcrumbs.length - 2]?.href || '/' : '/'
+  const isHome = breadcrumbs?.length === 1 && breadcrumbs[0]?.label === 'Home'
+  const showBackLink = !isHome
+  const backHref = breadcrumbs && breadcrumbs.length > 1 ? breadcrumbs[breadcrumbs.length - 2]?.href || '/' : '/'
   const playlistsHref = isAuthenticated ? '/playlists' : '/api/auth/login'
 
   const handleRequestAdmin = async () => {
@@ -185,12 +190,28 @@ export default function PageHeader({
       return
     }
 
+    const trimmedEmail = adminRequestEmail.trim()
+    if (!trimmedEmail) {
+      setAdminRequestStatus('error')
+      setAdminRequestMessage('Email is required to request admin access.')
+      return
+    }
+
     setAdminRequestStatus('idle')
     setAdminRequestMessage(null)
     try {
-      const res = await fetch('/api/admin/requests', { method: 'POST' })
+      const res = await fetch('/api/admin/requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          displayName: adminRequestName.trim() || userName || '',
+          email: trimmedEmail,
+        }),
+      })
       if (!res.ok) {
-        throw new Error('Failed to request admin access')
+        const payload = await res.json().catch(() => ({}))
+        const message = typeof payload?.error === 'string' ? payload.error : 'Failed to request admin access'
+        throw new Error(message)
       }
       const data = await res.json().catch(() => ({}))
       const status =
@@ -218,6 +239,16 @@ export default function PageHeader({
         <div className="text-center">
           <h1 className="text-2xl sm:text-3xl font-bold text-[#171923]">Spotify Playlist Tools</h1>
           <p className="text-sm text-gray-500 mt-1">{displaySubtitle}</p>
+          {showBackLink ? (
+            <div className="mx-auto mt-2 w-full max-w-7xl px-4 sm:px-8 text-left">
+              <Link
+                href={backHref}
+                className="hidden sm:inline-flex items-center text-xs font-semibold text-gray-500 hover:text-gray-700"
+              >
+                ← Back
+              </Link>
+            </div>
+          ) : null}
         </div>
       ) : (
         /* Default layout for authenticated pages */
@@ -333,13 +364,29 @@ export default function PageHeader({
                           {isAdmin || isSuperAdmin ? (
                             <div className="text-xs text-gray-600">Admin access granted.</div>
                           ) : (
-                            <button
-                              type="button"
-                              onClick={handleRequestAdmin}
-                              className="w-full rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
-                            >
-                              Request Admin Access
-                            </button>
+                            <div className="space-y-2">
+                              <input
+                                type="text"
+                                value={adminRequestName}
+                                onChange={(event) => setAdminRequestName(event.target.value)}
+                                placeholder="Display name"
+                                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              />
+                              <input
+                                type="email"
+                                value={adminRequestEmail}
+                                onChange={(event) => setAdminRequestEmail(event.target.value)}
+                                placeholder="Email address"
+                                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              />
+                              <button
+                                type="button"
+                                onClick={handleRequestAdmin}
+                                className="w-full rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                              >
+                                Request Admin Access
+                              </button>
+                            </div>
                           )}
                           {adminRequestMessage ? (
                             <div className={`text-xs ${adminRequestStatus === 'error' ? 'text-rose-600' : 'text-gray-500'}`}>
@@ -388,7 +435,7 @@ export default function PageHeader({
               {showBackLink ? (
                 <Link
                   href={backHref}
-                  className="inline-flex items-center text-xs font-semibold text-gray-500 hover:text-gray-700"
+                  className="hidden sm:inline-flex items-center text-xs font-semibold text-gray-500 hover:text-gray-700"
                 >
                   ← Back
                 </Link>

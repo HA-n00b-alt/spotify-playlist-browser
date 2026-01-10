@@ -69,6 +69,9 @@ export default function DocumentationPage() {
         . Powered by{' '}
         <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
           Spotify
+        </a>{' '}and{' '}
+        <a href="https://musicbrainz.org" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
+          Musicbrainz
         </a>
         .
       </footer>
