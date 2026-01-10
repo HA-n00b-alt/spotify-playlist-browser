@@ -47,6 +47,9 @@ export default function CreditsSearchClient() {
   const [history, setHistory] = useState<string[]>([])
   const [showHistory, setShowHistory] = useState(false)
   const blurTimeoutRef = useRef<number | null>(null)
+  const [debugRequest, setDebugRequest] = useState<string | null>(null)
+  const [debugResponse, setDebugResponse] = useState<string | null>(null)
+  const [debugStatus, setDebugStatus] = useState<number | null>(null)
 
   const limit = 25
   const historyKey = 'creditsSearchHistory'
@@ -68,10 +71,15 @@ export default function CreditsSearchClient() {
   const fetchResults = async (nextOffset: number, append: boolean, searchName = name) => {
     setLoading(true)
     setError(null)
+    setDebugResponse(null)
+    setDebugStatus(null)
     try {
-      const res = await fetch(
-        `/api/musicbrainz/search?name=${encodeURIComponent(searchName)}&role=${encodeURIComponent(role)}&limit=${limit}&offset=${nextOffset}`
-      )
+      const url = `/api/musicbrainz/search?name=${encodeURIComponent(searchName)}&role=${encodeURIComponent(role)}&limit=${limit}&offset=${nextOffset}`
+      setDebugRequest(`GET ${url}`)
+      const res = await fetch(url)
+      const responseText = await res.clone().text().catch(() => '')
+      setDebugStatus(res.status)
+      setDebugResponse(responseText)
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}))
         const message =
@@ -212,6 +220,25 @@ export default function CreditsSearchClient() {
         <p className="mt-3 text-xs text-gray-500">
           Searches MusicBrainz recordings by credit type and name.
         </p>
+        {(debugRequest || debugResponse) && (
+          <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+            {debugRequest && (
+              <div className="mb-2">
+                <span className="font-semibold text-gray-700">Request:</span> {debugRequest}
+              </div>
+            )}
+            {debugStatus !== null && (
+              <div className="mb-2">
+                <span className="font-semibold text-gray-700">Status:</span> {debugStatus}
+              </div>
+            )}
+            {debugResponse && (
+              <div className="max-h-48 overflow-auto whitespace-pre-wrap rounded border border-gray-200 bg-white p-2 text-[11px] text-gray-600">
+                {debugResponse}
+              </div>
+            )}
+          </div>
+        )}
       </form>
 
       {error && (
