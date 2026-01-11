@@ -29,6 +29,7 @@ import {
 // Use shared types
 type Track = SpotifyTrack
 type PlaylistInfo = SpotifyPlaylistInfo
+type BpmFallbackOverride = 'never' | 'always' | 'bpm_only' | 'key_only' | 'default'
 
 interface PlaylistTracksPageProps {
   params: {
@@ -69,6 +70,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const streamAbortRef = useRef<AbortController | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const [showBpmDebug, setShowBpmDebug] = useState(false)
+  const [bpmDebugLevel, setBpmDebugLevel] = useState('minimal')
+  const [bpmFallbackOverride, setBpmFallbackOverride] = useState<BpmFallbackOverride>('never')
+  const [bpmConfidenceThreshold, setBpmConfidenceThreshold] = useState('0.65')
   const [bpmDebugInfo, setBpmDebugInfo] = useState<Record<string, any>>({})
   const [bpmDetails, setBpmDetails] = useState<Record<string, { source?: string; error?: string }>>({})
   const [previewUrls, setPreviewUrls] = useState<Record<string, string | null>>({}) // Store successful preview URLs from DB
@@ -495,6 +499,20 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     return ids
   }, [loadingBpmFields, loadingKeyFields])
 
+  const bpmRequestSettings = useMemo(() => {
+    const parsedConfidence = Number.parseFloat(bpmConfidenceThreshold)
+    const maxConfidence = Number.isFinite(parsedConfidence)
+      ? Math.min(Math.max(parsedConfidence, 0), 1)
+      : 0.65
+    const debugLevel = bpmDebugLevel.trim() ? bpmDebugLevel.trim() : 'minimal'
+    const fallbackOverride = bpmFallbackOverride === 'default' ? undefined : bpmFallbackOverride
+    return {
+      debugLevel,
+      maxConfidence,
+      fallbackOverride,
+    }
+  }, [bpmConfidenceThreshold, bpmDebugLevel, bpmFallbackOverride])
+
   const isTrackLoading = (trackId: string) => loadingTrackIds.has(trackId)
 
   // Fetch BPM for all tracks using batch endpoint
@@ -760,12 +778,22 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       })
 
       try {
+        const requestBody: Record<string, unknown> = {
+          trackIds,
+          country: countryCode,
+          debug_level: bpmRequestSettings.debugLevel,
+          max_confidence: bpmRequestSettings.maxConfidence,
+        }
+        if (bpmRequestSettings.fallbackOverride) {
+          requestBody.fallback_override = bpmRequestSettings.fallbackOverride
+        }
+
         const res = await fetch('/api/bpm/stream-batch', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ trackIds, country: countryCode }),
+          body: JSON.stringify(requestBody),
         })
 
         if (!res.ok) {
@@ -2395,25 +2423,73 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     )
   }
 
-  const bpmDebugSetting = isAdmin ? (
-    <div className="flex items-center justify-between text-sm text-gray-700">
-      <span className="font-medium">BPM Debug</span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={showBpmDebug}
-        onClick={() => setShowBpmDebug(!showBpmDebug)}
-        className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${
-          showBpmDebug ? 'bg-emerald-500' : 'bg-gray-200'
-        }`}
-      >
-        <span
-          className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
-            showBpmDebug ? 'translate-x-4' : 'translate-x-1'
+  const bpmAdminSettings = isAdmin ? (
+    <>
+      <div className="flex items-center justify-between text-sm text-gray-700">
+        <span className="font-medium">BPM Debug Panel</span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={showBpmDebug}
+          onClick={() => setShowBpmDebug(!showBpmDebug)}
+          className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${
+            showBpmDebug ? 'bg-emerald-500' : 'bg-gray-200'
           }`}
+        >
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+              showBpmDebug ? 'translate-x-4' : 'translate-x-1'
+            }`}
+          />
+        </button>
+      </div>
+      <div className="space-y-1 text-sm text-gray-700">
+        <label className="block text-xs font-medium text-gray-500" htmlFor="bpm-debug-level">
+          Debug level
+        </label>
+        <select
+          id="bpm-debug-level"
+          value={bpmDebugLevel}
+          onChange={(e) => setBpmDebugLevel(e.target.value)}
+          className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
+        >
+          <option value="minimal">Minimal</option>
+          <option value="normal">Normal</option>
+        </select>
+      </div>
+      <div className="space-y-1 text-sm text-gray-700">
+        <label className="block text-xs font-medium text-gray-500" htmlFor="bpm-fallback-override">
+          Fallback override
+        </label>
+        <select
+          id="bpm-fallback-override"
+          value={bpmFallbackOverride}
+          onChange={(e) => setBpmFallbackOverride(e.target.value as BpmFallbackOverride)}
+          className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
+        >
+          <option value="never">Never use fallback</option>
+          <option value="always">Always use fallback</option>
+          <option value="bpm_only">BPM only</option>
+          <option value="key_only">Key only</option>
+          <option value="default">Confidence-based (legacy)</option>
+        </select>
+      </div>
+      <div className="space-y-1 text-sm text-gray-700">
+        <label className="block text-xs font-medium text-gray-500" htmlFor="bpm-confidence-threshold">
+          Confidence threshold
+        </label>
+        <input
+          id="bpm-confidence-threshold"
+          type="number"
+          min="0"
+          max="1"
+          step="0.01"
+          value={bpmConfidenceThreshold}
+          onChange={(e) => setBpmConfidenceThreshold(e.target.value)}
+          className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
         />
-      </button>
-    </div>
+      </div>
+    </>
   ) : null
 
   if (loading) {
@@ -2427,7 +2503,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               { label: '[user] playlists', href: '/playlists' },
               { label: 'Playlist' },
             ]}
-            settingsItems={bpmDebugSetting ?? undefined}
+            settingsItems={bpmAdminSettings ?? undefined}
           />
           <TrackTableSkeleton />
         </div>
@@ -2517,7 +2593,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             { label: '[user] playlists', href: '/playlists' },
             { label: playlistInfo?.name ?? 'Playlist' },
           ]}
-          settingsItems={bpmDebugSetting ?? undefined}
+          settingsItems={bpmAdminSettings ?? undefined}
         />
         
         {/* Show auth error with manual login option */}
@@ -3107,9 +3183,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          setSelectedBpmTrack(track)
-                          setRetryStatus(null)
-                          setShowBpmModal(true)
+                          if (isAdmin) {
+                            setSelectedBpmTrack(track)
+                            setRetryStatus(null)
+                            setRetryAttempted(false)
+                            setShowBpmModal(true)
+                          } else {
+                            handleTrackClick(track)
+                          }
                         }}
                         className="inline-flex w-16 items-center justify-center rounded-full border border-blue-200 bg-transparent px-2.5 py-0.5 text-[11px] font-medium text-blue-700"
                       >
@@ -3119,8 +3200,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          setSelectedBpmTrack(track)
-                          setShowBpmModal(true)
+                          if (isAdmin) {
+                            setSelectedBpmTrack(track)
+                            setRetryStatus(null)
+                            setRetryAttempted(false)
+                            setShowBpmModal(true)
+                          } else {
+                            handleTrackClick(track)
+                          }
                         }}
                         className="inline-flex w-16 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-0.5 text-[11px] font-medium text-amber-700"
                       >
@@ -3134,8 +3221,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          setSelectedBpmTrack(track)
-                          setShowBpmModal(true)
+                          if (isAdmin) {
+                            setSelectedBpmTrack(track)
+                            setRetryStatus(null)
+                            setRetryAttempted(false)
+                            setShowBpmModal(true)
+                          } else {
+                            handleTrackClick(track)
+                          }
                         }}
                         className="inline-flex w-16 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-0.5 text-[11px] font-medium text-amber-700"
                       >
@@ -3160,10 +3253,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
-                              setSelectedBpmTrack(track)
-                              setRetryStatus(null)
-                              setRetryAttempted(false)
-                              setShowBpmModal(true)
+                              if (isAdmin) {
+                                setSelectedBpmTrack(track)
+                                setRetryStatus(null)
+                                setRetryAttempted(false)
+                                setShowBpmModal(true)
+                              } else {
+                                handleTrackClick(track)
+                              }
                             }}
                             className="inline-flex w-24 items-center justify-center rounded-full border border-slate-200 bg-transparent px-2.5 py-0.5 text-[11px] font-medium text-slate-700 whitespace-nowrap"
                           >
@@ -3171,19 +3268,23 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           </button>
                         )
                       }
-                      if (tracksNeedingKey.has(track.id) || bpmStreamStatus[track.id] === 'error') {
-                        return (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setSelectedBpmTrack(track)
-                              setRetryStatus(null)
-                              setRetryAttempted(false)
-                              setShowBpmModal(true)
-                            }}
-                            className="inline-flex w-24 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-0.5 text-[11px] font-medium text-amber-700"
-                          >
-                            N/A
+                        if (tracksNeedingKey.has(track.id) || bpmStreamStatus[track.id] === 'error') {
+                          return (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                if (isAdmin) {
+                                  setSelectedBpmTrack(track)
+                                  setRetryStatus(null)
+                                  setRetryAttempted(false)
+                                  setShowBpmModal(true)
+                                } else {
+                                  handleTrackClick(track)
+                                }
+                              }}
+                              className="inline-flex w-24 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-0.5 text-[11px] font-medium text-amber-700"
+                            >
+                              N/A
                           </button>
                         )
                       }
@@ -3416,13 +3517,17 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             ? (
                               <button
                                 onClick={() => {
-                                  setSelectedBpmTrack(track)
-                                  setRetryStatus(null)
-                                  setRetryAttempted(false)
-                                  setShowBpmModal(true)
+                                  if (isAdmin) {
+                                    setSelectedBpmTrack(track)
+                                    setRetryStatus(null)
+                                    setRetryAttempted(false)
+                                    setShowBpmModal(true)
+                                  } else {
+                                    handleTrackClick(track)
+                                  }
                                 }}
                                 className="inline-flex w-16 items-center justify-center rounded-full border border-blue-200 bg-transparent px-2.5 py-1 text-xs font-medium text-blue-700"
-                                title="Click for BPM details"
+                                title={isAdmin ? 'Click for BPM details' : getPreviewTooltip(track.id)}
                               >
                                 {Math.round(trackBpms[track.id]!)}
                                 {bpmStreamStatus[track.id] === 'partial' && (
@@ -3434,13 +3539,17 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                               ? (
                                 <button
                                   onClick={() => {
-                                    setSelectedBpmTrack(track)
-                                    setRetryStatus(null)
-                                    setRetryAttempted(false)
-                                    setShowBpmModal(true)
+                                    if (isAdmin) {
+                                      setSelectedBpmTrack(track)
+                                      setRetryStatus(null)
+                                      setRetryAttempted(false)
+                                      setShowBpmModal(true)
+                                    } else {
+                                      handleTrackClick(track)
+                                    }
                                   }}
                                   className="inline-flex w-16 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-1 text-xs font-medium text-amber-700"
-                                  title="Click to see why BPM is not available"
+                                  title={isAdmin ? 'Click to see why BPM is not available' : getPreviewTooltip(track.id)}
                                 >
                                   N/A
                                 </button>
@@ -3454,13 +3563,17 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                 : (
                                   <button
                                     onClick={() => {
-                                      setSelectedBpmTrack(track)
-                                      setRetryStatus(null)
-                                      setRetryAttempted(false)
-                                      setShowBpmModal(true)
+                                      if (isAdmin) {
+                                        setSelectedBpmTrack(track)
+                                        setRetryStatus(null)
+                                        setRetryAttempted(false)
+                                        setShowBpmModal(true)
+                                      } else {
+                                        handleTrackClick(track)
+                                      }
                                     }}
                                     className="inline-flex w-16 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-1 text-xs font-medium text-amber-700"
-                                    title="Click to see why BPM is not available"
+                                    title={isAdmin ? 'Click to see why BPM is not available' : getPreviewTooltip(track.id)}
                                   >
                                     N/A
                                   </button>
@@ -3488,10 +3601,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation()
-                                    setSelectedBpmTrack(track)
-                                    setRetryStatus(null)
-                                    setRetryAttempted(false)
-                                    setShowBpmModal(true)
+                                    if (isAdmin) {
+                                      setSelectedBpmTrack(track)
+                                      setRetryStatus(null)
+                                      setRetryAttempted(false)
+                                      setShowBpmModal(true)
+                                    } else {
+                                      handleTrackClick(track)
+                                    }
                                   }}
                                   className="inline-flex w-24 items-center justify-center rounded-full border border-slate-200 bg-transparent px-2.5 py-1 text-xs font-medium text-slate-700 whitespace-nowrap"
                                 >
@@ -3504,10 +3621,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation()
-                                    setSelectedBpmTrack(track)
-                                    setRetryStatus(null)
-                                    setRetryAttempted(false)
-                                    setShowBpmModal(true)
+                                    if (isAdmin) {
+                                      setSelectedBpmTrack(track)
+                                      setRetryStatus(null)
+                                      setRetryAttempted(false)
+                                      setShowBpmModal(true)
+                                    } else {
+                                      handleTrackClick(track)
+                                    }
                                   }}
                                   className="inline-flex w-24 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-1 text-xs font-medium text-amber-700"
                                 >
@@ -3666,7 +3787,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           )}
 
       {/* BPM Details Modal */}
-      {bpmModalData && selectedBpmTrack && (
+      {isAdmin && bpmModalData && selectedBpmTrack && (
           <div 
             className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
             onClick={() => {
@@ -3741,6 +3862,60 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   {recalcStatus?.error && (
                     <div className="mt-1 text-xs text-red-600">{recalcStatus.error}</div>
                   )}
+                </div>
+                <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <h4 className="text-sm font-semibold text-gray-800">BPM service overrides</h4>
+                  <div className="mt-2 grid gap-3 sm:grid-cols-3">
+                    <div className="space-y-1 text-xs text-gray-700">
+                      <label className="block text-[11px] font-medium text-gray-500" htmlFor="modal-bpm-debug-level">
+                        Debug level
+                      </label>
+                      <select
+                        id="modal-bpm-debug-level"
+                        value={bpmDebugLevel}
+                        onChange={(e) => setBpmDebugLevel(e.target.value)}
+                        className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
+                      >
+                        <option value="minimal">Minimal</option>
+                        <option value="normal">Normal</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1 text-xs text-gray-700">
+                      <label className="block text-[11px] font-medium text-gray-500" htmlFor="modal-bpm-fallback-override">
+                        Fallback override
+                      </label>
+                      <select
+                        id="modal-bpm-fallback-override"
+                        value={bpmFallbackOverride}
+                        onChange={(e) => setBpmFallbackOverride(e.target.value as BpmFallbackOverride)}
+                        className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
+                      >
+                        <option value="never">Never</option>
+                        <option value="always">Always</option>
+                        <option value="bpm_only">BPM only</option>
+                        <option value="key_only">Key only</option>
+                        <option value="default">Confidence-based</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1 text-xs text-gray-700">
+                      <label className="block text-[11px] font-medium text-gray-500" htmlFor="modal-bpm-confidence-threshold">
+                        Confidence threshold
+                      </label>
+                      <input
+                        id="modal-bpm-confidence-threshold"
+                        type="number"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={bpmConfidenceThreshold}
+                        onChange={(e) => setBpmConfidenceThreshold(e.target.value)}
+                        className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
+                      />
+                    </div>
+                  </div>
+                  <p className="mt-2 text-[11px] text-gray-500">
+                    Applies to new calculations (retry or recalc).
+                  </p>
                 </div>
               </div>
 

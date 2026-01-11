@@ -684,10 +684,11 @@ async function computeBpmFromService(previewUrl: string): Promise<{
         'Authorization': `Bearer ${idToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         urls: [previewUrl],
         max_confidence: 0.65,
-        debug_level: 'normal'
+        debug_level: 'minimal',
+        fallback_override: 'never',
       }),
       signal: controller.signal,
     })

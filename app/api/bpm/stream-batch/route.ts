@@ -13,6 +13,17 @@ export async function POST(request: Request) {
     const body = await request.json()
     const trackIds = body.trackIds
     const countryCode = typeof body.country === 'string' ? body.country : undefined
+    const rawDebugLevel = typeof body.debug_level === 'string' ? body.debug_level.trim() : ''
+    const debugLevel = rawDebugLevel || 'minimal'
+    const rawMaxConfidence = typeof body.max_confidence === 'number' ? body.max_confidence : NaN
+    const maxConfidence = Number.isFinite(rawMaxConfidence)
+      ? Math.min(Math.max(rawMaxConfidence, 0), 1)
+      : 0.65
+    const rawFallbackOverride = typeof body.fallback_override === 'string' ? body.fallback_override : undefined
+    const allowedFallbackOverrides = new Set(['never', 'always', 'bpm_only', 'key_only'])
+    const fallbackOverride = rawFallbackOverride && allowedFallbackOverrides.has(rawFallbackOverride)
+      ? rawFallbackOverride
+      : undefined
 
     if (!Array.isArray(trackIds) || trackIds.length === 0) {
       trackApiRequest(userId, '/api/bpm/stream-batch', 'POST', 400).catch(() => {})
@@ -46,17 +57,22 @@ export async function POST(request: Request) {
     }
 
     const idToken = await getIdentityToken(BPM_SERVICE_URL)
+    const requestBody: Record<string, unknown> = {
+      urls,
+      max_confidence: maxConfidence,
+      debug_level: debugLevel,
+    }
+    if (fallbackOverride) {
+      requestBody.fallback_override = fallbackOverride
+    }
+
     const response = await fetch(`${BPM_SERVICE_URL}/analyze/batch`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${idToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        urls,
-        max_confidence: 0.65,
-        debug_level: 'normal',
-      }),
+      body: JSON.stringify(requestBody),
     })
 
     if (!response.ok) {

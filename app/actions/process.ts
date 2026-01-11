@@ -41,7 +41,8 @@ export async function processAudioUrl(formData: FormData): Promise<{ batchId: st
     body: JSON.stringify({
       urls: [audioUrl],
       max_confidence: 0.65,
-      debug_level: 'normal',
+      debug_level: 'minimal',
+      fallback_override: 'never',
     }),
   })
 
@@ -61,4 +62,3 @@ export async function processAudioUrl(formData: FormData): Promise<{ batchId: st
     totalUrls: data.total_urls || 1,
   }
 }
-
