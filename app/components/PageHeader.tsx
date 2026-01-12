@@ -398,6 +398,14 @@ export default function PageHeader({
                               <div className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-400">
                                 Admin
                               </div>
+                              {(isAdmin || isSuperAdmin) && (
+                                <Link
+                                  href="/admin"
+                                  className="block rounded-lg px-2 py-1 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                                >
+                                  Admin
+                                </Link>
+                              )}
                               {isAdmin && (
                                 <Link
                                   href="/stats"
@@ -408,7 +416,7 @@ export default function PageHeader({
                               )}
                               {isSuperAdmin && (
                                 <Link
-                                  href="/admin"
+                                  href="/admin/users"
                                   className="block rounded-lg px-2 py-1 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900"
                                 >
                                   Admin Users

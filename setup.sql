@@ -33,6 +33,9 @@ CREATE TABLE IF NOT EXISTS track_bpm_cache (
   error TEXT,
   urls JSONB, -- Array of preview URLs with success flag
   isrc_mismatch BOOLEAN DEFAULT FALSE, -- True when ISRC from search results doesn't match Spotify ISRC
+  isrc_mismatch_review_status TEXT, -- Admin review status for ISRC mismatch: mismatch or match
+  isrc_mismatch_reviewed_by VARCHAR(255), -- Spotify user ID of the reviewer
+  isrc_mismatch_reviewed_at TIMESTAMP WITH TIME ZONE, -- When the review was recorded
   debug_txt TEXT, -- Debug information from BPM service
   CONSTRAINT unique_spotify_track UNIQUE (spotify_track_id)
 );
@@ -46,6 +49,9 @@ COMMENT ON TABLE track_bpm_cache IS 'Cache for BPM values computed from audio pr
 COMMENT ON COLUMN track_bpm_cache.isrc IS 'International Standard Recording Code from Spotify, used for cross-platform track matching';
 COMMENT ON COLUMN track_bpm_cache.urls IS 'Array of preview URLs with success flag';
 COMMENT ON COLUMN track_bpm_cache.isrc_mismatch IS 'True when ISRC from iTunes/Deezer search results does not match Spotify ISRC, may affect BPM accuracy';
+COMMENT ON COLUMN track_bpm_cache.isrc_mismatch_review_status IS 'Admin review status for ISRC mismatch: mismatch or match';
+COMMENT ON COLUMN track_bpm_cache.isrc_mismatch_reviewed_by IS 'Spotify user ID of the reviewer';
+COMMENT ON COLUMN track_bpm_cache.isrc_mismatch_reviewed_at IS 'Timestamp when ISRC mismatch review was recorded';
 COMMENT ON COLUMN track_bpm_cache.bpm_essentia IS 'BPM value from Essentia analysis (normalized, integer)';
 COMMENT ON COLUMN track_bpm_cache.bpm_raw_essentia IS 'Raw BPM value from Essentia analysis (before normalization)';
 COMMENT ON COLUMN track_bpm_cache.bpm_confidence_essentia IS 'BPM confidence score from Essentia (0-1)';
@@ -110,6 +116,19 @@ CREATE INDEX IF NOT EXISTS idx_analytics_api_requests_endpoint ON analytics_api_
 COMMENT ON TABLE analytics_users IS 'Tracks unique users and their aggregate statistics';
 COMMENT ON TABLE analytics_pageviews IS 'Tracks individual page views';
 COMMENT ON TABLE analytics_api_requests IS 'Tracks API endpoint requests';
+
+-- ============================================================================
+-- Admin Settings
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS admin_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_by VARCHAR(255)
+);
+
+COMMENT ON TABLE admin_settings IS 'Admin-configurable settings such as monitoring dashboard URLs.';
 
 -- ============================================================================
 -- Playlist Cache Table
