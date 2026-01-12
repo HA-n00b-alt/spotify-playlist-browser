@@ -73,7 +73,7 @@ export default async function Home({
                     </div>
                     <h3 className="text-2xl font-semibold text-[#171923]">Find producer, writer, and mixer credits</h3>
                     <p className="text-[13px] text-gray-500">
-                      Search MusicBrainz credits without logging in and export data for deeper research.
+                      Search Muso credits without logging in and export data for deeper research.
                     </p>
                   </div>
                   <div className="hidden sm:flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-600">

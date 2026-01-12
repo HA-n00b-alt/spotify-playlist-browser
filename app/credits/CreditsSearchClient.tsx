@@ -23,6 +23,7 @@ interface SearchResult {
   releaseId: string
   coverArtUrl?: string | null
   previewUrl?: string | null
+  source?: 'muso' | 'musicbrainz'
 }
 
 const ROLE_OPTIONS: Array<{ value: RoleOption; label: string }> = [
@@ -484,7 +485,7 @@ export default function CreditsSearchClient() {
           </button>
         </div>
         <p className="text-xs text-gray-500">
-          Searches MusicBrainz recordings by credit type and name.
+          Searches Muso credits by role and name, with MusicBrainz as fallback.
         </p>
         {loading && statusMessage && (
           <div className="text-xs text-gray-500">
@@ -593,15 +594,19 @@ export default function CreditsSearchClient() {
                     )}
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <a
-                          href={`https://musicbrainz.org/recording/${encodeURIComponent(track.id)}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="font-semibold text-gray-900 text-sm hover:text-green-700 hover:underline"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          {track.title}
-                        </a>
+                        {track.source === 'musicbrainz' ? (
+                          <a
+                            href={`https://musicbrainz.org/recording/${encodeURIComponent(track.id)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-semibold text-gray-900 text-sm hover:text-green-700 hover:underline"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            {track.title}
+                          </a>
+                        ) : (
+                          <span className="font-semibold text-gray-900 text-sm">{track.title}</span>
+                        )}
                       </div>
                       <div className="text-xs text-gray-600 truncate">{track.artist}</div>
                       <div className="text-xs text-gray-500 truncate">
@@ -714,15 +719,19 @@ export default function CreditsSearchClient() {
                           )}
                         </td>
                         <td className="px-3 lg:px-4 py-2 lg:py-3">
-                          <a
-                            href={`https://musicbrainz.org/recording/${encodeURIComponent(track.id)}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="font-medium text-gray-900 text-xs sm:text-sm hover:text-green-600 hover:underline"
-                            onClick={(event) => event.stopPropagation()}
-                          >
-                            {track.title}
-                          </a>
+                          {track.source === 'musicbrainz' ? (
+                            <a
+                              href={`https://musicbrainz.org/recording/${encodeURIComponent(track.id)}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-medium text-gray-900 text-xs sm:text-sm hover:text-green-600 hover:underline"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              {track.title}
+                            </a>
+                          ) : (
+                            <span className="font-medium text-gray-900 text-xs sm:text-sm">{track.title}</span>
+                          )}
                         </td>
                         <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-700 text-xs sm:text-sm hidden md:table-cell max-w-[140px] truncate">
                           {track.artist}

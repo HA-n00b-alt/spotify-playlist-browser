@@ -19,12 +19,6 @@ const tools = [
     roles: ['admin', 'superadmin'],
   },
   {
-    title: 'BPM/Key Verification',
-    description: 'Send track details to ChatGPT with web search to validate BPM/key.',
-    href: '/admin/bpm-verification',
-    roles: ['admin', 'superadmin'],
-  },
-  {
     title: 'Observability',
     description: 'Monitor Vercel and GCP services with logging and performance links.',
     href: '/admin/observability',

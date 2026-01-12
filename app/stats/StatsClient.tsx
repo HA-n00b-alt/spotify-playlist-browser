@@ -9,6 +9,9 @@ interface StatsData {
     totalApiRequests: number
     activeUsers7d: number
     activeUsers30d: number
+    musoDailyUsed: number
+    musoDailyLimit: number
+    musoDailyRemaining: number
   }
   topPaths: Array<{ path: string; count: number }>
   topEndpoints: Array<{ endpoint: string; method: string; count: number }>
@@ -63,7 +66,7 @@ export default function StatsClient() {
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
         <StatCard
           title="Total Users"
           value={stats.summary.totalUsers.toLocaleString()}
@@ -88,6 +91,11 @@ export default function StatsClient() {
           title="Active Users (30d)"
           value={stats.summary.activeUsers30d.toLocaleString()}
           description="Last 30 days"
+        />
+        <StatCard
+          title="Muso API Used (Today)"
+          value={stats.summary.musoDailyUsed.toLocaleString()}
+          description={`Remaining ${stats.summary.musoDailyRemaining.toLocaleString()} of ${stats.summary.musoDailyLimit.toLocaleString()}`}
         />
       </div>
 
@@ -225,5 +233,4 @@ function StatCard({ title, value, description }: { title: string; value: string;
     </div>
   )
 }
-
 

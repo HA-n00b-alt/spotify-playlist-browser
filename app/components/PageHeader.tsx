@@ -27,6 +27,8 @@ export default function PageHeader({
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [bpmStatus, setBpmStatus] = useState<'checking' | 'ok' | 'error'>('checking')
   const [bpmStatusMessage, setBpmStatusMessage] = useState<string | null>(null)
+  const [musoStatus, setMusoStatus] = useState<'checking' | 'ok' | 'warning' | 'error'>('checking')
+  const [musoStatusLabel, setMusoStatusLabel] = useState<string>('Muso API checking')
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const settingsRef = useRef<HTMLDivElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -166,6 +168,49 @@ export default function PageHeader({
     }
   }, [])
 
+  useEffect(() => {
+    if (!isAdmin && !isSuperAdmin) {
+      return
+    }
+    let isMounted = true
+    setMusoStatus('checking')
+    setMusoStatusLabel('Muso API checking')
+    fetch('/api/admin/muso-status')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!isMounted) return
+        if (!data?.enabled) {
+          setMusoStatus('error')
+          setMusoStatusLabel('Muso API not configured')
+          return
+        }
+        const remaining = typeof data?.remaining === 'number' ? data.remaining : 0
+        const limit = typeof data?.limit === 'number' ? data.limit : 0
+        if (remaining <= 0) {
+          setMusoStatus('error')
+          setMusoStatusLabel('Muso daily limit reached')
+          return
+        }
+        const warningThreshold = Math.max(50, Math.round(limit * 0.1))
+        if (remaining <= warningThreshold) {
+          setMusoStatus('warning')
+          setMusoStatusLabel(`Muso near limit (${remaining} left)`)
+          return
+        }
+        setMusoStatus('ok')
+        setMusoStatusLabel(`Muso API healthy (${remaining} left)`)
+      })
+      .catch(() => {
+        if (!isMounted) return
+        setMusoStatus('error')
+        setMusoStatusLabel('Muso API unreachable')
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [isAdmin, isSuperAdmin])
+
   const bpmStatusColor =
     bpmStatus === 'ok' ? 'bg-green-500' : bpmStatus === 'checking' ? 'bg-amber-400' : 'bg-red-500'
   const bpmStatusLabel =
@@ -174,6 +219,8 @@ export default function PageHeader({
       : bpmStatus === 'checking'
         ? 'BPM API checking'
       : `BPM API error${bpmStatusMessage ? `: ${bpmStatusMessage}` : ''}`
+  const musoStatusColor =
+    musoStatus === 'ok' ? 'bg-green-500' : musoStatus === 'warning' ? 'bg-amber-400' : musoStatus === 'checking' ? 'bg-amber-400' : 'bg-red-500'
 
   // Replace [user] placeholder with actual username if available
   const displaySubtitle = subtitle.includes('[user]') && userName
@@ -346,6 +393,17 @@ export default function PageHeader({
                             <span>{bpmStatusLabel}</span>
                           </div>
                         </div>
+                        {isAdmin || isSuperAdmin ? (
+                          <div className="space-y-2">
+                            <div className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-400">
+                              Muso API
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-gray-600">
+                              <span className={`h-2 w-2 rounded-full ${musoStatusColor}`} />
+                              <span>{musoStatusLabel}</span>
+                            </div>
+                          </div>
+                        ) : null}
 
                         {settingsItems && (
                           <>

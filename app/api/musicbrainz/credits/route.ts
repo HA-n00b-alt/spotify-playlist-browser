@@ -1,5 +1,60 @@
 import { NextResponse } from 'next/server'
 import { fetchMusicBrainzJson } from '@/lib/musicbrainz/client'
+import { getTrackDetailsByIsrc, hasMusoApiKey, type MusoTrackDetails } from '@/lib/muso'
+
+const normalizeRole = (value?: string | null) => (value || '').toLowerCase()
+
+const uniqueNames = (names: Array<string | null | undefined>) =>
+  Array.from(new Set(names.filter((name): name is string => Boolean(name && name.trim()))))
+
+const collectMusoCredits = (track: MusoTrackDetails) => {
+  const performedBy = uniqueNames(track.artists?.map((artist) => artist.name) || [])
+  const producedBy: string[] = []
+  const mixedBy: string[] = []
+  const masteredBy: string[] = []
+  const writtenBy: string[] = []
+
+  const credits = Array.isArray(track.credits) ? track.credits : []
+  for (const group of credits) {
+    const parent = normalizeRole(group.parent)
+    const childCredits = Array.isArray(group.credits) ? group.credits : []
+    for (const credit of childCredits) {
+      const child = normalizeRole(credit.child)
+      const collaborators = Array.isArray(credit.collaborators) ? credit.collaborators : []
+      const names = uniqueNames(collaborators.map((collab) => collab.name))
+      const bucket = (target: string[], incoming: string[]) => target.push(...incoming)
+
+      if (child.includes('producer') || parent.includes('producer')) {
+        bucket(producedBy, names)
+        continue
+      }
+      if (child.includes('mix') || child.includes('engineer')) {
+        bucket(mixedBy, names)
+        continue
+      }
+      if (child.includes('master')) {
+        bucket(masteredBy, names)
+        continue
+      }
+      if (child.includes('writer') || child.includes('composer') || child.includes('lyric')) {
+        bucket(writtenBy, names)
+        continue
+      }
+      if (child.includes('artist') || parent.includes('artist')) {
+        bucket(performedBy, names)
+      }
+    }
+  }
+
+  return {
+    performedBy: uniqueNames(performedBy),
+    producedBy: uniqueNames(producedBy),
+    mixedBy: uniqueNames(mixedBy),
+    masteredBy: uniqueNames(masteredBy),
+    writtenBy: uniqueNames(writtenBy),
+    releaseId: null,
+  }
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -13,6 +68,16 @@ export async function GET(request: Request) {
   }
 
   try {
+    if (hasMusoApiKey()) {
+      try {
+        const track = await getTrackDetailsByIsrc(isrc)
+        if (track) {
+          return NextResponse.json(collectMusoCredits(track))
+        }
+      } catch {
+        // Fall back to MusicBrainz if Muso is unavailable or rate-limited.
+      }
+    }
     const data = await fetchMusicBrainzJson<any>(`/isrc/${encodeURIComponent(isrc)}`, {
       fmt: 'json',
       inc: 'artist-credits+artist-rels+recording-rels+work-rels',

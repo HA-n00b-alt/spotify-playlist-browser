@@ -8,6 +8,7 @@ import {
   streamRecordingsByCredit,
 } from '@/lib/musicbrainz/client'
 import { fetchDeezerTrackByIsrc } from '@/lib/deezer'
+import { hasMusoApiKey, listProfileCredits, searchProfilesByName } from '@/lib/muso'
 import { query } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
@@ -30,6 +31,7 @@ interface TrackResult {
   releaseId: string
   coverArtUrl?: string | null
   previewUrl?: string | null
+  source?: 'muso' | 'musicbrainz'
 }
 
 function getReleasePrimaryType(release: any): string | null {
@@ -149,6 +151,108 @@ export async function GET(request: Request) {
     return Array.from(map.values())
   }
 
+  const musoRoleCredits = (roleName: string) => {
+    switch (roleName) {
+      case 'songwriter':
+        return ['Songwriter', 'Writer', 'Composer', 'Lyricist']
+      case 'mixer':
+        return ['Mixer', 'Mixing Engineer']
+      case 'engineer':
+        return ['Engineer', 'Recording Engineer', 'Mastering Engineer']
+      case 'artist':
+        return ['Artist', 'Primary Artist', 'Featured Artist']
+      case 'producer':
+      default:
+        return ['Producer']
+    }
+  }
+
+  const fetchMusoResults = async () => {
+    const profiles = await searchProfilesByName(name)
+    const profile = profiles[0]
+    if (!profile?.id) {
+      return { results: [] as TrackResult[], totalCount: 0 }
+    }
+    const { items, totalCount } = await listProfileCredits({
+      profileId: profile.id,
+      credits: musoRoleCredits(role),
+      limit,
+      offset,
+    })
+    const results = items.map((item) => {
+      const track = item.track || {}
+      const album = item.album || {}
+      const artists = Array.isArray(item.artists) ? item.artists : []
+      const artistName = artists.map((artist) => artist?.name).filter(Boolean).join(', ')
+      const releaseDate = typeof item.releaseDate === 'string' ? item.releaseDate : ''
+      return {
+        id: track.id || 'unknown',
+        title: track.title || 'Unknown title',
+        artist: artistName || 'Unknown artist',
+        album: album.title || 'Unknown release',
+        releaseType: undefined,
+        year: releaseDate ? releaseDate.split('-')[0] : '',
+        length: typeof track.duration === 'number' ? track.duration : 0,
+        isrc: Array.isArray(track.isrcs) ? track.isrcs[0] : undefined,
+        releaseId: album.id || 'unknown',
+        coverArtUrl: album.albumArt || null,
+        previewUrl: track.spotifyPreviewUrl || null,
+        source: 'muso',
+      } as TrackResult
+    })
+    return { results, totalCount }
+  }
+
+  if (hasMusoApiKey()) {
+    try {
+      const { results, totalCount } = await fetchMusoResults()
+      if (stream) {
+        const encoder = new TextEncoder()
+        const streamBody = new ReadableStream({
+          start: async (controller) => {
+            const send = (payload: Record<string, unknown>) => {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`))
+            }
+            try {
+              results.forEach((track) => send({ type: 'result', track }))
+              await saveCache(results)
+              send({ type: 'done', count: results.length })
+            } catch (error) {
+              send({ type: 'error', message: error instanceof Error ? error.message : 'Unknown error' })
+            } finally {
+              controller.close()
+            }
+          },
+        })
+        return new Response(streamBody, {
+          headers: {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            Connection: 'keep-alive',
+          },
+        })
+      }
+
+      await saveCache(results)
+      return NextResponse.json({
+        releaseCount: totalCount,
+        releaseOffset: offset,
+        releaseLimit: limit,
+        trackCount: results.length,
+        results,
+        source: 'muso',
+      })
+    } catch (error) {
+      if (debug) {
+        debugSteps.push({
+          step: 2,
+          name: 'Muso lookup failed; falling back to MusicBrainz',
+          data: { error: error instanceof Error ? error.message : 'Unknown error' },
+        })
+      }
+    }
+  }
+
   if (stream && !refresh) {
     const cached = await loadCache()
     if (cached && cached.length) {
@@ -162,6 +266,17 @@ export async function GET(request: Request) {
       })
 
       void (async () => {
+        if (hasMusoApiKey()) {
+          try {
+            const { results } = await fetchMusoResults()
+            const merged = mergeResults(cached, results)
+            await saveCache(merged)
+            return
+          } catch {
+            // Fall back to MusicBrainz refresh.
+          }
+        }
+
         const collected: TrackResult[] = []
         for await (const recording of streamRecordingsByCredit({ name, role, limit, offset: 0 })) {
           const embeddedReleases = Array.isArray(recording?.releases) ? recording.releases : []
@@ -201,6 +316,7 @@ export async function GET(request: Request) {
             releaseId,
             coverArtUrl,
             previewUrl: deezerTrack?.previewUrl || null,
+            source: 'musicbrainz',
           })
         }
         const merged = mergeResults(cached, collected)
@@ -275,6 +391,7 @@ export async function GET(request: Request) {
               releaseId,
               coverArtUrl,
               previewUrl: deezerTrack?.previewUrl || null,
+              source: 'musicbrainz',
             }
 
             send({ type: 'result', track })
@@ -389,6 +506,7 @@ export async function GET(request: Request) {
           releaseId,
           coverArtUrl,
           previewUrl: deezerTrack?.previewUrl || null,
+          source: 'musicbrainz',
         } as TrackResult
       })
     )

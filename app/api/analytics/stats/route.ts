@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { isAdminUser } from '@/lib/analytics'
+import { getMusoUsageSnapshot } from '@/lib/muso'
 import { query } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
@@ -93,6 +94,8 @@ export async function GET() {
        ORDER BY count DESC`
     )
 
+    const musoUsage = await getMusoUsageSnapshot()
+
     return NextResponse.json({
       summary: {
         totalUsers,
@@ -100,6 +103,9 @@ export async function GET() {
         totalApiRequests,
         activeUsers7d,
         activeUsers30d,
+        musoDailyUsed: musoUsage.used,
+        musoDailyLimit: musoUsage.limit,
+        musoDailyRemaining: musoUsage.remaining,
       },
       topPaths: topPaths.map((p) => ({
         path: p.path,
@@ -131,7 +137,6 @@ export async function GET() {
     )
   }
 }
-
 
 
 
