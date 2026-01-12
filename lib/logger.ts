@@ -4,6 +4,7 @@
 
 import pino from 'pino'
 import * as Sentry from '@sentry/nextjs'
+import type { NextRequest } from 'next/server'
 
 export interface LogContext {
   [key: string]: unknown
@@ -111,8 +112,8 @@ export function logRequest({
   sendToSentry('API request completed', 'info', payload)
 }
 
-export function withApiLogging<T extends (request: Request, context?: any) => Promise<Response>>(handler: T): T {
-  return (async (request: Request, context?: any) => {
+export function withApiLogging<T extends (request: Request | NextRequest, context?: any) => Promise<Response>>(handler: T): T {
+  return (async (request: Request | NextRequest, context?: any) => {
     const start = Date.now()
     const url = new URL(request.url)
     try {
