@@ -21,7 +21,7 @@ interface SpotifySearchResponse {
   }
 }
 
-export const POST = withApiLogging(async (request: NextRequest) => {
+export const POST = withApiLogging(async (request: Request | NextRequest) => {
   try {
     const accessToken = await getAccessToken();
     if (!accessToken) {
