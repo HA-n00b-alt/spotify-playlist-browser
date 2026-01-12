@@ -55,7 +55,7 @@ export default function ObservabilityLinksClient({ defaults }: Props) {
           rel="noopener noreferrer"
           className="mt-4 inline-flex items-center text-sm font-semibold text-emerald-600 hover:text-emerald-700"
         >
-          Open Vercel dashboard ->
+          Open Vercel dashboard {'>'}
         </a>
       </div>
 
@@ -71,7 +71,7 @@ export default function ObservabilityLinksClient({ defaults }: Props) {
             rel="noopener noreferrer"
             className="inline-flex items-center text-sm font-semibold text-emerald-600 hover:text-emerald-700"
           >
-            Open Cloud Logging ->
+            Open Cloud Logging {'>'}
           </a>
           <a
             href={links.gcp_metrics_url}
@@ -79,7 +79,7 @@ export default function ObservabilityLinksClient({ defaults }: Props) {
             rel="noopener noreferrer"
             className="inline-flex items-center text-sm font-semibold text-emerald-600 hover:text-emerald-700"
           >
-            Open Cloud Monitoring ->
+            Open Cloud Monitoring {'>'}
           </a>
         </div>
       </div>
@@ -95,7 +95,7 @@ export default function ObservabilityLinksClient({ defaults }: Props) {
           rel="noopener noreferrer"
           className="mt-4 inline-flex items-center text-sm font-semibold text-emerald-600 hover:text-emerald-700"
         >
-          Open Sentry dashboard ->
+          Open Sentry dashboard {'>'}
         </a>
       </div>
     </>

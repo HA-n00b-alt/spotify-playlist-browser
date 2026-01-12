@@ -84,7 +84,7 @@ export default async function AdminPage() {
             href="/playlists"
             className="mt-3 inline-flex items-center text-sm font-semibold text-emerald-600 hover:text-emerald-700"
           >
-            Go to playlists ->
+            Go to playlists {'>'}
           </Link>
         </div>
       </div>
