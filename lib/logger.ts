@@ -25,7 +25,7 @@ const logger = pino(
     : { level, base, timestamp: pino.stdTimeFunctions.isoTime }
 )
 
-const shouldSendToSentry = Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN)
+const shouldSendToSentry = Boolean(process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN)
 
 const sendToSentry = (message: string, level: Sentry.SeverityLevel, context?: LogContext, error?: Error) => {
   if (!shouldSendToSentry) return

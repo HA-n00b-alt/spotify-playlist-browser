@@ -7,7 +7,11 @@ export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     // Server-side initialization
     Sentry.init({
-      dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+      dsn: process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN,
+      enableLogs: true,
+      integrations: [
+        Sentry.consoleLoggingIntegration({ levels: ['log', 'warn', 'error'] }),
+      ],
       
       // Adjust this value in production, or use tracesSampler for greater control
       tracesSampleRate: 1.0,
@@ -20,7 +24,11 @@ export async function register() {
   if (process.env.NEXT_RUNTIME === 'edge') {
     // Edge runtime initialization
     Sentry.init({
-      dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+      dsn: process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN,
+      enableLogs: true,
+      integrations: [
+        Sentry.consoleLoggingIntegration({ levels: ['log', 'warn', 'error'] }),
+      ],
       
       // Adjust this value in production, or use tracesSampler for greater control
       tracesSampleRate: 1.0,
@@ -30,7 +38,5 @@ export async function register() {
     })
   }
 }
-
-
 
 

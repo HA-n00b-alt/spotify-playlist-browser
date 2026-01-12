@@ -6,6 +6,7 @@ import * as Sentry from '@sentry/nextjs'
 
 Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+  enableLogs: true,
   
   // Adjust this value in production, or use tracesSampler for greater control
   tracesSampleRate: 1.0,
@@ -21,6 +22,7 @@ Sentry.init({
   
   // You can remove this option if you're not planning to use the Sentry Session Replay feature:
   integrations: [
+    Sentry.consoleLoggingIntegration({ levels: ['log', 'warn', 'error'] }),
     Sentry.replayIntegration({
       // Additional Replay configuration goes in here, for example:
       maskAllText: true,
@@ -31,5 +33,4 @@ Sentry.init({
 
 // Export router transition hook for navigation instrumentation
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart
-
 
