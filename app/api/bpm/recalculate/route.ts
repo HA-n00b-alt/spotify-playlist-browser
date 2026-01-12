@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server'
 import { query } from '@/lib/db'
 import { getCurrentUserId } from '@/lib/analytics'
-import { logError, logInfo } from '@/lib/logger'
+import { logError, logInfo, withApiLogging } from '@/lib/logger'
 import { getPlaylistTracks } from '@/lib/spotify'
 
 export const dynamic = 'force-dynamic'
 // Increase max duration for large playlists (Vercel Pro allows up to 300s)
 export const maxDuration = 60
 
-export async function POST(request: Request) {
+export const POST = withApiLogging(async (request: Request) => {
   const userId = await getCurrentUserId()
   
   try {
@@ -129,5 +129,4 @@ export async function POST(request: Request) {
       { status: 500 }
     )
   }
-}
-
+})

@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
 import { getBpmForSpotifyTrack } from '@/lib/bpm'
 import { trackApiRequest, getCurrentUserId } from '@/lib/analytics'
-import { logError, logInfo } from '@/lib/logger'
+import { logError, logInfo, withApiLogging } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(request: Request) {
+export const GET = withApiLogging(async (request: Request) => {
   const { searchParams } = new URL(request.url)
   const spotifyTrackId = searchParams.get('spotifyTrackId')
   const countryParam = searchParams.get('country')
@@ -75,5 +75,4 @@ export async function GET(request: Request) {
       { status: 500 }
     )
   }
-}
-
+})

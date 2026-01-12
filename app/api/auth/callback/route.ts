@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import crypto from 'crypto'
-import { logError, logInfo } from '@/lib/logger'
+import { logError, logInfo, withApiLogging } from '@/lib/logger'
 
-export async function GET(request: Request) {
+export const GET = withApiLogging(async (request: Request) => {
   const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')
   const error = searchParams.get('error')
@@ -140,5 +140,4 @@ export async function GET(request: Request) {
       new URL('/?error=callback_error', request.url)
     )
   }
-}
-
+})

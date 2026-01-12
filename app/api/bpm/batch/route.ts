@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { query } from '@/lib/db'
 import { ensureSuccessfulPreviewUrlForTrack } from '@/lib/bpm'
 import { trackApiRequest, getCurrentUserId } from '@/lib/analytics'
-import { logError, logInfo } from '@/lib/logger'
+import { logError, logInfo, withApiLogging } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -65,7 +65,7 @@ function getSelectedKey(record: CacheRecord): { key: string | null; scale: strin
 // Cache TTL: 90 days
 const CACHE_TTL_DAYS = 90
 
-export async function POST(request: Request) {
+export const POST = withApiLogging(async (request: Request) => {
   const userId = await getCurrentUserId()
   let trackIds: string[] | undefined
   
@@ -370,4 +370,4 @@ export async function POST(request: Request) {
       { status: 500 }
     )
   }
-}
+})

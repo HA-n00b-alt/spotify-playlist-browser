@@ -1,5 +1,6 @@
 import { MB_BASE_URL, USER_AGENT } from '../musicbrainz'
 import { fetchDeezerTrackByIsrc } from '../deezer'
+import { logError, logInfo, logWarning } from '../logger'
 
 type MusicBrainzParams = Record<string, string | number | undefined>
 
@@ -73,6 +74,7 @@ export async function fetchMusicBrainzJson<T>(path: string, params?: MusicBrainz
     const maxAttempts = 3
 
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const start = Date.now()
       const response = await fetch(url, {
         headers: {
           'User-Agent': USER_AGENT,
@@ -80,10 +82,17 @@ export async function fetchMusicBrainzJson<T>(path: string, params?: MusicBrainz
         },
         cache: 'no-store',
       })
+      const durationMs = Date.now() - start
 
       if (response.ok) {
         const data = await response.json()
         responseCache.set(url, { expiresAt: Date.now() + MB_CACHE_TTL_MS, value: data })
+        logInfo('MusicBrainz request completed', {
+          provider: 'musicbrainz',
+          url,
+          status: response.status,
+          durationMs,
+        })
         return data
       }
 
@@ -93,11 +102,25 @@ export async function fetchMusicBrainzJson<T>(path: string, params?: MusicBrainz
         const backoffMs = Number.isFinite(retrySeconds)
           ? retrySeconds * 1000
           : 500 * Math.pow(2, attempt)
+        logWarning('MusicBrainz rate limited', {
+          provider: 'musicbrainz',
+          url,
+          status: response.status,
+          durationMs,
+          retryAfter: retryAfter ?? null,
+        })
         await sleep(backoffMs)
         continue
       }
 
       const errorText = await response.text().catch(() => '')
+      logError(new Error('MusicBrainz request failed'), {
+        provider: 'musicbrainz',
+        url,
+        status: response.status,
+        durationMs,
+        errorText,
+      })
       throw new MusicBrainzError(
         `MusicBrainz request failed: ${response.status} ${response.statusText}${errorText ? ` (${errorText.slice(0, 200)})` : ''}`,
         {

@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { trackPageview, getCurrentUserId } from '@/lib/analytics'
+import { logError, withApiLogging } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
-export async function POST(request: Request) {
+export const POST = withApiLogging(async (request: Request) => {
   try {
     const body = await request.json()
     const { path } = body
@@ -17,16 +18,15 @@ export async function POST(request: Request) {
 
     // Track pageview asynchronously (fire and forget)
     trackPageview(userId, path).catch((error) => {
-      console.error('[Analytics] Error tracking pageview:', error)
+      logError(error, { component: 'analytics.track-pageview' })
     })
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('[Analytics] Error in track-pageview endpoint:', error)
+    logError(error, { component: 'analytics.track-pageview' })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
-}
-
+})
 
 
 

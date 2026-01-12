@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
+import { logError, logWarning, withApiLogging } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
 /**
  * Get country code from IP address or Accept-Language header
  */
-export async function GET(request: Request) {
+export const GET = withApiLogging(async (request: Request) => {
   try {
     // Try to get country from IP address first
     const forwarded = request.headers.get('x-forwarded-for')
@@ -28,7 +29,10 @@ export async function GET(request: Request) {
           }
         }
       } catch (error) {
-        console.warn('[Country API] Error fetching country from IP:', error)
+        logWarning('Country lookup by IP failed', {
+          component: 'api.country',
+          error: error instanceof Error ? error.message : String(error),
+        })
       }
     }
 
@@ -69,8 +73,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ countryCode })
   } catch (error) {
-    console.error('[Country API] Error:', error)
+    logError(error, { component: 'api.country' })
     return NextResponse.json({ countryCode: 'us' }, { status: 200 })
   }
-}
-
+})

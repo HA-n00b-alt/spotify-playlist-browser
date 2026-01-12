@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
 import { getIdentityToken, prepareBpmStreamingBatch } from '@/lib/bpm'
 import { trackApiRequest, getCurrentUserId } from '@/lib/analytics'
-import { logError, logInfo } from '@/lib/logger'
+import { logError, logInfo, withApiLogging } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
 const BPM_SERVICE_URL = process.env.BPM_SERVICE_URL || 'https://bpm-service-340051416180.europe-west3.run.app'
 
-export async function POST(request: Request) {
+export const POST = withApiLogging(async (request: Request) => {
   const userId = await getCurrentUserId()
   try {
     const body = await request.json()
@@ -66,6 +66,7 @@ export async function POST(request: Request) {
       requestBody.fallback_override = fallbackOverride
     }
 
+    const start = Date.now()
     const response = await fetch(`${BPM_SERVICE_URL}/analyze/batch`, {
       method: 'POST',
       headers: {
@@ -73,6 +74,13 @@ export async function POST(request: Request) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(requestBody),
+    })
+    const durationMs = Date.now() - start
+    logInfo('BPM batch request completed', {
+      component: 'api.bpm.stream-batch',
+      status: response.status,
+      durationMs,
+      trackCount: urls.length,
     })
 
     if (!response.ok) {
@@ -102,4 +110,4 @@ export async function POST(request: Request) {
       { status: 500 }
     )
   }
-}
+})

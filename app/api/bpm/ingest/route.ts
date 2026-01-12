@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
 import { storeStreamingBpmResult } from '@/lib/bpm'
 import { trackApiRequest, getCurrentUserId } from '@/lib/analytics'
-import { logError } from '@/lib/logger'
+import { logError, withApiLogging } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
-export async function POST(request: Request) {
+export const POST = withApiLogging(async (request: Request) => {
   const userId = await getCurrentUserId()
   try {
     const body = await request.json()
@@ -58,4 +58,4 @@ export async function POST(request: Request) {
       { status: 500 }
     )
   }
-}
+})

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAccessToken, makeSpotifyRequest } from '@/lib/spotify';
 import { CreditTrack } from '@/lib/musicbrainz';
-import { logError } from '@/lib/logger';
+import { logError, withApiLogging } from '@/lib/logger';
 
 interface SpotifyUserProfile {
   id: string
@@ -21,7 +21,7 @@ interface SpotifySearchResponse {
   }
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withApiLogging(async (request: NextRequest) => {
   try {
     const accessToken = await getAccessToken();
     if (!accessToken) {
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
           
           return null;
         } catch (e) {
-          console.error(`Failed to resolve track ${track.title}`, e);
+          logError(e, { component: 'CreatePlaylistFromSearch', trackTitle: track.title });
           return null;
         }
       });
@@ -120,4 +120,4 @@ export async function POST(request: NextRequest) {
     logError(error, { component: 'CreatePlaylistFromSearch' });
     return NextResponse.json({ error: 'Failed to create playlist' }, { status: 500 });
   }
-}
+})

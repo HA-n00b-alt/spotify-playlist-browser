@@ -45,6 +45,8 @@ export default function CreditsSearchClient() {
   const [showHistory, setShowHistory] = useState(false)
   const blurTimeoutRef = useRef<number | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
+  const [debugMode, setDebugMode] = useState(false)
+  const [debugPayload, setDebugPayload] = useState<any | null>(null)
   const [showingCached, setShowingCached] = useState(false)
   const resultsRef = useRef<SearchResult[]>([])
   const [playingId, setPlayingId] = useState<string | null>(null)
@@ -266,6 +268,46 @@ export default function CreditsSearchClient() {
     }
   }
 
+  const fetchResultsDebug = async (searchName: string) => {
+    const trimmed = searchName.trim()
+    if (!trimmed) {
+      setError('Enter a name to search')
+      return
+    }
+    if (streamRef.current) {
+      streamRef.current.close()
+      streamRef.current = null
+    }
+    setLoading(true)
+    setError(null)
+    setShowingCached(false)
+    setStatusMessage('Loading debug results...')
+    setResults([])
+    setTrackCount(0)
+    setLastBatchCount(0)
+    setTotalWorks(null)
+    totalWorksRef.current = null
+    setDebugPayload(null)
+    try {
+      const url = `/api/musicbrainz/search?name=${encodeURIComponent(trimmed)}&role=${encodeURIComponent(role)}&limit=${limit}&offset=0&debug=true`
+      const res = await fetch(url)
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(payload?.error || 'Credits search failed')
+      }
+      const incoming = Array.isArray(payload?.results) ? payload.results : []
+      setResults(incoming)
+      setTrackCount(incoming.length)
+      setDebugPayload(payload?.debug || null)
+      setStatusMessage(`Loaded ${incoming.length} results (debug mode).`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Credits search failed')
+      setStatusMessage(null)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const saveHistory = (value: string) => {
     if (typeof window === 'undefined') return
     const trimmed = value.trim()
@@ -285,6 +327,10 @@ export default function CreditsSearchClient() {
       return
     }
     saveHistory(trimmed)
+    if (debugMode) {
+      await fetchResultsDebug(trimmed)
+      return
+    }
     if (typeof window !== 'undefined') {
       const cached = window.localStorage.getItem(cacheKeyFor(trimmed, role))
       if (cached) {
@@ -483,6 +529,13 @@ export default function CreditsSearchClient() {
           >
             {loading ? 'Searching...' : 'Search'}
           </button>
+          <button
+            type="button"
+            onClick={() => setDebugMode((prev) => !prev)}
+            className="inline-flex items-center justify-center rounded-full border border-gray-200 px-5 py-2 text-xs font-semibold text-gray-600 transition hover:border-gray-300"
+          >
+            {debugMode ? 'Debug on' : 'Debug off'}
+          </button>
         </div>
         <p className="text-xs text-gray-500">
           Searches Muso credits by role and name, with MusicBrainz as fallback.
@@ -497,6 +550,31 @@ export default function CreditsSearchClient() {
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
           {error}
+        </div>
+      )}
+
+      {debugMode && (
+        <div className="rounded-xl border border-gray-200 bg-white p-4 text-xs text-gray-600">
+          <div className="font-semibold text-gray-900">Debug</div>
+          <div className="mt-2">
+            Source counts:{' '}
+            {Object.entries(
+              results.reduce((acc, item) => {
+                const key = item.source || 'unknown'
+                acc[key] = (acc[key] || 0) + 1
+                return acc
+              }, {} as Record<string, number>)
+            )
+              .map(([key, value]) => `${key}: ${value}`)
+              .join(', ') || 'none'}
+          </div>
+          {debugPayload ? (
+            <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-gray-50 p-3 text-[11px] text-gray-700">
+              {JSON.stringify(debugPayload, null, 2)}
+            </pre>
+          ) : (
+            <div className="mt-3 text-gray-500">No debug payload loaded yet.</div>
+          )}
         </div>
       )}
 

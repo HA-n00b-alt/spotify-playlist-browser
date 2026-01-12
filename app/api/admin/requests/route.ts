@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUserId, getCurrentUserProfile, isSuperAdminUser } from '@/lib/analytics'
 import { query } from '@/lib/db'
+import { logInfo, withApiLogging } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+export const GET = withApiLogging(async () => {
   const isSuperAdmin = await isSuperAdminUser()
   if (!isSuperAdmin) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -25,9 +26,9 @@ export async function GET() {
   )
 
   return NextResponse.json({ requests: rows })
-}
+})
 
-export async function POST(request: Request) {
+export const POST = withApiLogging(async (request: Request) => {
   const profile = await getCurrentUserProfile()
   const userId = profile?.id || (await getCurrentUserId())
   if (!userId) {
@@ -72,10 +73,14 @@ export async function POST(request: Request) {
     [userId, resolvedName || null, resolvedEmail]
   )
 
+  logInfo('Admin access requested', {
+    component: 'admin.requests',
+    spotifyUserId: userId,
+  })
   return NextResponse.json({ status: 'requested' })
-}
+})
 
-export async function PATCH(request: Request) {
+export const PATCH = withApiLogging(async (request: Request) => {
   const isSuperAdmin = await isSuperAdminUser()
   if (!isSuperAdmin) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -123,6 +128,11 @@ export async function PATCH(request: Request) {
        WHERE id = $1`,
       [requestId, resolverId]
     )
+    logInfo('Admin access approved', {
+      component: 'admin.requests',
+      requestId,
+      spotifyUserId: requestRow.spotify_user_id,
+    })
   } else {
     await query(
       `UPDATE admin_access_requests
@@ -130,7 +140,12 @@ export async function PATCH(request: Request) {
        WHERE id = $1`,
       [requestId, resolverId]
     )
+    logInfo('Admin access denied', {
+      component: 'admin.requests',
+      requestId,
+      spotifyUserId: requestRow.spotify_user_id,
+    })
   }
 
   return NextResponse.json({ ok: true })
-}
+})

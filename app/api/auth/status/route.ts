@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import { logError, logInfo, logWarning, withApiLogging } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+export const GET = withApiLogging(async () => {
   const cookieStore = await cookies()
   const accessToken = cookieStore.get('access_token')?.value
   const refreshToken = cookieStore.get('refresh_token')?.value
@@ -22,6 +23,9 @@ export async function GET() {
 
     if (clientId && clientSecret) {
       try {
+        logInfo('Attempting token refresh from status endpoint', {
+          component: 'auth.status',
+        })
         const refreshResponse = await fetch('https://accounts.spotify.com/api/token', {
           method: 'POST',
           headers: {
@@ -37,9 +41,15 @@ export async function GET() {
         if (refreshResponse.ok) {
           const data = await refreshResponse.json()
           tokenToUse = data.access_token
+        } else {
+          logWarning('Token refresh failed in status endpoint', {
+            component: 'auth.status',
+            status: refreshResponse.status,
+            statusText: refreshResponse.statusText,
+          })
         }
-      } catch {
-        // Refresh failed
+      } catch (error) {
+        logError(error, { component: 'auth.status', errorType: 'refresh' })
       }
     }
   }
@@ -64,8 +74,8 @@ export async function GET() {
           },
         })
       }
-    } catch {
-      // API call failed
+    } catch (error) {
+      logError(error, { component: 'auth.status', errorType: 'profile' })
     }
   }
 
@@ -78,5 +88,4 @@ export async function GET() {
   }
 
   return NextResponse.json({ authenticated: false })
-}
-
+})

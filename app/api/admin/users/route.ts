@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import { isSuperAdminUser } from '@/lib/analytics'
 import { query } from '@/lib/db'
+import { logInfo, withApiLogging } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+export const GET = withApiLogging(async () => {
   const isSuperAdmin = await isSuperAdminUser()
   if (!isSuperAdmin) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -21,9 +22,9 @@ export async function GET() {
     'SELECT spotify_user_id, active, created_at, is_super_admin, display_name, email FROM admin_users ORDER BY spotify_user_id ASC'
   )
   return NextResponse.json({ admins: rows })
-}
+})
 
-export async function POST(request: Request) {
+export const POST = withApiLogging(async (request: Request) => {
   const isSuperAdmin = await isSuperAdminUser()
   if (!isSuperAdmin) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -48,10 +49,11 @@ export async function POST(request: Request) {
     [rawId, displayName || null, email || null]
   )
 
+  logInfo('Admin user added', { component: 'admin.users', spotifyUserId: rawId })
   return NextResponse.json({ ok: true })
-}
+})
 
-export async function PATCH(request: Request) {
+export const PATCH = withApiLogging(async (request: Request) => {
   const isSuperAdmin = await isSuperAdminUser()
   if (!isSuperAdmin) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -76,11 +78,13 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'Cannot deactivate super admin' }, { status: 400 })
     }
     await query('UPDATE admin_users SET active = FALSE WHERE spotify_user_id = $1', [rawId])
+    logInfo('Admin user deactivated', { component: 'admin.users', spotifyUserId: rawId })
     return NextResponse.json({ ok: true })
   }
 
   if (action === 'activate') {
     await query('UPDATE admin_users SET active = TRUE WHERE spotify_user_id = $1', [rawId])
+    logInfo('Admin user activated', { component: 'admin.users', spotifyUserId: rawId })
     return NextResponse.json({ ok: true })
   }
 
@@ -95,13 +99,14 @@ export async function PATCH(request: Request) {
        WHERE spotify_user_id = $1`,
       [rawId, displayName || null, email || null]
     )
+    logInfo('Admin user updated', { component: 'admin.users', spotifyUserId: rawId })
     return NextResponse.json({ ok: true })
   }
 
   return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
-}
+})
 
-export async function DELETE(request: Request) {
+export const DELETE = withApiLogging(async (request: Request) => {
   const isSuperAdmin = await isSuperAdminUser()
   if (!isSuperAdmin) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -122,5 +127,6 @@ export async function DELETE(request: Request) {
   }
 
   await query('DELETE FROM admin_users WHERE spotify_user_id = $1', [rawId])
+  logInfo('Admin user deleted', { component: 'admin.users', spotifyUserId: rawId })
   return NextResponse.json({ ok: true })
-}
+})

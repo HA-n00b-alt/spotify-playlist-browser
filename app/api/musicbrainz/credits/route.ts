@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { fetchMusicBrainzJson } from '@/lib/musicbrainz/client'
 import { getTrackDetailsByIsrc, hasMusoApiKey, type MusoTrackDetails } from '@/lib/muso'
+import { withApiLogging } from '@/lib/logger'
 
 const normalizeRole = (value?: string | null) => (value || '').toLowerCase()
 
@@ -56,7 +57,7 @@ const collectMusoCredits = (track: MusoTrackDetails) => {
   }
 }
 
-export async function GET(request: Request) {
+export const GET = withApiLogging(async (request: Request) => {
   const { searchParams } = new URL(request.url)
   const isrc = searchParams.get('isrc')
 
@@ -213,4 +214,4 @@ export async function GET(request: Request) {
       { status: 500 }
     )
   }
-}
+})

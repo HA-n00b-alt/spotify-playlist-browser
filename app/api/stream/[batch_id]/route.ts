@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getIdentityToken } from '@/lib/bpm'
+import { logError, logInfo, withApiLogging } from '@/lib/logger'
 
 const BPM_SERVICE_URL = process.env.BPM_SERVICE_URL || 'https://bpm-service-340051416180.europe-west3.run.app'
 
@@ -9,10 +10,10 @@ export const dynamic = 'force-dynamic'
  * Streaming proxy route handler for BPM service stream endpoint
  * Proxies the NDJSON stream from Cloud Run to the Next.js client
  */
-export async function GET(
+export const GET = withApiLogging(async (
   request: Request,
   { params }: { params: { batch_id: string } }
-) {
+) => {
   const batchId = params.batch_id
 
   if (!batchId) {
@@ -27,11 +28,19 @@ export async function GET(
     const idToken = await getIdentityToken(BPM_SERVICE_URL)
 
     // Call the BPM service's streaming endpoint
+    const start = Date.now()
     const streamResponse = await fetch(`${BPM_SERVICE_URL}/stream/${batchId}`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${idToken}`,
       },
+    })
+    const durationMs = Date.now() - start
+    logInfo('BPM stream response received', {
+      component: 'api.stream',
+      status: streamResponse.status,
+      durationMs,
+      batchId,
     })
 
     if (!streamResponse.ok) {
@@ -85,7 +94,7 @@ export async function GET(
       },
     })
   } catch (error) {
-    console.error('[Stream Proxy] Error:', error)
+    logError(error, { component: 'api.stream', batchId })
     return NextResponse.json(
       { 
         error: 'Failed to proxy stream',
@@ -94,5 +103,4 @@ export async function GET(
       { status: 500 }
     )
   }
-}
-
+})

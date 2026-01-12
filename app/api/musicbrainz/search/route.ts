@@ -10,6 +10,7 @@ import {
 import { fetchDeezerTrackByIsrc } from '@/lib/deezer'
 import { hasMusoApiKey, listProfileCredits, searchProfilesByName } from '@/lib/muso'
 import { query } from '@/lib/db'
+import { withApiLogging } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -82,7 +83,7 @@ function selectReleaseInfo(releases: any[]) {
   }
 }
 
-export async function GET(request: Request) {
+export const GET = withApiLogging(async (request: Request) => {
   const { searchParams } = new URL(request.url)
   const name = searchParams.get('name')?.trim()
   const role = searchParams.get('role')?.trim().toLowerCase() || 'producer'
@@ -545,4 +546,4 @@ export async function GET(request: Request) {
       { status: 500 }
     )
   }
-}
+})

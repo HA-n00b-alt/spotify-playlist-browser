@@ -130,6 +130,7 @@ async function refreshAccessToken(): Promise<string | null> {
       hasRefreshToken: !!refreshToken,
     })
     
+    const start = Date.now()
     const response = await fetch('https://accounts.spotify.com/api/token', {
       method: 'POST',
       headers: {
@@ -141,12 +142,14 @@ async function refreshAccessToken(): Promise<string | null> {
         refresh_token: refreshToken,
       }),
     })
+    const durationMs = Date.now() - start
 
     logInfo('Token refresh response received', {
       component: 'spotify.refreshAccessToken',
       status: response.status,
       statusText: response.statusText,
       ok: response.ok,
+      durationMs,
     })
 
     if (!response.ok) {
@@ -230,7 +233,8 @@ export async function makeSpotifyRequest<T>(
     : `https://api.spotify.com/v1${endpoint}`
   
   const makeRequest = async (token: string): Promise<Response> => {
-    return fetch(url, {
+    const start = Date.now()
+    const response = await fetch(url, {
       ...options,
       headers: {
         Authorization: `Bearer ${token}`,
@@ -238,6 +242,14 @@ export async function makeSpotifyRequest<T>(
         ...options.headers,
       },
     })
+    const durationMs = Date.now() - start
+    logInfo('Spotify API request completed', {
+      component: 'spotify.makeSpotifyRequest',
+      endpoint,
+      status: response.status,
+      durationMs,
+    })
+    return response
   }
 
   let response = await makeRequest(accessToken)

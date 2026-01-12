@@ -1,6 +1,6 @@
 import { neon } from '@neondatabase/serverless'
 import { Pool } from 'pg'
-import { logError, logInfo } from './logger'
+import { logError, logInfo, logWarning } from './logger'
 
 // Get database URLs from environment
 const DATABASE_URL = process.env.DATABASE_URL
@@ -48,6 +48,8 @@ export async function query<T = any>(text: string, params?: any[]): Promise<T[]>
   const queryPreview = text.substring(0, 100)
   const paramsCount = params?.length || 0
   
+  const start = Date.now()
+  const slowThresholdMs = Number.parseInt(process.env.DB_SLOW_QUERY_MS || '500', 10)
   try {
     logInfo('Executing database query', {
       component: 'db.query',
@@ -60,19 +62,31 @@ export async function query<T = any>(text: string, params?: any[]): Promise<T[]>
     const sqlClient = neon(DATABASE_URL)
     const result = await sqlClient(text, params || [])
     
+    const durationMs = Date.now() - start
     const resultCount = Array.isArray(result) ? result.length : 'non-array'
-    logInfo('Database query completed', {
+    const logPayload = {
       component: 'db.query',
       queryPreview,
       resultCount,
-    })
+      durationMs,
+    }
+    if (durationMs >= slowThresholdMs) {
+      logWarning('Slow database query detected', {
+        ...logPayload,
+        slowThresholdMs,
+      })
+    } else {
+      logInfo('Database query completed', logPayload)
+    }
     
     return result as T[]
   } catch (error) {
+    const durationMs = Date.now() - start
     logError(error, {
       component: 'db.query',
       queryPreview,
       paramsCount,
+      durationMs,
       query: text,
       params: params && params.length > 0 ? params : undefined,
     })

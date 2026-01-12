@@ -1,5 +1,6 @@
 import { getPlaylists } from './spotify'
 import { query } from './db'
+import { logError } from './logger'
 
 interface PlaylistCacheRecord {
   playlist_id: string
@@ -41,7 +42,7 @@ export async function getPlaylistsWithMetadata() {
       })
     }
   } catch (cacheError) {
-    console.error('Error checking cache status:', cacheError)
+    logError(cacheError, { component: 'playlists.getPlaylistsWithMetadata' })
   }
 
   // Add metadata to each playlist (keep Spotify's original order)
@@ -56,5 +57,4 @@ export async function getPlaylistsWithMetadata() {
 
   return playlistsWithMetadata
 }
-
 

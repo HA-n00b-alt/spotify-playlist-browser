@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation'
 import { getPlaylistsWithMetadata } from '@/lib/playlists'
 import PlaylistsTable from './PlaylistsTable'
 import PageHeader from '../components/PageHeader'
-import { logError } from '@/lib/logger'
+import { logError, logInfo } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -110,7 +110,7 @@ export default async function PlaylistsPage() {
                        error.toLowerCase().includes('unauthorized') || 
                        error.toLowerCase().includes('please log in')
     
-    console.log('[Playlists Page] Error page rendering:', { error, isForbidden, isAuthError })
+    logInfo('Playlists error page rendering', { error, isForbidden, isAuthError })
     
     return (
       <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-transparent">

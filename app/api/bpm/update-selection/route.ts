@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
 import { query } from '@/lib/db'
 import { getCurrentUserId } from '@/lib/analytics'
-import { logError, logInfo } from '@/lib/logger'
+import { logError, logInfo, withApiLogging } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
-export async function POST(request: Request) {
+export const POST = withApiLogging(async (request: Request) => {
   const userId = await getCurrentUserId()
   
   try {
@@ -118,5 +118,4 @@ export async function POST(request: Request) {
       { status: 500 }
     )
   }
-}
-
+})

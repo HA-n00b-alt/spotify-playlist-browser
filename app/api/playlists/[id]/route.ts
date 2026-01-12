@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getPlaylist } from '@/lib/spotify'
 import { query } from '@/lib/db'
 import { AuthenticationError } from '@/lib/errors'
-import { logError, logInfo } from '@/lib/logger'
+import { logError, withApiLogging } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,10 +11,10 @@ interface PlaylistCacheRecord {
   updated_at: Date
 }
 
-export async function GET(
+export const GET = withApiLogging(async (
   request: Request,
   { params }: { params: { id: string } }
-) {
+) => {
   try {
     const url = new URL(request.url)
     const forceRefresh = url.searchParams.get('refresh') === 'true'
@@ -102,5 +102,4 @@ export async function GET(
       { status: 500 }
     )
   }
-}
-
+})

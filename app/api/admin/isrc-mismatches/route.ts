@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { isAdminUser, getCurrentUserId } from '@/lib/analytics'
 import { query } from '@/lib/db'
+import { withApiLogging } from '@/lib/logger'
 
 type PreviewUrlEntry = {
   url: string
@@ -28,7 +29,7 @@ function getPreviewUrl(urls: PreviewUrlEntry[] | null): string | null {
   return urls[0]?.url || null
 }
 
-export async function GET() {
+export const GET = withApiLogging(async () => {
   const isAdmin = await isAdminUser()
   if (!isAdmin) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
@@ -49,9 +50,9 @@ export async function GET() {
   }))
 
   return NextResponse.json({ items })
-}
+})
 
-export async function PATCH(request: Request) {
+export const PATCH = withApiLogging(async (request: Request) => {
   const isAdmin = await isAdminUser()
   if (!isAdmin) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
@@ -84,4 +85,4 @@ export async function PATCH(request: Request) {
   )
 
   return NextResponse.json({ ok: true })
-}
+})

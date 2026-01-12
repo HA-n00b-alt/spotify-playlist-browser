@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 import { isAdminUser } from '@/lib/analytics'
 import { getMusoUsageSnapshot } from '@/lib/muso'
+import { logError, withApiLogging } from '@/lib/logger'
 import { query } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+export const GET = withApiLogging(async () => {
   // Check if user is admin
   const isAdmin = await isAdminUser()
   if (!isAdmin) {
@@ -130,13 +131,12 @@ export async function GET() {
       })),
     })
   } catch (error) {
-    console.error('[Analytics] Error fetching stats:', error)
+    logError(error, { component: 'analytics.stats' })
     return NextResponse.json(
       { error: 'Failed to fetch stats' },
       { status: 500 }
     )
   }
-}
-
+})
 
 

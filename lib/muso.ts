@@ -1,4 +1,5 @@
 import { query } from './db'
+import { logError, logInfo, logWarning } from './logger'
 
 const MUSO_API_BASE = 'https://api.developer.muso.ai/v4'
 const MUSO_PROVIDER = 'muso'
@@ -118,10 +119,12 @@ async function musoFetch<T>(path: string, init?: RequestInit): Promise<T> {
   }
   const { used, limit } = await getMusoUsageSnapshot()
   if (used >= limit) {
+    logWarning('Muso daily limit reached', { used, limit })
     throw new Error('MUSO_RATE_LIMIT')
   }
   await incrementUsage()
   const url = `${MUSO_API_BASE}${path}`
+  const start = Date.now()
   const response = await fetch(url, {
     ...init,
     headers: {
@@ -130,10 +133,24 @@ async function musoFetch<T>(path: string, init?: RequestInit): Promise<T> {
       ...(init?.headers || {}),
     },
   })
+  const durationMs = Date.now() - start
   if (!response.ok) {
     const text = await response.text().catch(() => '')
+    logError(new Error('Muso API request failed'), {
+      provider: MUSO_PROVIDER,
+      path,
+      status: response.status,
+      durationMs,
+      errorText: text,
+    })
     throw new Error(text || `Muso API error (${response.status})`)
   }
+  logInfo('Muso API request completed', {
+    provider: MUSO_PROVIDER,
+    path,
+    status: response.status,
+    durationMs,
+  })
   return response.json() as Promise<T>
 }
 

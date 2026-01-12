@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
+import { logInfo, withApiLogging } from '@/lib/logger'
 
-export async function GET() {
+export const GET = withApiLogging(async () => {
   const clientId = process.env.SPOTIFY_CLIENT_ID
   const redirectUri = process.env.SPOTIFY_REDIRECT_URI || 'https://searchmyplaylist.delman.it/api/auth/callback'
   
@@ -40,6 +41,10 @@ export async function GET() {
     path: '/',
   })
 
-  return response
-}
+  logInfo('Auth login initiated', {
+    component: 'auth.login',
+    redirectUri,
+  })
 
+  return response
+})

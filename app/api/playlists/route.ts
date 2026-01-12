@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
 import { getPlaylistsWithMetadata } from '@/lib/playlists'
 import { trackApiRequest, getCurrentUserId } from '@/lib/analytics'
-import { logError, logInfo } from '@/lib/logger'
+import { logError, logInfo, withApiLogging } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(request: Request) {
+export const GET = withApiLogging(async (request: Request) => {
   const userId = await getCurrentUserId()
   let response: NextResponse
 
@@ -93,5 +93,4 @@ export async function GET(request: Request) {
   }
 
   return response!
-}
-
+})

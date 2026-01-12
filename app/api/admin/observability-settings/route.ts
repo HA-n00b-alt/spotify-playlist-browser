@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { isAdminUser, getCurrentUserId } from '@/lib/analytics'
 import { query } from '@/lib/db'
+import { withApiLogging } from '@/lib/logger'
 
 type SettingRow = {
   key: string
@@ -9,7 +10,7 @@ type SettingRow = {
 
 const ALLOWED_KEYS = ['vercel_dashboard_url', 'gcp_logs_url', 'gcp_metrics_url', 'sentry_dashboard_url']
 
-export async function GET() {
+export const GET = withApiLogging(async () => {
   const isAdmin = await isAdminUser()
   if (!isAdmin) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
@@ -29,9 +30,9 @@ export async function GET() {
   }
 
   return NextResponse.json({ settings: values })
-}
+})
 
-export async function PUT(request: Request) {
+export const PUT = withApiLogging(async (request: Request) => {
   const isAdmin = await isAdminUser()
   if (!isAdmin) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
@@ -61,4 +62,4 @@ export async function PUT(request: Request) {
   }
 
   return NextResponse.json({ ok: true })
-}
+})

@@ -1,14 +1,19 @@
 import { NextResponse } from 'next/server'
-import { logError, logInfo } from '@/lib/logger'
+import { logError, logInfo, logWarning, withApiLogging } from '@/lib/logger'
 
-export async function GET(request: Request) {
+export const GET = withApiLogging(async (request: Request) => {
   const { searchParams } = new URL(request.url)
   const audioUrl = searchParams.get('url')
 
-  console.log('[Audio Proxy Debug] Request received, URL:', audioUrl)
+  logInfo('Audio proxy request received', {
+    component: 'api.audio-proxy',
+    audioUrl: audioUrl?.substring(0, 120) || null,
+  })
 
   if (!audioUrl) {
-    console.error('[Audio Proxy Debug] Missing URL parameter')
+    logWarning('Audio proxy missing URL parameter', {
+      component: 'api.audio-proxy',
+    })
     return NextResponse.json(
       { error: 'URL parameter is required' },
       { status: 400 }
@@ -16,7 +21,10 @@ export async function GET(request: Request) {
   }
 
   try {
-    console.log('[Audio Proxy Debug] Fetching audio from:', audioUrl)
+    logInfo('Audio proxy fetching audio', {
+      component: 'api.audio-proxy',
+      audioUrl: audioUrl.substring(0, 120),
+    })
     // Fetch the audio file from the source
     // Try to match what Python requests library does (which the BPM service uses)
     // Python requests typically sends minimal headers and lets the server handle it
@@ -31,11 +39,13 @@ export async function GET(request: Request) {
       // Don't send Referer/Origin - Python requests doesn't by default
     })
 
-    console.log('[Audio Proxy Debug] Response status:', response.status, response.ok)
-    console.log('[Audio Proxy Debug] Response headers:', {
-      'content-type': response.headers.get('content-type'),
-      'content-length': response.headers.get('content-length'),
-      'content-range': response.headers.get('content-range'),
+    logInfo('Audio proxy response received', {
+      component: 'api.audio-proxy',
+      status: response.status,
+      ok: response.ok,
+      contentType: response.headers.get('content-type'),
+      contentLength: response.headers.get('content-length'),
+      contentRange: response.headers.get('content-range'),
     })
 
     if (!response.ok) {
@@ -44,7 +54,8 @@ export async function GET(request: Request) {
       response.headers.forEach((value, key) => {
         responseHeaders[key] = value
       })
-      console.error('[Audio Proxy Debug] Fetch failed:', {
+      logError(new Error('Audio proxy fetch failed'), {
+        component: 'api.audio-proxy',
         status: response.status,
         statusText: response.statusText,
         errorText: errorText.substring(0, 500),
@@ -71,11 +82,12 @@ export async function GET(request: Request) {
     }
 
     // Get the audio data
-    console.log('[Audio Proxy Debug] Reading audio data...')
+    logInfo('Audio proxy reading audio data', {
+      component: 'api.audio-proxy',
+      audioUrl: audioUrl.substring(0, 120),
+    })
     const audioData = await response.arrayBuffer()
-    console.log('[Audio Proxy Debug] Audio data received, size:', audioData.byteLength, 'bytes')
     const contentType = response.headers.get('content-type') || 'audio/mpeg'
-    console.log('[Audio Proxy Debug] Content type:', contentType)
 
     // Return the audio with proper CORS headers
     logInfo('Audio proxied successfully', {
@@ -104,5 +116,4 @@ export async function GET(request: Request) {
       { status: 500 }
     )
   }
-}
-
+})

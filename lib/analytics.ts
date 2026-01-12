@@ -1,4 +1,5 @@
 import { query } from './db'
+import { logError, logInfo } from './logger'
 
 /**
  * Track a pageview for a user
@@ -29,7 +30,7 @@ export async function trackPageview(spotifyUserId: string | null, path: string):
     )
   } catch (error) {
     // Silently fail analytics tracking to avoid breaking the app
-    console.error('[Analytics] Error tracking pageview:', error)
+    logError(error, { component: 'analytics.trackPageview' })
   }
 }
 
@@ -65,7 +66,7 @@ export async function trackApiRequest(
     )
   } catch (error) {
     // Silently fail analytics tracking to avoid breaking the app
-    console.error('[Analytics] Error tracking API request:', error)
+    logError(error, { component: 'analytics.trackApiRequest' })
   }
 }
 
@@ -84,20 +85,32 @@ export async function getCurrentUserId(): Promise<string | null> {
     }
 
     // Fetch user info from Spotify
+    const start = Date.now()
     const response = await fetch('https://api.spotify.com/v1/me', {
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
     })
+    const durationMs = Date.now() - start
 
     if (!response.ok) {
+      logInfo('Spotify profile lookup failed', {
+        component: 'analytics.getCurrentUserId',
+        status: response.status,
+        durationMs,
+      })
       return null
     }
 
     const user = await response.json()
+    logInfo('Spotify profile lookup completed', {
+      component: 'analytics.getCurrentUserId',
+      status: response.status,
+      durationMs,
+    })
     return user.id || null
   } catch (error) {
-    console.error('[Analytics] Error getting user ID:', error)
+    logError(error, { component: 'analytics.getCurrentUserId' })
     return null
   }
 }
@@ -116,24 +129,36 @@ export async function getCurrentUserProfile(): Promise<{
       return null
     }
 
+    const start = Date.now()
     const response = await fetch('https://api.spotify.com/v1/me', {
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
     })
+    const durationMs = Date.now() - start
 
     if (!response.ok) {
+      logInfo('Spotify profile lookup failed', {
+        component: 'analytics.getCurrentUserProfile',
+        status: response.status,
+        durationMs,
+      })
       return null
     }
 
     const user = await response.json()
+    logInfo('Spotify profile lookup completed', {
+      component: 'analytics.getCurrentUserProfile',
+      status: response.status,
+      durationMs,
+    })
     return {
       id: user.id,
       display_name: user.display_name || null,
       email: user.email || null,
     }
   } catch (error) {
-    console.error('[Analytics] Error getting user profile:', error)
+    logError(error, { component: 'analytics.getCurrentUserProfile' })
     return null
   }
 }
@@ -154,7 +179,7 @@ export async function isAdminUser(): Promise<boolean> {
     )
     return rows[0]?.exists === true
   } catch (error) {
-    console.error('[Analytics] Error checking admin table:', error)
+    logError(error, { component: 'analytics.isAdminUser' })
     return false
   }
 }
@@ -172,7 +197,7 @@ export async function isSuperAdminUser(): Promise<boolean> {
     )
     return rows[0]?.exists === true
   } catch (error) {
-    console.error('[Analytics] Error checking super admin table:', error)
+    logError(error, { component: 'analytics.isSuperAdminUser' })
     return false
   }
 }

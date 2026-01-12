@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
 import { refreshPreviewUrlsForTrack } from '@/lib/bpm'
 import { getCurrentUserId, trackApiRequest } from '@/lib/analytics'
-import { logError, logInfo } from '@/lib/logger'
+import { logError, logInfo, withApiLogging } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(request: Request) {
+export const GET = withApiLogging(async (request: Request) => {
   const { searchParams } = new URL(request.url)
   const spotifyTrackId = searchParams.get('spotifyTrackId')
   const countryParam = searchParams.get('country')
@@ -50,4 +50,4 @@ export async function GET(request: Request) {
     trackApiRequest(userId, '/api/bpm/preview-refresh', 'GET', 500).catch(() => {})
     return NextResponse.json({ error: message }, { status: 500 })
   }
-}
+})
