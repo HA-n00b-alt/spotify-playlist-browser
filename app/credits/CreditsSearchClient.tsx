@@ -578,10 +578,10 @@ export default function CreditsSearchClient() {
         </div>
       )}
 
-      <div className="bg-white rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.06)] border-t border-gray-100 p-4 sm:p-6">
+      <div className="bg-white rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.06)] border-t border-gray-100 p-4 sm:p-6 dark:border-slate-800 dark:bg-slate-900">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Results</h2>
-          <span className="text-sm text-gray-500">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Results</h2>
+          <span className="text-sm text-gray-500 dark:text-slate-400">
             {trackCount > 0 ? `${trackCount} tracks` : 'No results yet'}
           </span>
         </div>
@@ -596,12 +596,12 @@ export default function CreditsSearchClient() {
             Refresh cache
           </button>
           {showingCached ? (
-            <span className="text-xs text-gray-400">Cached results</span>
+            <span className="text-xs text-gray-400 dark:text-slate-500">Cached results</span>
           ) : null}
         </div>
 
         <div className="flex flex-wrap items-center gap-3 mb-4">
-          <label className="text-xs sm:text-sm text-gray-600">Per page</label>
+          <label className="text-xs sm:text-sm text-gray-600 dark:text-slate-300">Per page</label>
           <select
             value={pageSize}
             onChange={(event) => {
@@ -612,7 +612,7 @@ export default function CreditsSearchClient() {
                 window.localStorage.setItem(pageSizeKey, String(value))
               }
             }}
-            className="px-2 py-1 border border-gray-300 rounded text-gray-900 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="px-2 py-1 border border-gray-300 rounded text-gray-900 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-green-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
           >
             <option value="10">10</option>
             <option value="20">20</option>
@@ -704,19 +704,19 @@ export default function CreditsSearchClient() {
               ))}
             </div>
 
-            <div className="hidden sm:block overflow-hidden rounded-2xl bg-white shadow-[0_4px_24px_rgba(0,0,0,0.06)] border-t border-gray-100">
+            <div className="hidden sm:block overflow-hidden rounded-2xl bg-white shadow-[0_4px_24px_rgba(0,0,0,0.06)] border-t border-gray-100 dark:border-slate-800 dark:bg-slate-900">
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-white/70">
+                  <thead className="bg-white/70 dark:bg-slate-900/90">
                     <tr>
-                      <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] w-12">
+                      <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] w-12 dark:text-slate-500">
                         #
                       </th>
-                      <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] w-12 lg:w-16">
+                      <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] w-12 lg:w-16 dark:text-slate-500">
                         Cover
                       </th>
                       <th
-                        className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none"
+                        className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none dark:text-slate-500 dark:hover:text-slate-200"
                         onClick={() => handleSort('title')}
                       >
                         <div className="flex items-center">
@@ -725,7 +725,7 @@ export default function CreditsSearchClient() {
                         </div>
                       </th>
                       <th
-                        className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden md:table-cell max-w-[140px] cursor-pointer hover:text-gray-700 select-none"
+                        className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden md:table-cell max-w-[140px] cursor-pointer hover:text-gray-700 select-none dark:text-slate-500 dark:hover:text-slate-200"
                         onClick={() => handleSort('artist')}
                       >
                         <div className="flex items-center">
@@ -734,7 +734,7 @@ export default function CreditsSearchClient() {
                         </div>
                       </th>
                       <th
-                        className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden lg:table-cell max-w-[160px] cursor-pointer hover:text-gray-700 select-none"
+                        className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden lg:table-cell max-w-[160px] cursor-pointer hover:text-gray-700 select-none dark:text-slate-500 dark:hover:text-slate-200"
                         onClick={() => handleSort('album')}
                       >
                         <div className="flex items-center">
@@ -743,7 +743,7 @@ export default function CreditsSearchClient() {
                         </div>
                       </th>
                       <th
-                        className="px-3 lg:px-4 py-2 lg:py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden md:table-cell cursor-pointer hover:text-gray-700 select-none"
+                        className="px-3 lg:px-4 py-2 lg:py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden md:table-cell cursor-pointer hover:text-gray-700 select-none dark:text-slate-500 dark:hover:text-slate-200"
                         onClick={() => handleSort('duration')}
                       >
                         <div className="flex items-center justify-end">
@@ -752,7 +752,7 @@ export default function CreditsSearchClient() {
                         </div>
                       </th>
                       <th
-                        className="px-3 lg:px-4 py-2 lg:py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none"
+                        className="px-3 lg:px-4 py-2 lg:py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none dark:text-slate-500 dark:hover:text-slate-200"
                         onClick={() => handleSort('year')}
                       >
                         <div className="flex items-center justify-end">
@@ -761,7 +761,7 @@ export default function CreditsSearchClient() {
                         </div>
                       </th>
                       <th
-                        className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden lg:table-cell cursor-pointer hover:text-gray-700 select-none"
+                        className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden lg:table-cell cursor-pointer hover:text-gray-700 select-none dark:text-slate-500 dark:hover:text-slate-200"
                         onClick={() => handleSort('isrc')}
                       >
                         <div className="flex items-center">
@@ -771,14 +771,14 @@ export default function CreditsSearchClient() {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-gray-200 dark:divide-slate-800">
                     {visibleResults.map((track, index) => (
                       <tr
                         key={`${track.id}-${track.releaseId}`}
-                        className="hover:bg-[#F9FAFB] cursor-pointer"
+                        className="cursor-pointer hover:bg-[#F9FAFB] dark:hover:bg-slate-800/60"
                         onClick={() => handleTogglePreview(track)}
                       >
-                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-500 text-xs sm:text-sm">
+                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-500 text-xs sm:text-sm dark:text-slate-400">
                           {startIndex + index + 1}
                         </td>
                         <td className="px-3 lg:px-4 py-2 lg:py-3">
@@ -791,8 +791,8 @@ export default function CreditsSearchClient() {
                               className="w-8 h-8 sm:w-10 sm:h-10 object-cover rounded-md"
                             />
                           ) : (
-                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 rounded-md flex items-center justify-center">
-                              <span className="text-gray-400 text-xs">No image</span>
+                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 rounded-md flex items-center justify-center dark:bg-slate-800">
+                              <span className="text-gray-400 text-xs dark:text-slate-500">No image</span>
                             </div>
                           )}
                         </td>
@@ -802,28 +802,28 @@ export default function CreditsSearchClient() {
                               href={`https://musicbrainz.org/recording/${encodeURIComponent(track.id)}`}
                               target="_blank"
                               rel="noreferrer"
-                              className="font-medium text-gray-900 text-xs sm:text-sm hover:text-green-600 hover:underline"
+                              className="font-medium text-gray-900 text-xs sm:text-sm hover:text-green-600 hover:underline dark:text-slate-100"
                               onClick={(event) => event.stopPropagation()}
                             >
                               {track.title}
                             </a>
                           ) : (
-                            <span className="font-medium text-gray-900 text-xs sm:text-sm">{track.title}</span>
+                            <span className="font-medium text-gray-900 text-xs sm:text-sm dark:text-slate-100">{track.title}</span>
                           )}
                         </td>
-                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-700 text-xs sm:text-sm hidden md:table-cell max-w-[140px] truncate">
+                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-700 text-xs sm:text-sm hidden md:table-cell max-w-[140px] truncate dark:text-slate-200">
                           {track.artist}
                         </td>
-                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-700 text-xs sm:text-sm hidden lg:table-cell max-w-[160px] truncate">
+                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-700 text-xs sm:text-sm hidden lg:table-cell max-w-[160px] truncate dark:text-slate-200">
                           {track.album}
                         </td>
-                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-right text-gray-600 text-xs sm:text-sm hidden md:table-cell">
+                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-right text-gray-600 text-xs sm:text-sm hidden md:table-cell dark:text-slate-300">
                           {track.length ? formatDuration(track.length) : '-'}
                         </td>
-                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-right text-gray-600 text-xs sm:text-sm">
+                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-right text-gray-600 text-xs sm:text-sm dark:text-slate-300">
                           {track.year || '-'}
                         </td>
-                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden lg:table-cell">
+                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden lg:table-cell dark:text-slate-300">
                           {track.isrc || '-'}
                         </td>
                       </tr>

@@ -25,7 +25,7 @@ export default function PageHeader({
   breadcrumbs,
   settingsItems,
 }: PageHeaderProps) {
-  const { theme, toggleTheme } = useTheme()
+  const { theme, density, toggleTheme, toggleDensity } = useTheme()
   const [userName, setUserName] = useState<string | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -41,6 +41,8 @@ export default function PageHeader({
   })
   const [requestCounts, setRequestCounts] = useState<{ admin: number; spotify: number } | null>(null)
   const [sentryUrl, setSentryUrl] = useState<string | null>(null)
+  const [logLevel, setLogLevel] = useState<string>('info')
+  const [isUpdatingLogLevel, setIsUpdatingLogLevel] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const settingsRef = useRef<HTMLDivElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -190,6 +192,9 @@ export default function PageHeader({
             ? data.settings.sentry_dashboard_url.trim()
             : null
         setSentryUrl(nextUrl)
+        if (typeof data?.settings?.log_level === 'string' && data.settings.log_level.trim()) {
+          setLogLevel(data.settings.log_level.trim())
+        }
       })
       .catch(() => {
         if (!isMounted) return
@@ -216,6 +221,21 @@ export default function PageHeader({
     : subtitle
   const playlistsHref = isAuthenticated ? '/playlists' : '/api/auth/login'
   const sentryEnabled = Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN)
+
+  const handleLogLevelChange = async (nextLevel: string) => {
+    if (!isAdmin && !isSuperAdmin) return
+    setIsUpdatingLogLevel(true)
+    setLogLevel(nextLevel)
+    try {
+      await fetch('/api/admin/observability-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ log_level: nextLevel }),
+      })
+    } finally {
+      setIsUpdatingLogLevel(false)
+    }
+  }
 
   const handleRequestAdmin = async () => {
     if (!isAuthenticated) {
@@ -407,16 +427,40 @@ export default function PageHeader({
                           <div className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-400 dark:text-slate-400">
                             Appearance
                           </div>
-                          <button
-                            type="button"
-                            onClick={toggleTheme}
-                            className="flex w-full items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-700 transition hover:bg-gray-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                          >
+                          <div className="flex items-center justify-between text-xs text-gray-700 dark:text-slate-200">
                             <span>Dark mode</span>
-                            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-600 dark:text-emerald-400">
-                              {theme === 'dark' ? 'On' : 'Off'}
-                            </span>
-                          </button>
+                            <button
+                              type="button"
+                              onClick={toggleTheme}
+                              className={`relative inline-flex h-5 w-10 items-center rounded-full transition ${
+                                theme === 'dark' ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-700'
+                              }`}
+                              aria-pressed={theme === 'dark'}
+                            >
+                              <span
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                                  theme === 'dark' ? 'translate-x-5' : 'translate-x-1'
+                                }`}
+                              />
+                            </button>
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-gray-700 dark:text-slate-200">
+                            <span>Density</span>
+                            <button
+                              type="button"
+                              onClick={toggleDensity}
+                              className={`relative inline-flex h-5 w-10 items-center rounded-full transition ${
+                                density === 'compact' ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-700'
+                              }`}
+                              aria-pressed={density === 'compact'}
+                            >
+                              <span
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                                  density === 'compact' ? 'translate-x-5' : 'translate-x-1'
+                                }`}
+                              />
+                            </button>
+                          </div>
                         </div>
 
                         {(isAdmin || isSuperAdmin) && (
@@ -455,6 +499,25 @@ export default function PageHeader({
                               {sentryEnabled ? 'Enabled' : 'Disabled'}
                             </span>
                           </div>
+                          {(isAdmin || isSuperAdmin) && (
+                            <div className="flex items-center justify-between gap-3 text-xs text-gray-600 dark:text-slate-300">
+                              <label htmlFor="log-level" className="text-xs text-gray-600 dark:text-slate-300">
+                                Log level
+                              </label>
+                              <select
+                                id="log-level"
+                                value={logLevel}
+                                onChange={(event) => handleLogLevelChange(event.target.value)}
+                                disabled={isUpdatingLogLevel}
+                                className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                              >
+                                <option value="debug">debug</option>
+                                <option value="info">info</option>
+                                <option value="warn">warn</option>
+                                <option value="error">error</option>
+                              </select>
+                            </div>
+                          )}
                           {sentryUrl && (
                             <Link
                               href={sentryUrl}
@@ -478,6 +541,14 @@ export default function PageHeader({
                           <div className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-400 dark:text-slate-400">
                             Access
                           </div>
+                          {isAuthenticated && (
+                            <div className="text-xs text-gray-600 dark:text-slate-300">
+                              Signed in as{' '}
+                              <span className="font-semibold text-gray-700 dark:text-slate-100">
+                                {userName || adminRequestEmail || 'Spotify user'}
+                              </span>
+                            </div>
+                          )}
                           {isAdmin || isSuperAdmin ? (
                             <div className="text-xs text-gray-600 dark:text-slate-300">Admin access granted.</div>
                           ) : (

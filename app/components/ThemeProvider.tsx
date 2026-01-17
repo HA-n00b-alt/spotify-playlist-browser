@@ -3,19 +3,28 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 
 type Theme = 'light' | 'dark'
+type Density = 'comfortable' | 'compact'
 
 type ThemeContextValue = {
   theme: Theme
+  density: Density
   toggleTheme: () => void
+  toggleDensity: () => void
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null)
 
 const STORAGE_KEY = 'theme'
+const DENSITY_KEY = 'density'
 
 function applyTheme(nextTheme: Theme) {
   if (typeof document === 'undefined') return
   document.documentElement.classList.toggle('dark', nextTheme === 'dark')
+}
+
+function applyDensity(nextDensity: Density) {
+  if (typeof document === 'undefined') return
+  document.documentElement.classList.toggle('density-compact', nextDensity === 'compact')
 }
 
 function getInitialTheme(): Theme {
@@ -27,13 +36,23 @@ function getInitialTheme(): Theme {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
+function getInitialDensity(): Density {
+  if (typeof window === 'undefined') return 'comfortable'
+  const stored = window.localStorage.getItem(DENSITY_KEY)
+  return stored === 'compact' ? 'compact' : 'comfortable'
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>('light')
+  const [density, setDensity] = useState<Density>('comfortable')
 
   useEffect(() => {
     const initial = getInitialTheme()
     setTheme(initial)
     applyTheme(initial)
+    const initialDensity = getInitialDensity()
+    setDensity(initialDensity)
+    applyDensity(initialDensity)
   }, [])
 
   useEffect(() => {
@@ -42,12 +61,20 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     applyTheme(theme)
   }, [theme])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(DENSITY_KEY, density)
+    applyDensity(density)
+  }, [density])
+
   const value = useMemo(
     () => ({
       theme,
+      density,
       toggleTheme: () => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark')),
+      toggleDensity: () => setDensity((prev) => (prev === 'compact' ? 'comfortable' : 'compact')),
     }),
-    [theme]
+    [theme, density]
   )
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>

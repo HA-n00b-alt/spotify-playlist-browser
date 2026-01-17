@@ -1,3 +1,27 @@
+/*
+  * DEBUGGING MUSO API
+  *
+  * The Muso API is deprecated and will be discontinued on January 31, 2024.
+  * See the documentation: https://muso.ai/developers/docs/
+  *
+  * To test the Muso API from the command line, you can use the following `curl` command.
+  * Replace YOUR_MUSO_API_KEY with your actual Muso API key from your environment variables.
+  *
+  * Test 'searchProfilesByName':
+  * curl -H "x-api-key: YOUR_MUSO_API_KEY" "https://api.developer.muso.ai/v4/profiles/search?names=John%20Doe"
+  *
+  * Test 'listProfileCredits':
+  * curl -H "x-api-key: YOUR_MUSO_API_KEY" "https://api.developer.muso.ai/v4/profile/PROFILE_ID/credits"
+  *
+  * You will need to replace PROFILE_ID with a valid profile ID. You can get a profile ID by running the 'searchProfilesByName' command and extracting the 'id' from the response.
+  *
+  * Test 'getTrackDetailsByIsrc':
+  * curl -H "x-api-key: YOUR_MUSO_API_KEY" "https://api.developer.muso.ai/v4/track/isrc/ISRC_CODE"
+  *
+  * You will need to replace ISRC_CODE with a valid ISRC. You can find ISRCs on the ISRC mismatch page in the application, or from other sources.
+  *
+  * Please execute this command in your terminal and check the output to understand if the API is reachable and if your key is valid.
+*/
 import { query } from './db'
 import { logError, logInfo, logWarning } from './logger'
 

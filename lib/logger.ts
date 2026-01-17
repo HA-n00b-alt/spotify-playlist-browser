@@ -83,6 +83,14 @@ export function logDebug(message: string, context?: LogContext) {
   logger.debug({ context }, message)
 }
 
+export function setRuntimeLogLevel(nextLevel: string) {
+  const allowed: LogLevel[] = ['debug', 'info', 'warn', 'error']
+  if (!allowed.includes(nextLevel as LogLevel)) {
+    return
+  }
+  logger.level = nextLevel
+}
+
 export function logRequest({
   method,
   path,

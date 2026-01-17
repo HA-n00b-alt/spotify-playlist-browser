@@ -2444,7 +2444,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         </button>
       </div>
       <div className="space-y-1 text-sm text-gray-700">
-        <label className="block text-xs font-medium text-gray-500" htmlFor="bpm-debug-level">
+        <label className="block text-xs font-medium text-gray-500 dark:text-slate-400" htmlFor="bpm-debug-level">
           Debug level
         </label>
         <select
@@ -2458,7 +2458,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         </select>
       </div>
       <div className="space-y-1 text-sm text-gray-700">
-        <label className="block text-xs font-medium text-gray-500" htmlFor="bpm-fallback-override">
+        <label className="block text-xs font-medium text-gray-500 dark:text-slate-400" htmlFor="bpm-fallback-override">
           Fallback override
         </label>
         <select
@@ -2475,7 +2475,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         </select>
       </div>
       <div className="space-y-1 text-sm text-gray-700">
-        <label className="block text-xs font-medium text-gray-500" htmlFor="bpm-confidence-threshold">
+        <label className="block text-xs font-medium text-gray-500 dark:text-slate-400" htmlFor="bpm-confidence-threshold">
           Confidence threshold
         </label>
         <input
@@ -2507,7 +2507,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           />
           <TrackTableSkeleton />
         </div>
-        <footer className="mt-auto py-6 sm:py-8 text-center text-xs sm:text-sm text-gray-500 border-t border-gray-200">
+        <footer className="mt-auto py-6 sm:py-8 text-center text-xs sm:text-sm text-gray-500 dark:text-slate-400 border-t border-gray-200">
           Created by{' '}
           <a href="mailto:delman@delman.it" className="text-green-600 hover:text-green-700 hover:underline">
             delman@delman.it
@@ -2551,7 +2551,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             </div>
           </div>
         </div>
-        <footer className="mt-auto py-6 sm:py-8 text-center text-xs sm:text-sm text-gray-500 border-t border-gray-200">
+        <footer className="mt-auto py-6 sm:py-8 text-center text-xs sm:text-sm text-gray-500 dark:text-slate-400 border-t border-gray-200">
           Created by{' '}
           <a href="mailto:delman@delman.it" className="text-green-600 hover:text-green-700 hover:underline">
             delman@delman.it
@@ -2709,7 +2709,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   {Object.entries(bpmDebugInfo).filter(([id, data]: [string, any]) => 
                     data?.urls && data.urls.length > 0
                   ).length === 0 && (
-                    <p className="text-gray-500">No searches with URLs tracked yet.</p>
+                    <p className="text-gray-500 dark:text-slate-400">No searches with URLs tracked yet.</p>
                   )}
                 </div>
               </details>
@@ -2750,7 +2750,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               )}
               <button
                 onClick={handleHeaderRefresh}
-                className="group relative inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:text-gray-700"
+                className="group relative inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200"
                 aria-label="Refresh playlist"
                 disabled={isHeaderRefreshing}
               >
@@ -2808,7 +2808,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       {stripHtmlTags(playlistInfo.description)}
                     </p>
                   )}
-                  <div className="flex flex-wrap items-center gap-2 text-sm text-gray-500">
+                  <div className="flex flex-wrap items-center gap-2 text-sm text-gray-500 dark:text-slate-400">
                     {playlistInfo.owner.external_urls?.spotify ? (
                       <>
                         <span>By </span>
@@ -2923,7 +2923,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             <button
               type="button"
               onClick={() => setShowAdvanced((prev) => !prev)}
-              className={`absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-400 hover:text-gray-700 ${
+              className={`absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-200 ${
                 showAdvanced ? 'bg-gray-100 text-gray-700' : 'bg-white'
               }`}
               title={showAdvanced ? 'Hide advanced search' : 'Show advanced search'}
@@ -2950,7 +2950,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       onChange={(e) => setYearFrom(e.target.value)}
                       className="w-24 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     />
-                    <span className="text-gray-500 text-sm whitespace-nowrap">to</span>
+                    <span className="text-gray-500 dark:text-slate-400 text-sm whitespace-nowrap">to</span>
                     <input
                       type="number"
                       placeholder="To"
@@ -2973,7 +2973,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       onChange={(e) => setBpmFrom(e.target.value)}
                       className="w-24 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     />
-                    <span className="text-gray-500 text-sm whitespace-nowrap">to</span>
+                    <span className="text-gray-500 dark:text-slate-400 text-sm whitespace-nowrap">to</span>
                     <input
                       type="number"
                       placeholder="To"
@@ -3039,7 +3039,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 <button
                   onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
                   disabled={safePage <= 1}
-                  className="px-2 py-1 border border-gray-300 rounded disabled:text-gray-400 disabled:border-gray-200"
+                  className="px-2 py-1 border border-gray-300 rounded disabled:text-gray-400 dark:text-slate-500 disabled:border-gray-200"
                 >
                   Prev
                 </button>
@@ -3049,7 +3049,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 <button
                   onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
                   disabled={safePage >= totalPages}
-                  className="px-2 py-1 border border-gray-300 rounded disabled:text-gray-400 disabled:border-gray-200"
+                  className="px-2 py-1 border border-gray-300 rounded disabled:text-gray-400 dark:text-slate-500 disabled:border-gray-200"
                 >
                   Next
                 </button>
@@ -3068,7 +3068,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               className={`bg-white rounded-2xl shadow-[0_4px_16px_rgba(0,0,0,0.06)] p-4 cursor-pointer transition-colors ${
                 playingTrackId === track.id
                   ? 'bg-emerald-50'
-                  : 'hover:bg-[#F9FAFB]'
+                  : 'hover:bg-[#F9FAFB] dark:hover:bg-slate-800/60'
               }`}
               onClick={(e) => {
                 // Only handle left click
@@ -3084,7 +3084,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             >
               <div className="flex items-start gap-3">
                 <div className="flex flex-col items-center gap-2">
-                  <div className="text-gray-500 text-xs font-medium w-6 h-6 flex items-center justify-center">
+                  <div className="text-gray-500 dark:text-slate-400 text-xs font-medium w-6 h-6 flex items-center justify-center">
                     {playingTrackId === track.id ? (
                       <svg className="w-4 h-4 text-green-600 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
@@ -3105,7 +3105,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     />
                   ) : (
                     <div className="w-14 h-14 bg-gray-200 rounded-xl flex-shrink-0 flex items-center justify-center">
-                      <span className="text-gray-400 text-[10px]">No image</span>
+                      <span className="text-gray-400 dark:text-slate-500 text-[10px]">No image</span>
                     </div>
                   )}
                 </div>
@@ -3126,13 +3126,13 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     <button
                       type="button"
                       onClick={(e) => handleTrackContextMenu(e, track)}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-400 dark:text-slate-500 hover:bg-gray-100 hover:text-gray-600"
                       aria-label="More options"
                     >
                       ...
                     </button>
                   </div>
-                  <div className="text-xs text-gray-500 mt-1 truncate">
+                  <div className="text-xs text-gray-500 dark:text-slate-400 mt-1 truncate">
                     {track.artists.map((artist, index) => (
                       <span key={artist.id || index}>
                         {artist.external_urls?.spotify ? (
@@ -3151,7 +3151,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       </span>
                     ))}
                   </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-gray-400">
+                  <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-gray-400 dark:text-slate-500">
                     <span className="truncate">
                       {track.album.external_urls?.spotify ? (
                         <a
@@ -3171,9 +3171,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     <span aria-hidden="true">•</span>
                     <span>{formatDuration(track.duration_ms)}</span>
                   </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-slate-400">
                     {loadingBpmFields.has(track.id) ? (
-                      <span className="inline-flex w-16 items-center justify-center text-gray-400">
+                      <span className="inline-flex w-16 items-center justify-center text-gray-400 dark:text-slate-500">
                         <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -3238,7 +3238,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     {(() => {
                       if (loadingKeyFields.has(track.id)) {
                         return (
-                          <span className="inline-flex w-24 items-center justify-center text-gray-400">
+                          <span className="inline-flex w-24 items-center justify-center text-gray-400 dark:text-slate-500">
                             <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -3289,7 +3289,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         )
                       }
                       return (
-                        <span className="inline-flex w-24 items-center justify-center rounded-full border border-gray-200 bg-transparent px-2.5 py-0.5 text-[11px] font-medium text-gray-500">
+                        <span className="inline-flex w-24 items-center justify-center rounded-full border border-gray-200 bg-transparent px-2.5 py-0.5 text-[11px] font-medium text-gray-500 dark:text-slate-400">
                           -
                         </span>
                       )
@@ -3302,21 +3302,21 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         </div>
 
         {/* Desktop Table View */}
-        <div className="hidden sm:block overflow-hidden rounded-2xl bg-white shadow-[0_4px_24px_rgba(0,0,0,0.06)] border-t border-gray-100">
+        <div className="hidden sm:block overflow-hidden rounded-2xl bg-white shadow-[0_4px_24px_rgba(0,0,0,0.06)] border-t border-gray-100 dark:border-slate-800 dark:bg-slate-900">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-white/70">
+              <thead className="bg-white/70 dark:bg-slate-900/90">
                 <tr>
-                  <th className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] w-12">
+                  <th className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 w-12">
                     #
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] w-12 lg:w-16"
+                    className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 w-12 lg:w-16"
                     aria-label="Cover"
                   >
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none"
+                    className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 cursor-pointer hover:text-gray-700 dark:hover:text-slate-200 select-none"
                     onClick={() => handleSort('name')}
                   >
                     <div className="flex items-center">
@@ -3325,7 +3325,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none hidden md:table-cell max-w-[120px]"
+                    className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 cursor-pointer hover:text-gray-700 dark:hover:text-slate-200 select-none hidden md:table-cell max-w-[120px]"
                     onClick={() => handleSort('artists')}
                   >
                     <div className="flex items-center">
@@ -3334,7 +3334,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none hidden lg:table-cell max-w-[150px]"
+                    className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 cursor-pointer hover:text-gray-700 dark:hover:text-slate-200 select-none hidden lg:table-cell max-w-[150px]"
                     onClick={() => handleSort('album')}
                   >
                     <div className="flex items-center">
@@ -3343,7 +3343,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none hidden md:table-cell"
+                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 cursor-pointer hover:text-gray-700 dark:hover:text-slate-200 select-none hidden md:table-cell"
                     onClick={() => handleSort('duration')}
                   >
                     <div className="flex items-center justify-end">
@@ -3352,7 +3352,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none hidden md:table-cell"
+                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 cursor-pointer hover:text-gray-700 dark:hover:text-slate-200 select-none hidden md:table-cell"
                     onClick={() => handleSort('tempo')}
                   >
                     <div className="flex items-center justify-end">
@@ -3360,11 +3360,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       <SortIcon field="tempo" />
                     </div>
                   </th>
-                  <th className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden md:table-cell min-w-[96px]">
+                  <th className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 hidden md:table-cell min-w-[96px]">
                     Key
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none"
+                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 cursor-pointer hover:text-gray-700 dark:hover:text-slate-200 select-none"
                     onClick={() => handleSort('release_date')}
                   >
                     <div className="flex items-center justify-end">
@@ -3373,7 +3373,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none hidden lg:table-cell"
+                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 cursor-pointer hover:text-gray-700 dark:hover:text-slate-200 select-none hidden lg:table-cell"
                     onClick={() => handleSort('popularity')}
                   >
                     <div className="flex items-center justify-end">
@@ -3382,7 +3382,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   </th>
                   <th
-                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none hidden lg:table-cell"
+                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 cursor-pointer hover:text-gray-700 dark:hover:text-slate-200 select-none hidden lg:table-cell"
                     onClick={() => handleSort('added_at')}
                   >
                     <div className="flex items-center justify-end">
@@ -3390,7 +3390,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       <SortIcon field="added_at" />
                     </div>
                   </th>
-                  <th className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0]">
+                  <th className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500">
                     <span className="sr-only">Options</span>
                   </th>
                 </tr>
@@ -3398,7 +3398,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               <tbody>
                 {sortedTracks.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={11} className="px-4 py-8 text-center text-gray-500 dark:text-slate-400">
                       {(searchQuery || yearFrom || yearTo || bpmFrom || bpmTo) ? 'No tracks match your filters' : 'No tracks found'}
                     </td>
                   </tr>
@@ -3408,8 +3408,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       key={track.id} 
                       className={`group transition-colors cursor-pointer ${
                         playingTrackId === track.id
-                          ? 'bg-emerald-50 hover:bg-emerald-100'
-                          : 'hover:bg-[#F9FAFB]'
+                          ? 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20'
+                          : 'hover:bg-[#F9FAFB] dark:hover:bg-slate-800/60'
                       }`}
                       onClick={(e) => {
                         // Only handle left click
@@ -3423,7 +3423,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       }}
                       title={getPreviewTooltip(track.id)}
                     >
-                      <td className="px-3 lg:px-4 py-4 text-gray-400 text-xs sm:text-sm">
+                      <td className="px-3 lg:px-4 py-4 text-gray-400 dark:text-slate-500 text-xs sm:text-sm">
                         <div className="flex items-center justify-center">
                           {playingTrackId === track.id ? (
                             <svg className="w-4 h-4 text-green-600 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
@@ -3447,7 +3447,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           />
                         ) : (
                           <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 rounded-xl flex-shrink-0 flex items-center justify-center">
-                            <span className="text-gray-400 text-xs">No image</span>
+                            <span className="text-gray-400 dark:text-slate-500 text-xs">No image</span>
                           </div>
                         )}
                       </td>
@@ -3463,11 +3463,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             {track.name}
                           </a>
                           {track.explicit && (
-                            <span className="ml-1 text-xs bg-gray-200 text-gray-700 px-1 py-0.5 rounded">E</span>
+                            <span className="ml-1 text-xs bg-gray-200 text-gray-700 px-1 py-0.5 rounded dark:bg-slate-800 dark:text-slate-200">E</span>
                           )}
                         </div>
                       </td>
-                      <td className="px-3 lg:px-4 py-4 text-gray-500 text-xs sm:text-sm hidden md:table-cell max-w-[120px] truncate" title={track.artists.map(a => a.name).join(', ')}>
+                      <td className="px-3 lg:px-4 py-4 text-gray-500 dark:text-slate-400 text-xs sm:text-sm hidden md:table-cell max-w-[120px] truncate" title={track.artists.map(a => a.name).join(', ')}>
                         {track.artists.map((artist, index) => (
                           <span key={artist.id || index}>
                             {artist.external_urls?.spotify ? (
@@ -3486,7 +3486,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           </span>
                         ))}
                       </td>
-                      <td className="px-3 lg:px-4 py-4 text-gray-500 text-xs sm:text-sm hidden lg:table-cell max-w-[150px] truncate" title={track.album.name}>
+                      <td className="px-3 lg:px-4 py-4 text-gray-500 dark:text-slate-400 text-xs sm:text-sm hidden lg:table-cell max-w-[150px] truncate" title={track.album.name}>
                         {track.album.external_urls?.spotify ? (
                           <a
                             href={track.album.external_urls.spotify}
@@ -3500,18 +3500,18 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           <span>{track.album.name}</span>
                         )}
                       </td>
-                      <td className="px-3 lg:px-4 py-4 text-gray-500 text-xs sm:text-sm hidden md:table-cell text-right">
+                      <td className="px-3 lg:px-4 py-4 text-gray-500 dark:text-slate-400 text-xs sm:text-sm hidden md:table-cell text-right">
                         {formatDuration(track.duration_ms)}
                       </td>
                       <td className="px-3 lg:px-4 py-4 text-xs sm:text-sm hidden md:table-cell text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-end">
                           {loadingBpmFields.has(track.id) ? (
-                            <div className="flex w-16 items-center justify-end gap-1 text-gray-400">
-                              <svg className="animate-spin h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <div className="flex w-16 items-center justify-end gap-1 text-gray-400 dark:text-slate-500">
+                              <svg className="animate-spin h-4 w-4 text-gray-400 dark:text-slate-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                               </svg>
-                              <span className="text-gray-400">...</span>
+                              <span className="text-gray-400 dark:text-slate-500">...</span>
                             </div>
                           ) : trackBpms[track.id] != null
                             ? (
@@ -3526,12 +3526,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                     handleTrackClick(track)
                                   }
                                 }}
-                                className="inline-flex w-16 items-center justify-center rounded-full border border-blue-200 bg-transparent px-2.5 py-1 text-xs font-medium text-blue-700"
+                                className="inline-flex w-16 items-center justify-center rounded-full border border-blue-200 bg-transparent px-2.5 py-1 text-xs font-medium text-blue-700 dark:border-emerald-500/40 dark:text-emerald-300"
                                 title={isAdmin ? 'Click for BPM details' : getPreviewTooltip(track.id)}
                               >
                                 {Math.round(trackBpms[track.id]!)}
                                 {bpmStreamStatus[track.id] === 'partial' && (
-                                  <span className="ml-1 text-[10px] text-blue-600">partial</span>
+                                  <span className="ml-1 text-[10px] text-blue-600 dark:text-emerald-300">partial</span>
                                 )}
                               </button>
                             )
@@ -3548,7 +3548,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                       handleTrackClick(track)
                                     }
                                   }}
-                                  className="inline-flex w-16 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-1 text-xs font-medium text-amber-700"
+                                  className="inline-flex w-16 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-1 text-xs font-medium text-amber-700 dark:border-amber-500/40 dark:text-amber-300"
                                   title={isAdmin ? 'Click to see why BPM is not available' : getPreviewTooltip(track.id)}
                                 >
                                   N/A
@@ -3556,7 +3556,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                               )
                               : track.tempo != null
                                 ? (
-                                  <span className="inline-flex w-16 items-center justify-center rounded-full border border-blue-200 bg-transparent px-2.5 py-1 text-xs font-medium text-blue-700">
+                                  <span className="inline-flex w-16 items-center justify-center rounded-full border border-blue-200 bg-transparent px-2.5 py-1 text-xs font-medium text-blue-700 dark:border-emerald-500/40 dark:text-emerald-300">
                                     {Math.round(track.tempo)}
                                   </span>
                                 )
@@ -3572,7 +3572,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                         handleTrackClick(track)
                                       }
                                     }}
-                                    className="inline-flex w-16 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-1 text-xs font-medium text-amber-700"
+                                    className="inline-flex w-16 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-1 text-xs font-medium text-amber-700 dark:border-amber-500/40 dark:text-amber-300"
                                     title={isAdmin ? 'Click to see why BPM is not available' : getPreviewTooltip(track.id)}
                                   >
                                     N/A
@@ -3585,7 +3585,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           {(() => {
                             if (loadingKeyFields.has(track.id)) {
                               return (
-                                <span className="inline-flex w-24 items-center justify-center gap-1 text-gray-400">
+                                <span className="inline-flex w-24 items-center justify-center gap-1 text-gray-400 dark:text-slate-500">
                                   <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -3610,7 +3610,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                       handleTrackClick(track)
                                     }
                                   }}
-                                  className="inline-flex w-24 items-center justify-center rounded-full border border-slate-200 bg-transparent px-2.5 py-1 text-xs font-medium text-slate-700 whitespace-nowrap"
+                                  className="inline-flex w-24 items-center justify-center rounded-full border border-slate-200 bg-transparent px-2.5 py-1 text-xs font-medium text-slate-700 whitespace-nowrap dark:border-slate-600 dark:text-slate-200"
                                 >
                                   {key && scale ? `${key} ${scale}` : key || scale}
                                 </button>
@@ -3630,35 +3630,35 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                       handleTrackClick(track)
                                     }
                                   }}
-                                  className="inline-flex w-24 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-1 text-xs font-medium text-amber-700"
+                                  className="inline-flex w-24 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-1 text-xs font-medium text-amber-700 dark:border-amber-500/40 dark:text-amber-300"
                                 >
                                   N/A
                                 </button>
                               )
                             }
                             return (
-                              <span className="inline-flex w-24 items-center justify-center rounded-full border border-gray-200 bg-transparent px-2.5 py-1 text-xs font-medium text-gray-500">
+                              <span className="inline-flex w-24 items-center justify-center rounded-full border border-gray-200 bg-transparent px-2.5 py-1 text-xs font-medium text-gray-500 dark:border-slate-600 dark:text-slate-400">
                                 -
                               </span>
                             )
                           })()}
                         </div>
                       </td>
-                      <td className="px-3 lg:px-4 py-4 text-gray-500 text-xs sm:text-sm text-right">
+                      <td className="px-3 lg:px-4 py-4 text-gray-500 dark:text-slate-400 text-xs sm:text-sm text-right">
                         {getYearString(track.album.release_date)}
                       </td>
-                      <td className="px-3 lg:px-4 py-4 text-gray-500 text-xs sm:text-sm text-right hidden lg:table-cell">
+                      <td className="px-3 lg:px-4 py-4 text-gray-500 dark:text-slate-400 text-xs sm:text-sm text-right hidden lg:table-cell">
                         {track.popularity != null ? track.popularity : (
-                          <span className="text-gray-400">N/A</span>
+                          <span className="text-gray-400 dark:text-slate-500">N/A</span>
                         )}
                       </td>
-                      <td className="px-3 lg:px-4 py-4 text-gray-500 text-xs sm:text-sm text-right hidden lg:table-cell">
+                      <td className="px-3 lg:px-4 py-4 text-gray-500 dark:text-slate-400 text-xs sm:text-sm text-right hidden lg:table-cell">
                         {track.added_at ? formatDate(track.added_at) : 'N/A'}
                       </td>
                       <td className="px-3 lg:px-4 py-4 text-right">
                         <button
                           type="button"
-                          className="opacity-0 transition-opacity text-gray-400 hover:text-gray-600 group-hover:opacity-100"
+                          className="opacity-0 transition-opacity text-gray-400 dark:text-slate-500 hover:text-gray-600 group-hover:opacity-100"
                           onClick={(e) => handleTrackContextMenu(e, track)}
                           aria-label="More options"
                         >
@@ -3684,7 +3684,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             <button
               onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
               disabled={safePage <= 1}
-              className="px-2 py-1 border border-gray-300 rounded disabled:text-gray-400 disabled:border-gray-200"
+              className="px-2 py-1 border border-gray-300 rounded disabled:text-gray-400 dark:text-slate-500 disabled:border-gray-200"
             >
               Prev
             </button>
@@ -3694,7 +3694,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             <button
               onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
               disabled={safePage >= totalPages}
-              className="px-2 py-1 border border-gray-300 rounded disabled:text-gray-400 disabled:border-gray-200"
+              className="px-2 py-1 border border-gray-300 rounded disabled:text-gray-400 dark:text-slate-500 disabled:border-gray-200"
             >
               Next
             </button>
@@ -3716,7 +3716,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               <h2 className="text-xl font-bold text-gray-900">BPM Processing Information</h2>
               <button
                 onClick={() => setShowBpmMoreInfo(false)}
-                className="text-gray-400 hover:text-gray-600 text-2xl"
+                className="text-gray-400 dark:text-slate-500 hover:text-gray-600 text-2xl"
               >
                 ×
               </button>
@@ -3763,12 +3763,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   <option value="ie">Ireland (IE)</option>
                   <option value="nz">New Zealand (NZ)</option>
                 </select>
-                <p className="mt-2 text-xs text-gray-500">
+                <p className="mt-2 text-xs text-gray-500 dark:text-slate-400">
                   Changing the country will reload the page and search stores in the selected country.
                 </p>
               </div>
 
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-gray-500 dark:text-slate-400">
                 Some tracks may not have preview audio available in the selected country, which is why they show as N/A. 
                 You can retry by clicking on the N/A value, or try selecting a different country.
               </p>
@@ -3816,7 +3816,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     setManualKey('')
                     setManualScale('major')
                   }}
-                  className="text-gray-400 hover:text-gray-600 text-2xl"
+                  className="text-gray-400 dark:text-slate-500 hover:text-gray-600 text-2xl"
                 >
                   ×
                 </button>
@@ -3855,7 +3855,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       }
                     }}
                     disabled={recalcStatus?.loading}
-                    className="bg-gray-200 hover:bg-gray-300 disabled:bg-gray-200 disabled:text-gray-400 text-gray-800 text-xs font-semibold py-1.5 px-3 rounded"
+                    className="bg-gray-200 hover:bg-gray-300 disabled:bg-gray-200 disabled:text-gray-400 dark:text-slate-500 text-gray-800 text-xs font-semibold py-1.5 px-3 rounded"
                   >
                     {recalcStatus?.loading ? 'Recalculating...' : 'Recalculate BPM/Key'}
                   </button>
@@ -3867,7 +3867,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   <h4 className="text-sm font-semibold text-gray-800">BPM service overrides</h4>
                   <div className="mt-2 grid gap-3 sm:grid-cols-3">
                     <div className="space-y-1 text-xs text-gray-700">
-                      <label className="block text-[11px] font-medium text-gray-500" htmlFor="modal-bpm-debug-level">
+                      <label className="block text-[11px] font-medium text-gray-500 dark:text-slate-400" htmlFor="modal-bpm-debug-level">
                         Debug level
                       </label>
                       <select
@@ -3881,7 +3881,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       </select>
                     </div>
                     <div className="space-y-1 text-xs text-gray-700">
-                      <label className="block text-[11px] font-medium text-gray-500" htmlFor="modal-bpm-fallback-override">
+                      <label className="block text-[11px] font-medium text-gray-500 dark:text-slate-400" htmlFor="modal-bpm-fallback-override">
                         Fallback override
                       </label>
                       <select
@@ -3898,7 +3898,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       </select>
                     </div>
                     <div className="space-y-1 text-xs text-gray-700">
-                      <label className="block text-[11px] font-medium text-gray-500" htmlFor="modal-bpm-confidence-threshold">
+                      <label className="block text-[11px] font-medium text-gray-500 dark:text-slate-400" htmlFor="modal-bpm-confidence-threshold">
                         Confidence threshold
                       </label>
                       <input
@@ -3913,7 +3913,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       />
                     </div>
                   </div>
-                  <p className="mt-2 text-[11px] text-gray-500">
+                  <p className="mt-2 text-[11px] text-gray-500 dark:text-slate-400">
                     Applies to new calculations (retry or recalc).
                   </p>
                 </div>
@@ -3939,7 +3939,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   )}
                   {loadingBpmFields.has(bpmModalData.trackId) && trackBpms[bpmModalData.trackId] == null && (
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-gray-500 dark:text-slate-400">
                       Waiting for first partial result...
                     </div>
                   )}
@@ -3976,13 +3976,13 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                 <span className="font-semibold text-gray-700">Essentia:</span>
                                 <span className="text-gray-900">{bpmModalData.fullData?.bpmEssentia != null ? Math.round(bpmModalData.fullData.bpmEssentia) : 'N/A'}</span>
                                 {bpmModalData.fullData?.bpmConfidenceEssentia != null && (
-                                  <span className="text-xs text-gray-500">
+                                  <span className="text-xs text-gray-500 dark:text-slate-400">
                                     (confidence: {(bpmModalData.fullData.bpmConfidenceEssentia * 100).toFixed(0)}%)
                                   </span>
                                 )}
                               </div>
                               {typeof bpmModalData.fullData?.bpmRawEssentia === 'number' && bpmModalData.fullData.bpmRawEssentia !== bpmModalData.fullData.bpmEssentia && (
-                                <div className="text-xs text-gray-500 mt-1">
+                                <div className="text-xs text-gray-500 dark:text-slate-400 mt-1">
                                   Raw: {bpmModalData.fullData.bpmRawEssentia.toFixed(1)}
                                 </div>
                               )}
@@ -4030,13 +4030,13 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                 <span className="font-semibold text-gray-700">Librosa:</span>
                                 <span className="text-gray-900">{bpmModalData.fullData?.bpmLibrosa != null ? Math.round(bpmModalData.fullData.bpmLibrosa) : 'N/A'}</span>
                                 {bpmModalData.fullData?.bpmConfidenceLibrosa != null && (
-                                  <span className="text-xs text-gray-500">
+                                  <span className="text-xs text-gray-500 dark:text-slate-400">
                                     (confidence: {(bpmModalData.fullData.bpmConfidenceLibrosa * 100).toFixed(0)}%)
                                   </span>
                                 )}
                               </div>
                               {typeof bpmModalData.fullData?.bpmRawLibrosa === 'number' && bpmModalData.fullData.bpmRawLibrosa !== bpmModalData.fullData.bpmLibrosa && (
-                                <div className="text-xs text-gray-500 mt-1">
+                                <div className="text-xs text-gray-500 dark:text-slate-400 mt-1">
                                   Raw: {bpmModalData.fullData.bpmRawLibrosa.toFixed(1)}
                                 </div>
                               )}
@@ -4144,7 +4144,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                   {bpmModalData.fullData?.keyEssentia || 'N/A'} {bpmModalData.fullData?.scaleEssentia || ''}
                                 </span>
                                 {bpmModalData.fullData?.keyscaleConfidenceEssentia != null && (
-                                  <span className="text-xs text-gray-500">
+                                  <span className="text-xs text-gray-500 dark:text-slate-400">
                                     (confidence: {(bpmModalData.fullData.keyscaleConfidenceEssentia * 100).toFixed(0)}%)
                                   </span>
                                 )}
@@ -4194,7 +4194,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                   {bpmModalData.fullData?.keyLibrosa || 'N/A'} {bpmModalData.fullData?.scaleLibrosa || ''}
                                 </span>
                                 {bpmModalData.fullData?.keyscaleConfidenceLibrosa != null && (
-                                  <span className="text-xs text-gray-500">
+                                  <span className="text-xs text-gray-500 dark:text-slate-400">
                                     (confidence: {(bpmModalData.fullData.keyscaleConfidenceLibrosa * 100).toFixed(0)}%)
                                   </span>
                                 )}
@@ -4359,7 +4359,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               <h2 className="text-xl font-bold text-gray-900">Song Credits</h2>
               <button
                 onClick={() => setShowCreditsModal(false)}
-                className="text-gray-400 hover:text-gray-600 text-2xl"
+                className="text-gray-400 dark:text-slate-500 hover:text-gray-600 text-2xl"
               >
                 ×
               </button>
@@ -4372,7 +4372,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               {creditsByTrackId[selectedCreditsTrack.id]?.releaseId && (
                 <a
                   href={`https://musicbrainz.org/release/${encodeURIComponent(creditsByTrackId[selectedCreditsTrack.id].releaseId as string)}`}
-                  className="text-xs text-gray-500 hover:text-gray-600"
+                  className="text-xs text-gray-500 dark:text-slate-400 hover:text-gray-600"
                   target="_blank"
                   rel="noreferrer"
                 >
@@ -4391,7 +4391,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   {creditsByTrackId[selectedCreditsTrack.id]?.performedBy?.length ? (
                     <div>{creditsByTrackId[selectedCreditsTrack.id].performedBy.join(', ')}</div>
                   ) : (
-                    <div className="text-gray-400">Not available</div>
+                    <div className="text-gray-400 dark:text-slate-500">Not available</div>
                   )}
                 </div>
                 <div>
@@ -4399,7 +4399,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   {creditsByTrackId[selectedCreditsTrack.id]?.writtenBy?.length ? (
                     <div>{creditsByTrackId[selectedCreditsTrack.id].writtenBy.join(', ')}</div>
                   ) : (
-                    <div className="text-gray-400">Not available</div>
+                    <div className="text-gray-400 dark:text-slate-500">Not available</div>
                   )}
                 </div>
                 <div>
@@ -4407,7 +4407,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   {creditsByTrackId[selectedCreditsTrack.id]?.producedBy?.length ? (
                     <div>{creditsByTrackId[selectedCreditsTrack.id].producedBy.join(', ')}</div>
                   ) : (
-                    <div className="text-gray-400">Not available</div>
+                    <div className="text-gray-400 dark:text-slate-500">Not available</div>
                   )}
                 </div>
                 <div>
@@ -4415,7 +4415,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   {creditsByTrackId[selectedCreditsTrack.id]?.mixedBy?.length ? (
                     <div>{creditsByTrackId[selectedCreditsTrack.id].mixedBy.join(', ')}</div>
                   ) : (
-                    <div className="text-gray-400">Not available</div>
+                    <div className="text-gray-400 dark:text-slate-500">Not available</div>
                   )}
                 </div>
                 <div>
@@ -4423,7 +4423,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   {creditsByTrackId[selectedCreditsTrack.id]?.masteredBy?.length ? (
                     <div>{creditsByTrackId[selectedCreditsTrack.id].masteredBy.join(', ')}</div>
                   ) : (
-                    <div className="text-gray-400">Not available</div>
+                    <div className="text-gray-400 dark:text-slate-500">Not available</div>
                   )}
                 </div>
               </div>
@@ -4455,7 +4455,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               {!isRefreshing && !refreshDone && (
                 <button
                   onClick={() => setShowCacheModal(false)}
-                  className="text-gray-400 hover:text-gray-600 text-2xl"
+                  className="text-gray-400 dark:text-slate-500 hover:text-gray-600 text-2xl"
                 >
                   ×
                 </button>
@@ -4472,7 +4472,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               </p>
               
               <div className="pt-2 border-t border-gray-200">
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-slate-400">
                   <strong>Retrieved on:</strong> {cachedAt.toLocaleString()}
                 </p>
               </div>
@@ -4528,7 +4528,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Recalculate BPM & Key?</h2>
               <button
                 onClick={() => setShowBpmRecalcPrompt(false)}
-                className="text-gray-400 hover:text-gray-600 text-2xl"
+                className="text-gray-400 dark:text-slate-500 hover:text-gray-600 text-2xl"
               >
                 ×
               </button>
@@ -4599,7 +4599,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         </div>
       )}
       
-      <footer className="mt-auto py-6 sm:py-8 text-center text-xs sm:text-sm text-gray-500 border-t border-gray-200">
+      <footer className="mt-auto py-6 sm:py-8 text-center text-xs sm:text-sm text-gray-500 dark:text-slate-400 border-t border-gray-200">
         Created by{' '}
         <a href="mailto:delman@delman.it" className="text-green-600 hover:text-green-700 hover:underline">
           delman@delman.it

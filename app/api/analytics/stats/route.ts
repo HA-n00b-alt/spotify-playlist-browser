@@ -87,6 +87,20 @@ export const GET = withApiLogging(async () => {
        ORDER BY date ASC`
     )
 
+    const apiRequestsOverTimeByProviderResult = await query<{ provider: string; date: string; count: string }>(
+      `SELECT provider, DATE(created_at) as date, SUM(request_count) as count
+       FROM external_api_usage
+       WHERE created_at >= NOW() - INTERVAL '30 days'
+       GROUP BY provider, DATE(created_at)
+       ORDER BY date ASC`
+    )
+
+    const apiRequestsOverTimeByProvider = {
+      spotify: [] as { date: string; count: number }[],
+      musicbrainz: [] as { date: string; count: number }[],
+      muso: [] as { date: string; count: number }[],
+    }
+
     // Get active users (last 7 days)
     const activeUsers7dResult = await query<{ count: string }>(
       `SELECT COUNT(DISTINCT spotify_user_id) as count 
@@ -109,6 +123,21 @@ export const GET = withApiLogging(async () => {
        FROM analytics_api_requests 
        GROUP BY status_code 
        ORDER BY count DESC`
+    )
+
+    const apiRequestsOverTimeByProvider = apiRequestsOverTimeByProviderResult.reduce(
+      (acc, row) => {
+        const provider = row.provider as 'spotify' | 'musicbrainz' | 'muso'
+        if (!acc[provider]) {
+          acc[provider] = []
+        }
+        acc[provider].push({
+          date: row.date,
+          count: parseInt(row.count, 10),
+        })
+        return acc
+      },
+      { spotify: [], musicbrainz: [], muso: [] } as Record<'spotify' | 'musicbrainz' | 'muso', { date: string; count: number }[]>
     )
 
     const musoUsage = await getMusoUsageSnapshot()
@@ -144,6 +173,7 @@ export const GET = withApiLogging(async () => {
         date: a.date,
         count: parseInt(a.count, 10),
       })),
+      apiRequestsOverTimeByProvider,
       requestsByStatus: requestsByStatus.map((r) => ({
         statusCode: r.status_code,
         count: parseInt(r.count, 10),

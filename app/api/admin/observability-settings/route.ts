@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server'
 import { isAdminUser, getCurrentUserId } from '@/lib/analytics'
 import { query } from '@/lib/db'
-import { withApiLogging } from '@/lib/logger'
+import { setRuntimeLogLevel, withApiLogging } from '@/lib/logger'
 
 type SettingRow = {
   key: string
   value: string | null
 }
 
-const ALLOWED_KEYS = ['vercel_dashboard_url', 'gcp_logs_url', 'gcp_metrics_url', 'sentry_dashboard_url']
+const ALLOWED_KEYS = ['vercel_dashboard_url', 'gcp_logs_url', 'gcp_metrics_url', 'sentry_dashboard_url', 'log_level']
 
 export const GET = withApiLogging(async () => {
   const isAdmin = await isAdminUser()
@@ -52,6 +52,9 @@ export const PUT = withApiLogging(async (request: Request) => {
 
   for (const [key, value] of entries) {
     const trimmed = typeof value === 'string' && value.trim() ? value.trim() : null
+    if (key === 'log_level' && trimmed) {
+      setRuntimeLogLevel(trimmed)
+    }
     await query(
       `INSERT INTO admin_settings (key, value, updated_at, updated_by)
        VALUES ($1, $2, NOW(), $3)

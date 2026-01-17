@@ -55,7 +55,7 @@ export default function RootLayout({
       <body className={`${inter.className} flex min-h-screen flex-col text-slate-900 antialiased dark:text-slate-100`}>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('theme');var d=t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches);if(d){document.documentElement.classList.add('dark');}}catch(e){}})();`,
+            __html: `(function(){try{var t=localStorage.getItem('theme');var d=t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches);if(d){document.documentElement.classList.add('dark');}var den=localStorage.getItem('density');if(den==='compact'){document.documentElement.classList.add('density-compact');}}catch(e){}})();`,
           }}
         />
         <ErrorBoundary>

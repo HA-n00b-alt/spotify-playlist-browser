@@ -78,6 +78,17 @@ html.dark .border-gray-300 {
   border-color: rgba(148, 163, 184, 0.35);
 }
 
+html.density-compact table th,
+html.density-compact table td {
+  padding-top: 0.5rem !important;
+  padding-bottom: 0.5rem !important;
+}
+
+html.density-compact .density-tight {
+  padding-top: 0.5rem !important;
+  padding-bottom: 0.5rem !important;
+}
+
 html.dark .border-slate-200\/70 {
   border-color: rgba(148, 163, 184, 0.2);
 }

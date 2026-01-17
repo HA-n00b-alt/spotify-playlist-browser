@@ -332,7 +332,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
             <div
               key={playlist.id}
               className={`rounded-2xl shadow-[0_4px_16px_rgba(0,0,0,0.06)] p-4 transition-colors ${
-                isNew ? 'bg-emerald-50' : 'bg-white hover:bg-[#F9FAFB]'
+                isNew ? 'bg-emerald-50 dark:bg-emerald-500/10' : 'bg-white hover:bg-[#F9FAFB] dark:bg-slate-900 dark:hover:bg-slate-800/60'
               }`}
             >
               <Link
@@ -359,16 +359,16 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       {isCached && (
-                        <span className="group relative inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-200 text-[11px] font-semibold text-blue-700">
+                        <span className="group relative inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-200 text-[11px] font-semibold text-blue-700 dark:border-emerald-500/40 dark:text-emerald-300">
                           C
-                          <span className="pointer-events-none absolute right-0 top-7 whitespace-nowrap rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 opacity-0 shadow-sm transition-opacity duration-0 group-hover:opacity-100">
+                          <span className="pointer-events-none absolute right-0 top-7 whitespace-nowrap rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 opacity-0 shadow-sm transition-opacity duration-0 group-hover:opacity-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
                             Using cached data
                           </span>
                         </span>
                       )}
                       {isNew && (
                         <span
-                          className="text-[11px] text-emerald-700 border border-emerald-200 bg-[#F5F5F7] px-1.5 py-0.5 rounded-full font-semibold"
+                          className="text-[11px] text-emerald-700 border border-emerald-200 bg-[#F5F5F7] px-1.5 py-0.5 rounded-full font-semibold dark:border-emerald-400/40 dark:bg-emerald-500/10 dark:text-emerald-300"
                           title="New"
                         >
                           New
@@ -376,7 +376,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                       )}
                     </div>
                   </div>
-                  <div className="text-sm text-gray-500 mb-2 line-clamp-1">
+                  <div className="text-sm text-gray-500 mb-2 line-clamp-1 dark:text-slate-400">
                     {playlist.description ? (
                       stripHtmlTags(playlist.description)
                     ) : (
@@ -416,13 +416,13 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
       </div>
       
       {/* Desktop Table View */}
-      <div className="hidden sm:block bg-white rounded-2xl overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.06)]">
+      <div className="hidden sm:block bg-white rounded-2xl overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.06)] dark:bg-slate-900">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-white/70 border-b border-gray-100">
+            <thead className="bg-white/70 border-b border-gray-100 dark:border-slate-800 dark:bg-slate-900/90">
               <tr>
                 <th
-                  className="px-4 lg:px-6 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none"
+                  className="px-4 lg:px-6 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none dark:text-slate-500 dark:hover:text-slate-200"
                   onClick={() => handleSort('name')}
                 >
                   <div className="flex items-center">
@@ -437,11 +437,11 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                     <SortIcon field="name" />
                   </div>
                 </th>
-                <th className="px-2 py-3 text-center text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] w-16">
+                <th className="px-2 py-3 text-center text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] w-16 dark:text-slate-500">
                   Status
                 </th>
                 <th
-                  className="px-4 lg:px-6 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none hidden md:table-cell"
+                  className="px-4 lg:px-6 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none hidden md:table-cell dark:text-slate-500 dark:hover:text-slate-200"
                   onClick={() => handleSort('description')}
                 >
                   <div className="flex items-center">
@@ -450,7 +450,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                   </div>
                 </th>
                 <th
-                  className="px-4 lg:px-6 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none"
+                  className="px-4 lg:px-6 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none dark:text-slate-500 dark:hover:text-slate-200"
                   onClick={() => handleSort('owner')}
                 >
                   <div className="flex items-center">
@@ -459,7 +459,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                   </div>
                 </th>
                 <th
-                  className="px-4 lg:px-6 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none"
+                  className="px-4 lg:px-6 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none dark:text-slate-500 dark:hover:text-slate-200"
                   onClick={() => handleSort('tracks')}
                 >
                   <div className="flex items-center justify-end">
@@ -468,7 +468,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                   </div>
                 </th>
                 <th
-                  className="px-4 lg:px-6 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none hidden lg:table-cell"
+                  className="px-4 lg:px-6 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none hidden lg:table-cell dark:text-slate-500 dark:hover:text-slate-200"
                   onClick={() => handleSort('followers')}
                 >
                   <div className="flex items-center justify-end">
@@ -487,7 +487,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                   <tr
                     key={playlist.id}
                     className={`transition-colors ${
-                      isNew ? 'bg-emerald-50 hover:bg-emerald-100' : 'hover:bg-[#F9FAFB]'
+                      isNew ? 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20' : 'hover:bg-[#F9FAFB] dark:hover:bg-slate-800/60'
                     }`}
                   >
                     <td className="px-4 lg:px-6 py-4">
@@ -504,8 +504,8 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                             className="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded-xl flex-shrink-0"
                           />
                         ) : (
-                          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 rounded-xl flex-shrink-0 flex items-center justify-center">
-                            <span className="text-gray-400 text-xs">No image</span>
+                          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 rounded-xl flex-shrink-0 flex items-center justify-center dark:bg-slate-800">
+                            <span className="text-gray-400 text-xs dark:text-slate-500">No image</span>
                           </div>
                         )}
                         <div className="min-w-0 flex-1">
@@ -518,16 +518,16 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                     <td className="px-2 py-4 text-center">
                       <div className="flex items-center justify-center gap-1">
                         {isCached && (
-                          <span className="group relative inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-200 text-[11px] font-semibold text-blue-700">
+                          <span className="group relative inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-200 text-[11px] font-semibold text-blue-700 dark:border-emerald-500/40 dark:text-emerald-300">
                             C
-                            <span className="pointer-events-none absolute right-0 top-7 whitespace-nowrap rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 opacity-0 shadow-sm transition-opacity duration-0 group-hover:opacity-100">
+                            <span className="pointer-events-none absolute right-0 top-7 whitespace-nowrap rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 opacity-0 shadow-sm transition-opacity duration-0 group-hover:opacity-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
                               Using cached data
                             </span>
                           </span>
                         )}
                         {isNew && (
                           <span
-                            className="text-[11px] text-emerald-700 border border-emerald-200 bg-[#F5F5F7] px-2 py-0.5 rounded-full"
+                            className="text-[11px] text-emerald-700 border border-emerald-200 bg-[#F5F5F7] px-2 py-0.5 rounded-full dark:border-emerald-400/40 dark:bg-emerald-500/10 dark:text-emerald-300"
                             title="New"
                           >
                             N
@@ -536,7 +536,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                       </div>
                     </td>
                     <td className="px-4 lg:px-6 py-4 hidden md:table-cell">
-                      <div className="text-gray-500 max-w-xs truncate text-sm">
+                      <div className="text-gray-500 max-w-xs truncate text-sm dark:text-slate-400">
                         {playlist.description ? (
                           stripHtmlTags(playlist.description)
                         ) : (
@@ -556,14 +556,14 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                           {playlist.owner.display_name}
                         </a>
                       ) : (
-                        <div className="text-gray-500 text-sm sm:text-base">{playlist.owner.display_name}</div>
+                        <div className="text-gray-500 text-sm sm:text-base dark:text-slate-400">{playlist.owner.display_name}</div>
                       )}
                     </td>
                     <td className="px-4 lg:px-6 py-4 text-right">
-                      <div className="text-gray-500 text-sm sm:text-base">{playlist.tracks.total}</div>
+                      <div className="text-gray-500 text-sm sm:text-base dark:text-slate-400">{playlist.tracks.total}</div>
                     </td>
                     <td className="px-4 lg:px-6 py-4 text-right hidden lg:table-cell pr-6">
-                      <div className="text-gray-500 text-sm sm:text-base">
+                      <div className="text-gray-500 text-sm sm:text-base dark:text-slate-400">
                         {playlist.followers?.total !== undefined ? playlist.followers.total.toLocaleString() : '-'}
                       </div>
                     </td>
