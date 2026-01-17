@@ -8,6 +8,7 @@ import {
   createErrorFromResponse 
 } from './errors'
 import { logError, logWarning, logInfo } from './logger'
+import { incrementExternalApiUsage } from './externalApiUsage'
 
 interface SpotifyError {
   error: {
@@ -243,6 +244,7 @@ export async function makeSpotifyRequest<T>(
       },
     })
     const durationMs = Date.now() - start
+    void incrementExternalApiUsage('spotify')
     logInfo('Spotify API request completed', {
       component: 'spotify.makeSpotifyRequest',
       endpoint,

@@ -334,6 +334,14 @@ export default function PageHeader({
                         >
                           Documentation
                         </Link>
+                        {(isAdmin || isSuperAdmin) && (
+                          <Link
+                            href="/admin"
+                            className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                          >
+                            Admin
+                          </Link>
+                        )}
                       </div>
                     )}
                   </div>
@@ -449,40 +457,6 @@ export default function PageHeader({
                             </div>
                           ) : null}
                         </div>
-                        {isAuthenticated && (isAdmin || isSuperAdmin) && (
-                          <>
-                            <div className="h-px bg-gray-100" />
-                            <div className="space-y-2">
-                              <div className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-400">
-                                Admin
-                              </div>
-                              {(isAdmin || isSuperAdmin) && (
-                                <Link
-                                  href="/admin"
-                                  className="block rounded-lg px-2 py-1 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-                                >
-                                  Admin
-                                </Link>
-                              )}
-                              {isAdmin && (
-                                <Link
-                                  href="/stats"
-                                  className="block rounded-lg px-2 py-1 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-                                >
-                                  Stats
-                                </Link>
-                              )}
-                              {isSuperAdmin && (
-                                <Link
-                                  href="/admin/users"
-                                  className="block rounded-lg px-2 py-1 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-                                >
-                                  Admin Users
-                                </Link>
-                              )}
-                            </div>
-                          </>
-                        )}
                       </div>
                     </div>
                   )}

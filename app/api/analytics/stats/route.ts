@@ -35,6 +35,22 @@ export const GET = withApiLogging(async () => {
     )
     const totalApiRequests = parseInt(totalApiRequestsResult[0]?.count || '0', 10)
 
+    const externalProviders = ['spotify', 'muso', 'musicbrainz']
+    const externalUsageRows = await query<{ provider: string; count: string }>(
+      `SELECT provider, SUM(request_count) as count
+       FROM external_api_usage
+       WHERE provider = ANY($1::text[])
+       GROUP BY provider`,
+      [externalProviders]
+    )
+    const externalUsageTotals = externalProviders.reduce<Record<string, number>>((acc, provider) => {
+      acc[provider] = 0
+      return acc
+    }, {})
+    externalUsageRows.forEach((row) => {
+      externalUsageTotals[row.provider] = parseInt(row.count, 10)
+    })
+
     // Get pageviews by path (top 10)
     const topPaths = await query<{ path: string; count: string }>(
       `SELECT path, COUNT(*) as count 
@@ -104,6 +120,9 @@ export const GET = withApiLogging(async () => {
         totalApiRequests,
         activeUsers7d,
         activeUsers30d,
+        spotifyApiRequests: externalUsageTotals.spotify,
+        musoApiRequests: externalUsageTotals.muso,
+        musicbrainzApiRequests: externalUsageTotals.musicbrainz,
         musoDailyUsed: musoUsage.used,
         musoDailyLimit: musoUsage.limit,
         musoDailyRemaining: musoUsage.remaining,
@@ -138,5 +157,4 @@ export const GET = withApiLogging(async () => {
     )
   }
 })
-
 

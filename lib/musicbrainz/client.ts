@@ -1,6 +1,7 @@
 import { MB_BASE_URL, USER_AGENT } from '../musicbrainz'
 import { fetchDeezerTrackByIsrc } from '../deezer'
 import { logError, logInfo, logWarning } from '../logger'
+import { incrementExternalApiUsage } from '../externalApiUsage'
 
 type MusicBrainzParams = Record<string, string | number | undefined>
 
@@ -83,6 +84,7 @@ export async function fetchMusicBrainzJson<T>(path: string, params?: MusicBrainz
         cache: 'no-store',
       })
       const durationMs = Date.now() - start
+      void incrementExternalApiUsage('musicbrainz')
 
       if (response.ok) {
         const data = await response.json()

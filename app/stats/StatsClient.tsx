@@ -9,6 +9,9 @@ interface StatsData {
     totalApiRequests: number
     activeUsers7d: number
     activeUsers30d: number
+    spotifyApiRequests: number
+    musoApiRequests: number
+    musicbrainzApiRequests: number
     musoDailyUsed: number
     musoDailyLimit: number
     musoDailyRemaining: number
@@ -66,7 +69,7 @@ export default function StatsClient() {
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Total Users"
           value={stats.summary.totalUsers.toLocaleString()}
@@ -78,11 +81,6 @@ export default function StatsClient() {
           description="All time"
         />
         <StatCard
-          title="API Requests"
-          value={stats.summary.totalApiRequests.toLocaleString()}
-          description="All time"
-        />
-        <StatCard
           title="Active Users (7d)"
           value={stats.summary.activeUsers7d.toLocaleString()}
           description="Last 7 days"
@@ -91,6 +89,21 @@ export default function StatsClient() {
           title="Active Users (30d)"
           value={stats.summary.activeUsers30d.toLocaleString()}
           description="Last 30 days"
+        />
+        <StatCard
+          title="Spotify API Calls"
+          value={stats.summary.spotifyApiRequests.toLocaleString()}
+          description="All time"
+        />
+        <StatCard
+          title="MusicBrainz API Calls"
+          value={stats.summary.musicbrainzApiRequests.toLocaleString()}
+          description="All time"
+        />
+        <StatCard
+          title="Muso API Calls"
+          value={stats.summary.musoApiRequests.toLocaleString()}
+          description="All time"
         />
         <StatCard
           title="Muso API Used (Today)"
@@ -233,4 +246,3 @@ function StatCard({ title, value, description }: { title: string; value: string;
     </div>
   )
 }
-
