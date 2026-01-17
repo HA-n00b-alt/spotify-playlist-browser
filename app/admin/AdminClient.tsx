@@ -229,7 +229,7 @@ export default function AdminClient() {
   return (
     <div className="rounded-2xl bg-white p-6 shadow-[0_4px_24px_rgba(0,0,0,0.06)] border-t border-gray-100 sm:p-10 space-y-6">
       <div className="space-y-2">
-        <h2 className="text-lg font-semibold text-[#171923]">Admin Users</h2>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Admin Users</h2>
         <p className="text-sm text-gray-500">
           Add or deactivate Spotify user IDs that should access admin-only features.
         </p>

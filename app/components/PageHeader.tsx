@@ -3,7 +3,8 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import UserMenu from './UserMenu'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTheme } from './ThemeProvider'
 
 interface PageHeaderProps {
   subtitle: string
@@ -15,20 +16,31 @@ interface PageHeaderProps {
   settingsItems?: React.ReactNode
 }
 
+type ApiHealthStatus = 'ok' | 'throttled' | 'checking' | 'error'
+type ApiHealthEntry = { status: ApiHealthStatus; label: string }
+
 export default function PageHeader({
   subtitle,
   center,
   breadcrumbs,
   settingsItems,
 }: PageHeaderProps) {
+  const { theme, toggleTheme } = useTheme()
   const [userName, setUserName] = useState<string | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
-  const [bpmStatus, setBpmStatus] = useState<'checking' | 'ok' | 'error'>('checking')
-  const [bpmStatusMessage, setBpmStatusMessage] = useState<string | null>(null)
-  const [musoStatus, setMusoStatus] = useState<'checking' | 'ok' | 'warning' | 'error'>('checking')
-  const [musoStatusLabel, setMusoStatusLabel] = useState<string>('Muso API checking')
+  const [apiHealth, setApiHealth] = useState<{
+    spotify: ApiHealthEntry
+    muso: ApiHealthEntry
+    musicbrainz: ApiHealthEntry
+  }>({
+    spotify: { status: 'checking', label: 'Checking' },
+    muso: { status: 'checking', label: 'Checking' },
+    musicbrainz: { status: 'checking', label: 'Checking' },
+  })
+  const [requestCounts, setRequestCounts] = useState<{ admin: number; spotify: number } | null>(null)
+  const [sentryUrl, setSentryUrl] = useState<string | null>(null)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const settingsRef = useRef<HTMLDivElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -116,117 +128,94 @@ export default function PageHeader({
   }, [isMenuOpen])
 
   useEffect(() => {
+    if (!isSettingsOpen) return
     let isMounted = true
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 30000)
-
-    setBpmStatus('checking')
-    setBpmStatusMessage(null)
-    fetch('/api/bpm/health', { signal: controller.signal })
-      .then(async (res) => {
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok) {
-          const message =
-            typeof data?.error === 'string' && data.error.trim()
-              ? data.error
-              : `BPM health check failed: ${res.status}`
-          throw new Error(message)
-        }
-        return data
-      })
-      .then((data) => {
-        if (!isMounted) return
-        if (data?.ok) {
-          setBpmStatus('ok')
-          setBpmStatusMessage(null)
-          return
-        }
-        const message =
-          typeof data?.error === 'string' && data.error.trim()
-            ? data.error
-            : 'BPM API reported unhealthy'
-        setBpmStatus('error')
-        setBpmStatusMessage(message)
-      })
-      .catch((err) => {
-        if (!isMounted) return
-        setBpmStatus('error')
-        const message =
-          err instanceof Error && err.message.trim()
-            ? err.message
-            : 'Unable to reach BPM API'
-        setBpmStatusMessage(message)
-      })
-      .finally(() => {
-        clearTimeout(timeoutId)
-      })
-
-    return () => {
-      isMounted = false
-      clearTimeout(timeoutId)
-      controller.abort()
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!isAdmin && !isSuperAdmin) {
-      return
-    }
-    let isMounted = true
-    setMusoStatus('checking')
-    setMusoStatusLabel('Muso API checking')
-    fetch('/api/admin/muso-status')
+    fetch('/api/health/services')
       .then((res) => res.json())
       .then((data) => {
         if (!isMounted) return
-        if (!data?.enabled) {
-          setMusoStatus('error')
-          setMusoStatusLabel('Muso API not configured')
-          return
-        }
-        const remaining = typeof data?.remaining === 'number' ? data.remaining : 0
-        const limit = typeof data?.limit === 'number' ? data.limit : 0
-        if (remaining <= 0) {
-          setMusoStatus('error')
-          setMusoStatusLabel('Muso daily limit reached')
-          return
-        }
-        const warningThreshold = Math.max(50, Math.round(limit * 0.1))
-        if (remaining <= warningThreshold) {
-          setMusoStatus('warning')
-          setMusoStatusLabel(`Muso near limit (${remaining} left)`)
-          return
-        }
-        setMusoStatus('ok')
-        setMusoStatusLabel(`Muso API healthy (${remaining} left)`)
+        setApiHealth({
+          spotify: data?.spotify ?? { status: 'error', label: 'Unavailable' },
+          muso: data?.muso ?? { status: 'error', label: 'Unavailable' },
+          musicbrainz: data?.musicbrainz ?? { status: 'error', label: 'Unavailable' },
+        })
       })
       .catch(() => {
         if (!isMounted) return
-        setMusoStatus('error')
-        setMusoStatusLabel('Muso API unreachable')
+        setApiHealth({
+          spotify: { status: 'error', label: 'Unavailable' },
+          muso: { status: 'error', label: 'Unavailable' },
+          musicbrainz: { status: 'error', label: 'Unavailable' },
+        })
       })
-
     return () => {
       isMounted = false
     }
-  }, [isAdmin, isSuperAdmin])
+  }, [isSettingsOpen])
 
-  const bpmStatusColor =
-    bpmStatus === 'ok' ? 'bg-green-500' : bpmStatus === 'checking' ? 'bg-amber-400' : 'bg-red-500'
-  const bpmStatusLabel =
-    bpmStatus === 'ok'
-      ? 'BPM API healthy'
-      : bpmStatus === 'checking'
-        ? 'BPM API checking'
-      : `BPM API error${bpmStatusMessage ? `: ${bpmStatusMessage}` : ''}`
-  const musoStatusColor =
-    musoStatus === 'ok' ? 'bg-green-500' : musoStatus === 'warning' ? 'bg-amber-400' : musoStatus === 'checking' ? 'bg-amber-400' : 'bg-red-500'
+  useEffect(() => {
+    if (!isSettingsOpen || (!isAdmin && !isSuperAdmin)) {
+      return
+    }
+    let isMounted = true
+    fetch('/api/admin/request-summary')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!isMounted) return
+        setRequestCounts({
+          admin: Number(data?.pendingAdminRequests ?? 0),
+          spotify: Number(data?.pendingSpotifyAccessRequests ?? 0),
+        })
+      })
+      .catch(() => {
+        if (!isMounted) return
+        setRequestCounts({ admin: 0, spotify: 0 })
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [isSettingsOpen, isAdmin, isSuperAdmin])
+
+  useEffect(() => {
+    if (!isSettingsOpen || (!isAdmin && !isSuperAdmin)) {
+      return
+    }
+    let isMounted = true
+    fetch('/api/admin/observability-settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!isMounted) return
+        const nextUrl =
+          typeof data?.settings?.sentry_dashboard_url === 'string' && data.settings.sentry_dashboard_url.trim()
+            ? data.settings.sentry_dashboard_url.trim()
+            : null
+        setSentryUrl(nextUrl)
+      })
+      .catch(() => {
+        if (!isMounted) return
+        setSentryUrl(null)
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [isSettingsOpen, isAdmin, isSuperAdmin])
+
+  const healthStatusColor = useMemo<Record<ApiHealthStatus, string>>(
+    () => ({
+      ok: 'bg-emerald-500',
+      throttled: 'bg-amber-400',
+      checking: 'bg-amber-400',
+      error: 'bg-red-500',
+    }),
+    []
+  )
 
   // Replace [user] placeholder with actual username if available
   const displaySubtitle = subtitle.includes('[user]') && userName
     ? subtitle.replace('[user]', userName)
     : subtitle
   const playlistsHref = isAuthenticated ? '/playlists' : '/api/auth/login'
+  const sentryEnabled = Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN)
 
   const handleRequestAdmin = async () => {
     if (!isAuthenticated) {
@@ -281,16 +270,16 @@ export default function PageHeader({
       {center ? (
         /* Centered layout for login/error pages */
         <div className="text-center">
-          <h1 className="text-2xl sm:text-3xl font-bold text-[#171923]">Spotify Playlist Tools</h1>
-          <p className="text-sm text-gray-500 mt-1">{displaySubtitle}</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100">Spotify Playlist Tools</h1>
+          <p className="text-sm text-gray-500 mt-1 dark:text-slate-400">{displaySubtitle}</p>
           {/* Back link removed */}
         </div>
       ) : (
         /* Default layout for authenticated pages */
         <div className="relative">
-          <header className="fixed inset-x-0 top-0 z-40 h-16 border-b border-gray-200/80 bg-white/70 backdrop-blur">
+          <header className="fixed inset-x-0 top-0 z-40 h-16 border-b border-gray-200/80 bg-white/70 backdrop-blur dark:border-slate-800/80 dark:bg-slate-900/80">
             <div className="mx-auto flex h-full w-full max-w-7xl items-center justify-between px-4 sm:px-8 lg:px-0">
-              <nav className="flex items-center gap-2 text-xs sm:text-sm text-gray-500">
+              <nav className="flex items-center gap-2 text-xs sm:text-sm text-gray-500 dark:text-slate-300">
                 <div className="flex items-center gap-2">
                   <div className="relative" ref={menuRef}>
                     <button
@@ -305,39 +294,39 @@ export default function PageHeader({
                         alt="Spotify Playlist Tools"
                         width={20}
                         height={20}
-                        className="h-5 w-5 opacity-70"
+                        className="h-5 w-5 opacity-70 dark:opacity-90"
                       />
                     </button>
                     {isMenuOpen && (
-                      <div className="absolute left-0 top-full mt-2 w-56 rounded-2xl border border-gray-200 bg-white p-2 text-sm shadow-xl">
+                      <div className="absolute left-0 top-full mt-2 w-56 rounded-2xl border border-gray-200 bg-white p-2 text-sm shadow-xl dark:border-slate-800 dark:bg-slate-900">
                         <Link
                           href="/"
-                          className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                          className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 dark:text-slate-200 dark:hover:bg-slate-800"
                         >
                           Home
                         </Link>
                         <Link
                           href={playlistsHref}
-                          className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                          className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 dark:text-slate-200 dark:hover:bg-slate-800"
                         >
                           Playlists
                         </Link>
                         <Link
                           href="/credits"
-                          className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                          className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 dark:text-slate-200 dark:hover:bg-slate-800"
                         >
                           Credit Search
                         </Link>
                         <Link
                           href="/docs"
-                          className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                          className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 dark:text-slate-200 dark:hover:bg-slate-800"
                         >
                           Documentation
                         </Link>
                         {(isAdmin || isSuperAdmin) && (
                           <Link
                             href="/admin"
-                            className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                            className="block rounded-lg px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 dark:text-slate-200 dark:hover:bg-slate-800"
                           >
                             Admin
                           </Link>
@@ -352,16 +341,16 @@ export default function PageHeader({
                         : crumb.label
                       return (
                         <div key={`${crumb.label}-${index}`} className="flex items-center gap-2">
-                          {index > 0 ? <span className="text-gray-300">/</span> : null}
+                          {index > 0 ? <span className="text-gray-300 dark:text-slate-600">/</span> : null}
                           {crumb.href && index < list.length - 1 ? (
                             <Link
                               href={crumb.href}
-                              className="text-gray-500 hover:text-gray-700"
+                              className="text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200"
                             >
                               {label}
                             </Link>
                           ) : (
-                            <span className="font-semibold text-[#171923]">{label}</span>
+                            <span className="font-semibold text-slate-900 dark:text-slate-100">{label}</span>
                           )}
                         </div>
                       )
@@ -375,7 +364,7 @@ export default function PageHeader({
                   <button
                     type="button"
                     onClick={() => setIsSettingsOpen((prev) => !prev)}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white/70 text-gray-600 shadow-sm transition hover:text-gray-900"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white/70 text-gray-600 shadow-sm transition hover:text-gray-900 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300 dark:hover:text-slate-100"
                     aria-label="View options"
                     aria-expanded={isSettingsOpen}
                   >
@@ -390,42 +379,107 @@ export default function PageHeader({
                   </button>
 
                   {isSettingsOpen && (
-                    <div className="absolute right-0 mt-3 w-72 rounded-2xl border border-gray-200 bg-white p-4 text-sm shadow-xl">
+                    <div className="absolute right-0 mt-3 w-80 rounded-2xl border border-gray-200 bg-white p-4 text-sm shadow-xl dark:border-slate-800 dark:bg-slate-900/95">
                       <div className="space-y-4">
                         <div className="space-y-2">
-                          <div className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-400">
-                            BPM API
+                          <div className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-400 dark:text-slate-400">
+                            API Health
                           </div>
-                          <div className="flex items-center gap-2 text-xs text-gray-600">
-                            <span className={`h-2 w-2 rounded-full ${bpmStatusColor}`} />
-                            <span>{bpmStatusLabel}</span>
+                          <div className="space-y-2 text-xs text-gray-600 dark:text-slate-300">
+                            {([
+                              { label: 'Spotify', value: apiHealth.spotify },
+                              { label: 'Muso', value: apiHealth.muso },
+                              { label: 'MusicBrainz', value: apiHealth.musicbrainz },
+                            ] as const).map((entry) => (
+                              <div key={entry.label} className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <span className={`h-2 w-2 rounded-full ${healthStatusColor[entry.value.status]}`} />
+                                  <span>{entry.label}</span>
+                                </div>
+                                <span className="text-[11px] text-gray-400 dark:text-slate-400">{entry.value.label}</span>
+                              </div>
+                            ))}
                           </div>
                         </div>
-                        {isAdmin || isSuperAdmin ? (
-                          <div className="space-y-2">
-                            <div className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-400">
-                              Muso API
-                            </div>
-                            <div className="flex items-center gap-2 text-xs text-gray-600">
-                              <span className={`h-2 w-2 rounded-full ${musoStatusColor}`} />
-                              <span>{musoStatusLabel}</span>
-                            </div>
+
+                        <div className="h-px bg-gray-100 dark:bg-slate-800" />
+                        <div className="space-y-2">
+                          <div className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-400 dark:text-slate-400">
+                            Appearance
                           </div>
-                        ) : null}
+                          <button
+                            type="button"
+                            onClick={toggleTheme}
+                            className="flex w-full items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-700 transition hover:bg-gray-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                          >
+                            <span>Dark mode</span>
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-600 dark:text-emerald-400">
+                              {theme === 'dark' ? 'On' : 'Off'}
+                            </span>
+                          </button>
+                        </div>
+
+                        {(isAdmin || isSuperAdmin) && (
+                          <>
+                            <div className="h-px bg-gray-100 dark:bg-slate-800" />
+                            <div className="space-y-2">
+                              <div className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-400 dark:text-slate-400">
+                                Requests
+                              </div>
+                              <div className="space-y-1 text-xs text-gray-600 dark:text-slate-300">
+                                <div className="flex items-center justify-between">
+                                  <span>Admin access</span>
+                                  <span className="font-semibold text-gray-700 dark:text-slate-100">
+                                    {requestCounts ? requestCounts.admin : '...'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span>Spotify API access</span>
+                                  <span className="font-semibold text-gray-700 dark:text-slate-100">
+                                    {requestCounts ? requestCounts.spotify : '...'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </>
+                        )}
+
+                        <div className="h-px bg-gray-100 dark:bg-slate-800" />
+                        <div className="space-y-2">
+                          <div className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-400 dark:text-slate-400">
+                            Logging
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-gray-600 dark:text-slate-300">
+                            <span>Sentry</span>
+                            <span className={`font-semibold ${sentryEnabled ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-slate-500'}`}>
+                              {sentryEnabled ? 'Enabled' : 'Disabled'}
+                            </span>
+                          </div>
+                          {sentryUrl && (
+                            <Link
+                              href={sentryUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center text-xs font-semibold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
+                            >
+                              Open Sentry dashboard {'>'}
+                            </Link>
+                          )}
+                        </div>
 
                         {settingsItems && (
                           <>
-                            <div className="h-px bg-gray-100" />
+                            <div className="h-px bg-gray-100 dark:bg-slate-800" />
                             <div className="space-y-2">{settingsItems}</div>
                           </>
                         )}
-                        <div className="h-px bg-gray-100" />
+                        <div className="h-px bg-gray-100 dark:bg-slate-800" />
                         <div className="space-y-2">
-                          <div className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-400">
+                          <div className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-400 dark:text-slate-400">
                             Access
                           </div>
                           {isAdmin || isSuperAdmin ? (
-                            <div className="text-xs text-gray-600">Admin access granted.</div>
+                            <div className="text-xs text-gray-600 dark:text-slate-300">Admin access granted.</div>
                           ) : (
                             <div className="space-y-2">
                               <input
@@ -433,26 +487,26 @@ export default function PageHeader({
                                 value={adminRequestName}
                                 onChange={(event) => setAdminRequestName(event.target.value)}
                                 placeholder="Display name"
-                                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                               />
                               <input
                                 type="email"
                                 value={adminRequestEmail}
                                 onChange={(event) => setAdminRequestEmail(event.target.value)}
                                 placeholder="Email address"
-                                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                               />
                               <button
                                 type="button"
                                 onClick={handleRequestAdmin}
-                                className="w-full rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                                className="w-full rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-400/40 dark:bg-emerald-500/10 dark:text-emerald-300"
                               >
                                 Request Admin Access
                               </button>
                             </div>
                           )}
                           {adminRequestMessage ? (
-                            <div className={`text-xs ${adminRequestStatus === 'error' ? 'text-rose-600' : 'text-gray-500'}`}>
+                            <div className={`text-xs ${adminRequestStatus === 'error' ? 'text-rose-600' : 'text-gray-500 dark:text-slate-400'}`}>
                               {adminRequestMessage}
                             </div>
                           ) : null}
@@ -461,7 +515,7 @@ export default function PageHeader({
                     </div>
                   )}
                 </div>
-                <div className="h-6 w-px bg-gray-200/80" />
+                <div className="h-6 w-px bg-gray-200/80 dark:bg-slate-700/80" />
                 <UserMenu />
               </div>
             </div>
@@ -469,7 +523,7 @@ export default function PageHeader({
           <div className="h-16" />
           {displaySubtitle ? (
             <div className="mx-auto w-full max-w-7xl px-4 sm:px-8 lg:px-0 pt-0">
-              <p className="text-[11px] text-gray-400">
+              <p className="text-[11px] text-gray-400 dark:text-slate-500">
                 {displaySubtitle}
               </p>
             </div>

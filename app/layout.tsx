@@ -6,6 +6,7 @@ import PageViewTracker from './components/PageViewTracker'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { QueryProvider } from './providers/QueryProvider'
 import CookieBanner from './components/CookieBanner'
+import { ThemeProvider } from './components/ThemeProvider'
 
 export const metadata: Metadata = {
   title: 'Spotify Playlist Browser',
@@ -51,13 +52,20 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.className} flex min-h-screen flex-col text-[#171923] antialiased`}>
+      <body className={`${inter.className} flex min-h-screen flex-col text-slate-900 antialiased dark:text-slate-100`}>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('theme');var d=t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches);if(d){document.documentElement.classList.add('dark');}}catch(e){}})();`,
+          }}
+        />
         <ErrorBoundary>
           <QueryProvider>
-            <PageViewTracker />
-            {children}
-            <CookieBanner />
-            <SpeedInsights />
+            <ThemeProvider>
+              <PageViewTracker />
+              {children}
+              <CookieBanner />
+              <SpeedInsights />
+            </ThemeProvider>
           </QueryProvider>
         </ErrorBoundary>
       </body>

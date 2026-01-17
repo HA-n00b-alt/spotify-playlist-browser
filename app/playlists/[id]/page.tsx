@@ -2786,7 +2786,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       href={playlistInfo.external_urls.spotify}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="block text-2xl font-bold tracking-tight text-[#171923] hover:text-emerald-600"
+                      className="block text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 hover:text-emerald-600"
                       onClick={(e) => {
                         e.preventDefault()
                         const spotifyUri = `spotify:playlist:${playlistInfo.id}`
@@ -2799,7 +2799,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       {playlistInfo.name}
                     </a>
                   ) : (
-                    <h1 className="text-2xl font-bold tracking-tight text-[#171923]">
+                    <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
                       {playlistInfo.name}
                     </h1>
                   )}
@@ -3113,7 +3113,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   <div className="flex items-start justify-between gap-2">
                     <a
                       href="#"
-                      className="block truncate text-sm font-semibold text-[#171923] hover:text-emerald-600 hover:underline"
+                      className="block truncate text-sm font-semibold text-slate-900 dark:text-slate-100 hover:text-emerald-600 hover:underline"
                       onClick={(e) => handleTrackTitleClick(e, track)}
                       onContextMenu={(e) => handleTrackContextMenu(e, track)}
                       title={getPreviewTooltip(track.id)}
@@ -3455,7 +3455,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         <div className="flex items-center gap-2">
                           <a
                             href="#"
-                            className="font-semibold text-[#171923] text-xs sm:text-sm hover:text-emerald-600 hover:underline"
+                            className="font-semibold text-slate-900 dark:text-slate-100 text-xs sm:text-sm hover:text-emerald-600 hover:underline"
                             onClick={(e) => handleTrackTitleClick(e, track)}
                             onContextMenu={(e) => handleTrackContextMenu(e, track)}
                             title={getPreviewTooltip(track.id)}
@@ -4525,7 +4525,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-[#171923]">Recalculate BPM & Key?</h2>
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Recalculate BPM & Key?</h2>
               <button
                 onClick={() => setShowBpmRecalcPrompt(false)}
                 className="text-gray-400 hover:text-gray-600 text-2xl"

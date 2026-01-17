@@ -36,9 +36,9 @@ export default function CookieBanner() {
 
   return (
     <div className="fixed inset-x-0 bottom-4 z-50 px-4 sm:px-8">
-      <div className="mx-auto max-w-5xl rounded-2xl border border-gray-200 bg-white/95 p-4 shadow-[0_8px_24px_rgba(0,0,0,0.08)] backdrop-blur">
+      <div className="mx-auto max-w-5xl rounded-2xl border border-gray-200 bg-white/95 p-4 shadow-[0_8px_24px_rgba(0,0,0,0.08)] backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs sm:text-sm text-gray-600">
+          <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-300">
             This site uses essential cookies for authentication and preferences. By continuing, you agree to their use.
           </p>
           <div className="flex flex-wrap items-center gap-3">
@@ -54,7 +54,7 @@ export default function CookieBanner() {
             </button>
             <a
               href="mailto:delman@delman.it"
-              className="text-xs font-medium text-gray-500 hover:text-gray-700 hover:underline"
+              className="text-xs font-medium text-gray-500 hover:text-gray-700 hover:underline dark:text-slate-400 dark:hover:text-slate-200"
             >
               Contact
             </a>

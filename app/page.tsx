@@ -23,7 +23,7 @@ export default async function Home({
         <div className="rounded-2xl bg-white p-6 border border-gray-100 sm:p-10">
           <div className="space-y-8">
             <div className="space-y-3">
-              <h2 className="text-2xl sm:text-3xl font-semibold text-[#171923]">Choose your tool</h2>
+              <h2 className="text-2xl sm:text-3xl font-semibold text-slate-900 dark:text-slate-100">Choose your tool</h2>
             </div>
 
             {error && (
@@ -46,7 +46,7 @@ export default async function Home({
                     <div className="inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-emerald-700">
                       Spotify Playlist Tools
                     </div>
-                    <h3 className="text-2xl font-semibold text-[#171923]">Playlists, BPM, and key insights</h3>
+                    <h3 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Playlists, BPM, and key insights</h3>
                     <p className="text-[13px] text-gray-500">
                       Search and sort your playlists, analyze tempo/key, and keep track-level insights tidy.
                     </p>
@@ -71,7 +71,7 @@ export default async function Home({
                     <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-600">
                       Credit Search Tools
                     </div>
-                    <h3 className="text-2xl font-semibold text-[#171923]">Find producer, writer, and mixer credits</h3>
+                    <h3 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Find producer, writer, and mixer credits</h3>
                     <p className="text-[13px] text-gray-500">
                       Search Muso credits without logging in and export data for deeper research.
                     </p>

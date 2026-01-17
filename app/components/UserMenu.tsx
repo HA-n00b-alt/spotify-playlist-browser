@@ -86,7 +86,7 @@ export default function UserMenu() {
         className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm shadow-sm transition-transform focus:outline-none focus:ring-2 focus:ring-offset-2 ${
           isAuthenticated
             ? 'bg-gradient-to-br from-green-400 to-green-600 text-white hover:scale-105 focus:ring-green-500'
-            : 'bg-white text-gray-500 border border-gray-200 hover:scale-105 focus:ring-gray-300'
+            : 'bg-white text-gray-500 border border-gray-200 hover:scale-105 focus:ring-gray-300 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700'
         }`}
         aria-label={isAuthenticated ? (user?.display_name || 'User menu') : 'Login with Spotify'}
         aria-expanded={isOpen}
@@ -111,33 +111,33 @@ export default function UserMenu() {
 
       {/* Dropdown menu */}
       {isOpen && isAuthenticated && (
-        <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-lg shadow-2xl border border-gray-200 py-1 z-50 animate-fade-in">
-          <div className="px-4 py-3 border-b border-gray-200">
-            <p className="text-sm font-semibold text-gray-900 truncate">
+        <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-lg shadow-2xl border border-gray-200 py-1 z-50 animate-fade-in dark:bg-slate-900 dark:border-slate-800">
+          <div className="px-4 py-3 border-b border-gray-200 dark:border-slate-800">
+            <p className="text-sm font-semibold text-gray-900 truncate dark:text-slate-100">
               {user?.display_name || user?.id}
             </p>
             {user?.email && (
-              <p className="text-xs text-gray-500 truncate mt-0.5">{user.email}</p>
+              <p className="text-xs text-gray-500 truncate mt-0.5 dark:text-slate-400">{user.email}</p>
             )}
           </div>
           <div className="py-1">
             <button
               onClick={handleOpenSpotify}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors flex items-center"
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors flex items-center dark:text-slate-200 dark:hover:bg-slate-800"
             >
               Open Spotify
             </button>
             <button
               onClick={handleOpenWebPlayer}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors flex items-center"
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors flex items-center dark:text-slate-200 dark:hover:bg-slate-800"
             >
               Open Web Player
             </button>
           </div>
-          <div className="border-t border-gray-200 py-1">
+          <div className="border-t border-gray-200 py-1 dark:border-slate-800">
             <button
               onClick={handleLogout}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors flex items-center"
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors flex items-center dark:text-slate-200 dark:hover:bg-slate-800"
             >
               Logout
             </button>

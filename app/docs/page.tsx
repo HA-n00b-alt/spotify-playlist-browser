@@ -16,14 +16,14 @@ export default function DocumentationPage() {
         <div className="rounded-2xl bg-white p-6 shadow-[0_4px_24px_rgba(0,0,0,0.06)] border-t border-gray-100 sm:p-10">
           <div className="space-y-6 text-sm text-gray-600">
             <div className="space-y-2">
-              <h2 className="text-lg font-semibold text-[#171923]">Overview</h2>
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Overview</h2>
               <p>
                 Spotify Playlist Tools helps you browse playlists, inspect BPM/key, and view credits in a clean, modern interface.
               </p>
             </div>
 
             <div className="space-y-2">
-              <h3 className="text-sm font-semibold text-[#171923]">Key Features</h3>
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Key Features</h3>
               <ul className="list-disc pl-5 space-y-1">
                 <li>Search and sort playlists and tracks.</li>
                 <li>Filter by BPM, year, and popularity.</li>
@@ -34,7 +34,7 @@ export default function DocumentationPage() {
             </div>
 
             <div className="space-y-2">
-              <h3 className="text-sm font-semibold text-[#171923]">How to Use</h3>
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">How to Use</h3>
               <ol className="list-decimal pl-5 space-y-1">
                 <li>Sign in with Spotify.</li>
                 <li>Select a playlist from the list view.</li>
@@ -45,7 +45,7 @@ export default function DocumentationPage() {
             </div>
 
             <div className="space-y-2">
-              <h3 className="text-sm font-semibold text-[#171923]">Access & Privacy</h3>
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Access & Privacy</h3>
               <p>
                 Due to Spotify API access policies, this app is available only to a small group of authorized users.
                 Request access at <a href="mailto:delman@delman.it" className="text-emerald-600 hover:text-emerald-700 underline">delman@delman.it</a>.
@@ -56,7 +56,7 @@ export default function DocumentationPage() {
             </div>
 
             <div className="space-y-2">
-              <h3 className="text-sm font-semibold text-[#171923]">Processing & Credits</h3>
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Processing & Credits</h3>
               <p>
                 New playlists or newly added tracks may take a few minutes to fully populate while BPM/key calculations run in the background.
               </p>

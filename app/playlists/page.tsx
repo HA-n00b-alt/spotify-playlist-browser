@@ -5,6 +5,7 @@ import { getPlaylistsWithMetadata } from '@/lib/playlists'
 import PlaylistsTable from './PlaylistsTable'
 import PageHeader from '../components/PageHeader'
 import { logError, logInfo } from '@/lib/logger'
+import SpotifyAccessRequestForm from '../components/SpotifyAccessRequestForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -135,8 +136,12 @@ export default async function PlaylistsPage() {
                   />
                 </svg>
               </div>
-              <h1 className="text-2xl sm:text-3xl font-bold mb-4 text-red-500">Error</h1>
-              <p className="text-gray-700 mb-6 text-base sm:text-lg">{error}</p>
+              <h1 className="text-2xl sm:text-3xl font-bold mb-4 text-red-500">Access blocked</h1>
+              <p className="text-gray-700 mb-6 text-base sm:text-lg">
+                {isForbidden
+                  ? 'Your Spotify account is not yet allowlisted for this app.'
+                  : error}
+              </p>
               
               {isAuthError ? (
                 <div className="flex flex-col items-center gap-4">
@@ -154,13 +159,14 @@ export default async function PlaylistsPage() {
                   </Link>
                 </div>
               ) : isForbidden ? (
-                <div className="flex flex-col items-center gap-4">
+                <div className="flex flex-col items-center gap-6">
+                  <SpotifyAccessRequestForm />
                   <form action="/api/auth/logout" method="POST" className="inline">
                     <button
                       type="submit"
-                      className="bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-full transition-colors"
+                      className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded transition-colors text-sm"
                     >
-                      Reauthorize
+                      Switch account
                     </button>
                   </form>
                 </div>

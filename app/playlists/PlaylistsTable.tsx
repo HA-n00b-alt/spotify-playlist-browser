@@ -354,7 +354,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <div className="font-semibold text-[#171923] truncate flex-1">
+                    <div className="font-semibold text-slate-900 dark:text-slate-100 truncate flex-1">
                       {playlist.name}
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
@@ -509,7 +509,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
                           </div>
                         )}
                         <div className="min-w-0 flex-1">
-                          <div className="font-semibold text-[#171923] group-hover:text-emerald-600 transition-colors truncate text-sm sm:text-base">
+                          <div className="font-semibold text-slate-900 dark:text-slate-100 group-hover:text-emerald-600 transition-colors truncate text-sm sm:text-base">
                             {playlist.name}
                           </div>
                         </div>
