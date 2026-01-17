@@ -7,6 +7,9 @@ import { logError } from './logger'
 type PreviewUrlEntry = {
   url: string
   successful?: boolean
+  isrc?: string
+  title?: string
+  artist?: string
 }
 
 interface PreviewUrlResult {
@@ -443,7 +446,13 @@ async function resolvePreviewUrl(params: {
         if (response.ok) {
           const trackData = await response.json() as any
           if (trackData.id && trackData.preview) {
-            urls.push({ url: trackData.preview, successful: true })
+            urls.push({
+              url: trackData.preview,
+              successful: true,
+              isrc: trackData.isrc,
+              title: trackData.title,
+              artist: trackData.artist?.name,
+            })
             return { 
               url: trackData.preview, 
               source: 'deezer_isrc', 
@@ -502,7 +511,13 @@ async function resolvePreviewUrl(params: {
                 isrcMismatch = true
                 // Don't return the URL if ISRC doesn't match - treat as error
                 if (selectedTrack.previewUrl) {
-                  urls.push({ url: selectedTrack.previewUrl, successful: false })
+                  urls.push({
+                    url: selectedTrack.previewUrl,
+                    successful: false,
+                    isrc: selectedTrack.isrc,
+                    title: selectedTrack.trackName,
+                    artist: selectedTrack.artistName,
+                  })
                 }
                 return { 
                   url: null, 
@@ -514,7 +529,13 @@ async function resolvePreviewUrl(params: {
             }
             
             if (selectedTrack.previewUrl) {
-              urls.push({ url: selectedTrack.previewUrl, successful: true })
+              urls.push({
+                url: selectedTrack.previewUrl,
+                successful: true,
+                isrc: selectedTrack.isrc,
+                title: selectedTrack.trackName,
+                artist: selectedTrack.artistName,
+              })
             }
             return { 
               url: selectedTrack.previewUrl, 
@@ -572,7 +593,13 @@ async function resolvePreviewUrl(params: {
                 isrcMismatch = true
                 // Don't return the URL if ISRC doesn't match - treat as error
                 if (selectedTrack.preview) {
-                  urls.push({ url: selectedTrack.preview, successful: false })
+                  urls.push({
+                    url: selectedTrack.preview,
+                    successful: false,
+                    isrc: selectedTrack.isrc,
+                    title: selectedTrack.title,
+                    artist: selectedTrack.artist?.name,
+                  })
                 }
                 return { 
                   url: null, 
@@ -584,8 +611,15 @@ async function resolvePreviewUrl(params: {
             }
             
             if (selectedTrack.preview) {
-              urls.push({ url: selectedTrack.preview, successful: true })
+              urls.push({
+                url: selectedTrack.preview,
+                successful: true,
+                isrc: selectedTrack.isrc,
+                title: selectedTrack.title,
+                artist: selectedTrack.artist?.name,
+              })
             }
+
             return { 
               url: selectedTrack.preview, 
               source: 'deezer_search', 

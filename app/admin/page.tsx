@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { isAdminUser, isSuperAdminUser } from '@/lib/analytics'
+import PageHeader from '../components/PageHeader'
 export const dynamic = 'force-dynamic'
 
 const tools = [
@@ -44,6 +45,13 @@ export default async function AdminPage() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
       <div className="max-w-7xl mx-auto flex-1 w-full p-4 sm:p-8">
+        <PageHeader
+          subtitle=""
+          breadcrumbs={[
+            { label: 'Home', href: '/' },
+            { label: 'Admin' },
+          ]}
+        />
         <section>
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>

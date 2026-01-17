@@ -9,6 +9,10 @@ export async function register() {
     Sentry.init({
       dsn: process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN,
       enableLogs: true,
+      ignoreErrors: [
+        'DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.',
+        'ExperimentalWarning: vm.USE_MAIN_CONTEXT_DEFAULT_LOADER is an experimental feature and might change at any time',
+      ],
       integrations: [
         Sentry.consoleLoggingIntegration({ levels: ['log', 'warn', 'error'] }),
       ],
@@ -26,6 +30,10 @@ export async function register() {
     Sentry.init({
       dsn: process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN,
       enableLogs: true,
+      ignoreErrors: [
+        'DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.',
+        'ExperimentalWarning: vm.USE_MAIN_CONTEXT_DEFAULT_LOADER is an experimental feature and might change at any time',
+      ],
       integrations: [
         Sentry.consoleLoggingIntegration({ levels: ['log', 'warn', 'error'] }),
       ],
@@ -38,5 +46,4 @@ export async function register() {
     })
   }
 }
-
 

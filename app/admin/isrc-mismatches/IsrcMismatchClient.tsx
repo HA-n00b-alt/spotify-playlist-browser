@@ -1,10 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 type PreviewUrlEntry = {
   url: string
   successful?: boolean
+  isrc?: string
+  title?: string
+  artist?: string
 }
 
 type IsrcMismatchItem = {
@@ -22,20 +25,31 @@ type IsrcMismatchItem = {
   preview_url?: string | null
 }
 
-function getPreviewUrl(item: IsrcMismatchItem): string | null {
-  if (item.preview_url) return item.preview_url
+function getPreviewEntry(item: IsrcMismatchItem): PreviewUrlEntry | null {
   const urls = item.urls || []
   const successful = urls.find((entry) => entry.successful)
-  if (successful?.url) return successful.url
-  const first = urls[0]?.url
-  return first || null
+  if (successful) return successful
+  return urls[0] || null
+}
+
+function getPreviewUrl(item: IsrcMismatchItem): string | null {
+  if (item.preview_url) return item.preview_url
+  return getPreviewEntry(item)?.url || null
 }
 
 export default function IsrcMismatchClient() {
   const [items, setItems] = useState<IsrcMismatchItem[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [showReviewed, setShowReviewed] = useState(true)
+  const [showMatched, setShowMatched] = useState(false)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  const handlePlay = (event: React.SyntheticEvent<HTMLAudioElement>) => {
+    if (audioRef.current && audioRef.current !== event.currentTarget) {
+      audioRef.current.pause()
+    }
+    audioRef.current = event.currentTarget
+  }
 
   const loadMismatches = async () => {
     setLoading(true)
@@ -85,7 +99,10 @@ export default function IsrcMismatchClient() {
     return [pending, reviewed]
   }, [items])
 
-  const visibleItems = showReviewed ? items : pendingItems
+  const visibleItems = useMemo(() => {
+    if (showMatched) return items
+    return items.filter((item) => item.isrc_mismatch_review_status !== 'match')
+  }, [items, showMatched])
 
   return (
     <div className="space-y-6">
@@ -99,10 +116,10 @@ export default function IsrcMismatchClient() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => setShowReviewed((prev) => !prev)}
+            onClick={() => setShowMatched((prev) => !prev)}
             className="rounded-full border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900"
           >
-            {showReviewed ? 'Hide reviewed' : 'Show reviewed'}
+            {showMatched ? 'Hide matched' : 'Show matched'}
           </button>
           <button
             type="button"
@@ -128,7 +145,8 @@ export default function IsrcMismatchClient() {
           </div>
         ) : null}
         {visibleItems.map((item) => {
-          const previewUrl = getPreviewUrl(item)
+          const previewEntry = getPreviewEntry(item)
+          const previewUrl = previewEntry?.url || item.preview_url
           const reviewLabel = item.isrc_mismatch_review_status
             ? item.isrc_mismatch_review_status === 'match'
               ? 'Confirmed match'
@@ -145,7 +163,7 @@ export default function IsrcMismatchClient() {
                     {item.artist || 'Unknown artist'} - {item.title || 'Unknown title'}
                   </div>
                   <div className="mt-1 text-xs text-gray-500">
-                    ISRC: {item.isrc || 'Missing'} | Spotify ID: {item.spotify_track_id}
+                    Spotify ISRC: {item.isrc || 'Missing'} | Spotify ID: {item.spotify_track_id}
                   </div>
                 </div>
                 <div className="text-xs font-semibold text-gray-500">{reviewLabel}</div>
@@ -154,12 +172,25 @@ export default function IsrcMismatchClient() {
                 <div className="space-y-2 text-sm text-gray-600">
                   <div className="text-xs uppercase tracking-[0.18em] text-gray-400">Preview</div>
                   {previewUrl ? (
-                    <audio controls preload="none" className="w-full">
+                    <audio controls preload="none" className="w-full" onPlay={handlePlay}>
                       <source src={previewUrl} />
                     </audio>
                   ) : (
                     <div className="text-xs text-gray-500">No preview URL available.</div>
                   )}
+                  {previewEntry ? (
+                    <div className="text-xs text-gray-500 mt-2 space-y-1">
+                      <div>
+                        <strong>Preview Artist:</strong> {previewEntry.artist || 'N/A'}
+                      </div>
+                      <div>
+                        <strong>Preview Title:</strong> {previewEntry.title || 'N/A'}
+                      </div>
+                      <div>
+                        <strong>Preview ISRC:</strong> {previewEntry.isrc || 'N/A'}
+                      </div>
+                    </div>
+                  ) : null}
                   {item.error ? <div className="text-xs text-rose-600">{item.error}</div> : null}
                   {item.isrc_mismatch_reviewed_at ? (
                     <div className="text-xs text-gray-400">
@@ -192,12 +223,14 @@ export default function IsrcMismatchClient() {
         })}
       </div>
 
-      {showReviewed ? (
+      {showMatched ? (
         <div className="text-xs text-gray-500">
-          Showing {pendingItems.length} pending and {reviewedItems.length} reviewed records.
+          Showing {items.length} records, including {reviewedItems.length} reviewed records.
         </div>
       ) : (
-        <div className="text-xs text-gray-500">Showing {pendingItems.length} pending records.</div>
+        <div className="text-xs text-gray-500">
+          Showing {visibleItems.length} records. Manually matched records are hidden.
+        </div>
       )}
     </div>
   )

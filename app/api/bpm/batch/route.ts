@@ -31,6 +31,7 @@ interface CacheRecord {
   updated_at: Date
   urls?: Array<{ url: string; successful?: boolean }> | null
   isrc_mismatch: boolean
+  isrc_mismatch_review_status: string | null
   debug_txt: string | null
 }
 
@@ -99,7 +100,7 @@ export const POST = withApiLogging(async (request: Request) => {
         key_essentia, scale_essentia, keyscale_confidence_essentia,
         key_librosa, scale_librosa, keyscale_confidence_librosa,
         bpm_selected, bpm_manual, key_selected, key_manual, scale_manual,
-        source, error, updated_at, urls, isrc_mismatch,
+        source, error, updated_at, urls, isrc_mismatch, isrc_mismatch_review_status,
         debug_txt
        FROM track_bpm_cache 
        WHERE spotify_track_id = ANY($1)`,
@@ -112,8 +113,18 @@ export const POST = withApiLogging(async (request: Request) => {
     const errorCacheMap = new Map<string, CacheRecord>() // Records with errors (even if expired)
     const now = Date.now()
     
+    const mismatchErrorMessage = 'ISRC mismatch: Found preview URL but ISRC does not match Spotify track (wrong audio file)'
     for (const record of cacheResults) {
       const ageDays = (now - new Date(record.updated_at).getTime()) / (1000 * 60 * 60 * 24)
+      const isMismatchResolved = record.isrc_mismatch_review_status === 'match'
+      const isMismatch = record.isrc_mismatch && !isMismatchResolved
+      const normalizedError =
+        isMismatchResolved && record.error && record.error.startsWith('ISRC mismatch')
+          ? null
+          : record.error
+
+      record.isrc_mismatch = isMismatch
+      record.error = normalizedError
       cacheMap.set(record.spotify_track_id, record)
       const selectedBpm = getSelectedBpm(record)
       // Only include valid cached results (not expired and not errors) for valid cache
@@ -247,7 +258,7 @@ export const POST = withApiLogging(async (request: Request) => {
         // If ISRC mismatch, ensure error message is set
         let errorMessage = errorRecord.error
         if (errorRecord.isrc_mismatch && !errorMessage) {
-          errorMessage = 'ISRC mismatch: Found preview URL but ISRC does not match Spotify track (wrong audio file)'
+          errorMessage = mismatchErrorMessage
         }
         const selectedBpm = getSelectedBpm(errorRecord)
         const selectedKey = getSelectedKey(errorRecord)
@@ -295,7 +306,7 @@ export const POST = withApiLogging(async (request: Request) => {
         // If ISRC mismatch, ensure error message is set
         let errorMessage = allCached.error
         if (allCached.isrc_mismatch && !errorMessage) {
-          errorMessage = 'ISRC mismatch: Found preview URL but ISRC does not match Spotify track (wrong audio file)'
+          errorMessage = mismatchErrorMessage
         }
         const selectedBpm = allCached.isrc_mismatch ? null : getSelectedBpm(allCached)
         const selectedKey = getSelectedKey(allCached)

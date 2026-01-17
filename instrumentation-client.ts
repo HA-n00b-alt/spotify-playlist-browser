@@ -7,6 +7,10 @@ import * as Sentry from '@sentry/nextjs'
 Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
   enableLogs: true,
+  ignoreErrors: [
+    'DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.',
+    'ExperimentalWarning: vm.USE_MAIN_CONTEXT_DEFAULT_LOADER is an experimental feature and might change at any time',
+  ],
   
   // Adjust this value in production, or use tracesSampler for greater control
   tracesSampleRate: 1.0,
@@ -33,4 +37,3 @@ Sentry.init({
 
 // Export router transition hook for navigation instrumentation
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart
-
