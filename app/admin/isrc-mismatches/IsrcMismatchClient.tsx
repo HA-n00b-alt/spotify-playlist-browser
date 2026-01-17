@@ -42,7 +42,10 @@ export default function IsrcMismatchClient() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showMatched, setShowMatched] = useState(false)
+  const [page, setPage] = useState(1)
+  const [isHydratingPreview, setIsHydratingPreview] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const [pageSize, setPageSize] = useState(20)
 
   const handlePlay = (event: React.SyntheticEvent<HTMLAudioElement>) => {
     if (audioRef.current && audioRef.current !== event.currentTarget) {
@@ -60,12 +63,48 @@ export default function IsrcMismatchClient() {
         throw new Error('Failed to load ISRC mismatches')
       }
       const data = await res.json()
-      setItems(Array.isArray(data?.items) ? data.items : [])
+      const nextItems = Array.isArray(data?.items) ? data.items : []
+      setItems(nextItems)
+      void hydrateMissingPreviewMeta(nextItems)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load ISRC mismatches')
     } finally {
       setLoading(false)
     }
+  }
+
+  const needsPreviewMeta = (item: IsrcMismatchItem) => {
+    const entry = getPreviewEntry(item)
+    if (!entry) return true
+    return !entry.artist || !entry.title || !entry.isrc
+  }
+
+  const hydrateMissingPreviewMeta = async (rows: IsrcMismatchItem[]) => {
+    const targets = rows.filter(needsPreviewMeta)
+    if (targets.length === 0) return
+    setIsHydratingPreview(true)
+    for (const item of targets) {
+      try {
+        const res = await fetch(`/api/bpm?spotifyTrackId=${encodeURIComponent(item.spotify_track_id)}`)
+        if (!res.ok) {
+          continue
+        }
+        const data = await res.json().catch(() => ({}))
+        if (!Array.isArray(data?.urls)) {
+          continue
+        }
+        setItems((prev) =>
+          prev.map((current) =>
+            current.spotify_track_id === item.spotify_track_id
+              ? { ...current, urls: data.urls }
+              : current
+          )
+        )
+      } catch {
+        // Ignore preview metadata fetch errors.
+      }
+    }
+    setIsHydratingPreview(false)
   }
 
   useEffect(() => {
@@ -104,6 +143,13 @@ export default function IsrcMismatchClient() {
     return items.filter((item) => item.isrc_mismatch_review_status !== 'match')
   }, [items, showMatched])
 
+  useEffect(() => {
+    setPage(1)
+  }, [showMatched, items.length])
+
+  const totalPages = Math.max(1, Math.ceil(visibleItems.length / pageSize))
+  const paginatedItems = visibleItems.slice((page - 1) * pageSize, page * pageSize)
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-white p-5 shadow-[0_4px_24px_rgba(0,0,0,0.06)]">
@@ -114,6 +160,9 @@ export default function IsrcMismatchClient() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {isHydratingPreview ? (
+            <div className="text-xs text-gray-500">Refreshing preview metadata...</div>
+          ) : null}
           <button
             type="button"
             onClick={() => setShowMatched((prev) => !prev)}
@@ -144,7 +193,7 @@ export default function IsrcMismatchClient() {
             No ISRC mismatches to review.
           </div>
         ) : null}
-        {visibleItems.map((item) => {
+        {paginatedItems.map((item) => {
           const previewEntry = getPreviewEntry(item)
           const previewUrl = previewEntry?.url || item.preview_url
           const reviewLabel = item.isrc_mismatch_review_status
@@ -232,6 +281,48 @@ export default function IsrcMismatchClient() {
           Showing {visibleItems.length} records. Manually matched records are hidden.
         </div>
       )}
+      {visibleItems.length > 0 && totalPages > 1 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-gray-500">
+          <div className="flex items-center gap-2">
+            <span>Rows</span>
+            <select
+              value={pageSize}
+              onChange={(event) => {
+                const value = Number(event.target.value)
+                setPageSize(value)
+                setPage(1)
+              }}
+              className="rounded-full border border-gray-200 px-2 py-1 text-xs text-gray-600"
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={40}>40</option>
+              <option value={80}>80</option>
+            </select>
+            <span>
+              Page {page} of {totalPages}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              disabled={page === 1}
+              className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={page === totalPages}
+              className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
