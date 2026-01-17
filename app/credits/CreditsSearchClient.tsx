@@ -166,7 +166,7 @@ export default function CreditsSearchClient() {
     replaceOnFirstResultRef.current = replaceOnFirstResult
     setStatusMessage(`Loading ${limit} results…`)
     const refreshParam = refresh ? '&refresh=true' : ''
-    const url = `/api/musicbrainz/search?name=${encodeURIComponent(trimmed)}&role=${encodeURIComponent(role)}&limit=${limit}&offset=${offset}&stream=true${refreshParam}`
+    const url = `/api/creditsearch?name=${encodeURIComponent(trimmed)}&role=${encodeURIComponent(role)}&limit=${limit}&offset=${offset}&stream=true${refreshParam}`
 
     const source = new EventSource(url)
     streamRef.current = source
@@ -289,7 +289,7 @@ export default function CreditsSearchClient() {
     totalWorksRef.current = null
     setDebugPayload(null)
     try {
-      const url = `/api/musicbrainz/search?name=${encodeURIComponent(trimmed)}&role=${encodeURIComponent(role)}&limit=${limit}&offset=0&debug=true`
+      const url = `/api/creditsearch?name=${encodeURIComponent(trimmed)}&role=${encodeURIComponent(role)}&limit=${limit}&offset=0&debug=true`
       const res = await fetch(url)
       const payload = await res.json().catch(() => ({}))
       if (!res.ok) {
