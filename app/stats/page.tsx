@@ -20,6 +20,7 @@ export default async function StatsPage() {
           subtitle="Analytics dashboard"
           breadcrumbs={[
             { label: 'Home', href: '/' },
+            { label: 'Admin', href: '/admin' },
             { label: 'Stats' },
           ]}
         />
