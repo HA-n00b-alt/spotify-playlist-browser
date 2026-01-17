@@ -3709,11 +3709,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           onClick={() => setShowBpmMoreInfo(false)}
         >
           <div 
-            className="bg-white rounded-lg shadow-xl max-w-md w-full p-6"
+            className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 dark:bg-slate-900 dark:text-slate-100"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-900">BPM Processing Information</h2>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100">BPM Processing Information</h2>
               <button
                 onClick={() => setShowBpmMoreInfo(false)}
                 className="text-gray-400 dark:text-slate-500 hover:text-gray-600 text-2xl"
@@ -3722,7 +3722,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               </button>
             </div>
             
-            <div className="space-y-4 text-sm text-gray-700">
+            <div className="space-y-4 text-sm text-gray-700 dark:text-slate-300">
               <p>
                 BPM calculation requires preview audio from iTunes, Deezer, or other sources. 
                 This process happens automatically the first time you open a playlist.
@@ -3737,7 +3737,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     // Reload page to apply new country
                     window.location.reload()
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                 >
                   <option value="us">United States (US)</option>
                   <option value="gb">United Kingdom (GB)</option>
@@ -3777,7 +3777,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             <div className="mt-6 flex justify-end">
               <button
                 onClick={() => setShowBpmMoreInfo(false)}
-                className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded transition-colors"
+                className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded transition-colors dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
               >
                 Close
               </button>
@@ -3801,11 +3801,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             }}
           >
             <div 
-              className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto"
+              className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto dark:bg-slate-900 dark:text-slate-100"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold text-gray-900">BPM & Key Information</h2>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100">BPM & Key Information</h2>
                 <button
                   onClick={() => {
                     setShowBpmModal(false)
@@ -3816,19 +3816,19 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     setManualKey('')
                     setManualScale('major')
                   }}
-                  className="text-gray-400 dark:text-slate-500 hover:text-gray-600 text-2xl"
+                  className="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 text-2xl"
                 >
                   ×
                 </button>
               </div>
               
               <div className="mb-4">
-                <h3 className="font-semibold text-gray-900 mb-2">{selectedBpmTrack.name}</h3>
-                <p className="text-sm text-gray-600">
+                <h3 className="font-semibold text-gray-900 dark:text-slate-100 mb-2">{selectedBpmTrack.name}</h3>
+                <p className="text-sm text-gray-600 dark:text-slate-300">
                   {selectedBpmTrack.artists.map(a => a.name).join(', ')}
                 </p>
                 {bpmStreamStatus[bpmModalData.trackId] === 'partial' && (
-                  <div className="mt-2 inline-flex items-center text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 px-2 py-1 rounded">
+                  <div className="mt-2 inline-flex items-center text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 px-2 py-1 rounded dark:bg-yellow-500/10 dark:border-yellow-500/30 dark:text-yellow-200">
                     Partial results streaming...
                   </div>
                 )}
@@ -3855,7 +3855,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       }
                     }}
                     disabled={recalcStatus?.loading}
-                    className="bg-gray-200 hover:bg-gray-300 disabled:bg-gray-200 disabled:text-gray-400 dark:text-slate-500 text-gray-800 text-xs font-semibold py-1.5 px-3 rounded"
+                    className="bg-gray-200 hover:bg-gray-300 disabled:bg-gray-200 disabled:text-gray-400 text-gray-800 text-xs font-semibold py-1.5 px-3 rounded dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
                   >
                     {recalcStatus?.loading ? 'Recalculating...' : 'Recalculate BPM/Key'}
                   </button>
@@ -3863,10 +3863,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     <div className="mt-1 text-xs text-red-600">{recalcStatus.error}</div>
                   )}
                 </div>
-                <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
-                  <h4 className="text-sm font-semibold text-gray-800">BPM service overrides</h4>
+                <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
+                  <h4 className="text-sm font-semibold text-gray-800 dark:text-slate-100">BPM service overrides</h4>
                   <div className="mt-2 grid gap-3 sm:grid-cols-3">
-                    <div className="space-y-1 text-xs text-gray-700">
+                    <div className="space-y-1 text-xs text-gray-700 dark:text-slate-300">
                       <label className="block text-[11px] font-medium text-gray-500 dark:text-slate-400" htmlFor="modal-bpm-debug-level">
                         Debug level
                       </label>
@@ -3874,13 +3874,13 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         id="modal-bpm-debug-level"
                         value={bpmDebugLevel}
                         onChange={(e) => setBpmDebugLevel(e.target.value)}
-                        className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
+                        className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                       >
                         <option value="minimal">Minimal</option>
                         <option value="normal">Normal</option>
                       </select>
                     </div>
-                    <div className="space-y-1 text-xs text-gray-700">
+                    <div className="space-y-1 text-xs text-gray-700 dark:text-slate-300">
                       <label className="block text-[11px] font-medium text-gray-500 dark:text-slate-400" htmlFor="modal-bpm-fallback-override">
                         Fallback override
                       </label>
@@ -3888,7 +3888,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         id="modal-bpm-fallback-override"
                         value={bpmFallbackOverride}
                         onChange={(e) => setBpmFallbackOverride(e.target.value as BpmFallbackOverride)}
-                        className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
+                        className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                       >
                         <option value="never">Never</option>
                         <option value="always">Always</option>
@@ -3897,7 +3897,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         <option value="default">Confidence-based</option>
                       </select>
                     </div>
-                    <div className="space-y-1 text-xs text-gray-700">
+                    <div className="space-y-1 text-xs text-gray-700 dark:text-slate-300">
                       <label className="block text-[11px] font-medium text-gray-500 dark:text-slate-400" htmlFor="modal-bpm-confidence-threshold">
                         Confidence threshold
                       </label>
@@ -3909,7 +3909,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         step="0.01"
                         value={bpmConfidenceThreshold}
                         onChange={(e) => setBpmConfidenceThreshold(e.target.value)}
-                        className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
+                        className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                       />
                     </div>
                   </div>
@@ -3923,17 +3923,17 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 // No BPM data available
                 <div className="space-y-3">
                   <div>
-                    <span className="font-semibold text-gray-700">BPM: </span>
-                    <span className="text-gray-600">Not available</span>
+                    <span className="font-semibold text-gray-700 dark:text-slate-200">BPM: </span>
+                    <span className="text-gray-600 dark:text-slate-300">Not available</span>
                   </div>
                   {bpmDetails[bpmModalData.trackId]?.error ? (
                     <div>
-                      <span className="font-semibold text-gray-700">Reason: </span>
-                      <span className="text-gray-600">{bpmDetails[bpmModalData.trackId].error}</span>
+                      <span className="font-semibold text-gray-700 dark:text-slate-200">Reason: </span>
+                      <span className="text-gray-600 dark:text-slate-300">{bpmDetails[bpmModalData.trackId].error}</span>
                     </div>
                   ) : (
                     <div>
-                      <span className="text-gray-600 text-sm">
+                      <span className="text-gray-600 text-sm dark:text-slate-300">
                         BPM data is being calculated or no preview audio is available for this track.
                       </span>
                     </div>
@@ -3944,20 +3944,20 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
                   )}
                   {trackBpms[bpmModalData.trackId] == null && !retryAttempted && (
-                    <button
-                      onClick={() => {
-                        if (!selectedBpmTrack) return
-                        setRetryStatus({ loading: true })
+                  <button
+                    onClick={() => {
+                      if (!selectedBpmTrack) return
+                      setRetryStatus({ loading: true })
                         setRetryAttempted(true)
                         setRetryTrackId(bpmModalData.trackId)
                         const targetIds = new Set([bpmModalData.trackId])
                         streamBpmsForTracks([selectedBpmTrack], targetIds, targetIds)
                       }}
                       disabled={retryStatus?.loading}
-                      className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded transition-colors"
-                    >
-                      {retryStatus?.loading ? 'Retrying...' : 'Retry'}
-                    </button>
+                    className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded transition-colors dark:bg-emerald-500 dark:hover:bg-emerald-400"
+                  >
+                    {retryStatus?.loading ? 'Retrying...' : 'Retry'}
+                  </button>
                   )}
                 </div>
               ) : (
@@ -3965,16 +3965,16 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 <div className="space-y-6">
                   {/* BPM Section */}
                   <div>
-                    <h4 className="font-semibold text-gray-900 mb-3">BPM</h4>
+                    <h4 className="font-semibold text-gray-900 dark:text-slate-100 mb-3">BPM</h4>
                     <div className="space-y-3">
                       {/* Essentia BPM */}
                       {bpmModalData.hasEssentiaBpm && (
-                        <div className={`p-3 rounded border-2 ${bpmModalData.bpmSelected === 'essentia' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+                        <div className={`p-3 rounded border-2 ${bpmModalData.bpmSelected === 'essentia' ? 'border-green-500 bg-green-50 dark:bg-emerald-500/10' : 'border-gray-200 bg-gray-50 dark:border-slate-700 dark:bg-slate-800/60'}`}>
                           <div className="flex items-center justify-between">
                             <div>
                               <div className="flex items-center gap-2">
-                                <span className="font-semibold text-gray-700">Essentia:</span>
-                                <span className="text-gray-900">{bpmModalData.fullData?.bpmEssentia != null ? Math.round(bpmModalData.fullData.bpmEssentia) : 'N/A'}</span>
+                                <span className="font-semibold text-gray-700 dark:text-slate-200">Essentia:</span>
+                                <span className="text-gray-900 dark:text-slate-100">{bpmModalData.fullData?.bpmEssentia != null ? Math.round(bpmModalData.fullData.bpmEssentia) : 'N/A'}</span>
                                 {bpmModalData.fullData?.bpmConfidenceEssentia != null && (
                                   <span className="text-xs text-gray-500 dark:text-slate-400">
                                     (confidence: {(bpmModalData.fullData.bpmConfidenceEssentia * 100).toFixed(0)}%)
@@ -4012,7 +4012,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                   }
                                 }}
                                 disabled={isUpdatingSelection}
-                                className="text-xs bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white px-2 py-1 rounded transition-colors"
+                                className="text-xs bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white px-2 py-1 rounded transition-colors dark:bg-emerald-500 dark:hover:bg-emerald-400"
                               >
                                 Use This
                               </button>
@@ -4023,12 +4023,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       
                       {/* Librosa BPM */}
                       {bpmModalData.hasLibrosaBpm && (
-                        <div className={`p-3 rounded border-2 ${bpmModalData.bpmSelected === 'librosa' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+                        <div className={`p-3 rounded border-2 ${bpmModalData.bpmSelected === 'librosa' ? 'border-green-500 bg-green-50 dark:bg-emerald-500/10' : 'border-gray-200 bg-gray-50 dark:border-slate-700 dark:bg-slate-800/60'}`}>
                           <div className="flex items-center justify-between">
                             <div>
                               <div className="flex items-center gap-2">
-                                <span className="font-semibold text-gray-700">Librosa:</span>
-                                <span className="text-gray-900">{bpmModalData.fullData?.bpmLibrosa != null ? Math.round(bpmModalData.fullData.bpmLibrosa) : 'N/A'}</span>
+                                <span className="font-semibold text-gray-700 dark:text-slate-200">Librosa:</span>
+                                <span className="text-gray-900 dark:text-slate-100">{bpmModalData.fullData?.bpmLibrosa != null ? Math.round(bpmModalData.fullData.bpmLibrosa) : 'N/A'}</span>
                                 {bpmModalData.fullData?.bpmConfidenceLibrosa != null && (
                                   <span className="text-xs text-gray-500 dark:text-slate-400">
                                     (confidence: {(bpmModalData.fullData.bpmConfidenceLibrosa * 100).toFixed(0)}%)
@@ -4065,7 +4065,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                   }
                                 }}
                                 disabled={isUpdatingSelection}
-                                className="text-xs bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white px-2 py-1 rounded transition-colors"
+                                className="text-xs bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white px-2 py-1 rounded transition-colors dark:bg-emerald-500 dark:hover:bg-emerald-400"
                               >
                                 Use This
                               </button>
@@ -4075,9 +4075,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       )}
                       
                       {isAdmin && (
-                        <div className={`p-3 rounded border-2 ${bpmModalData.bpmSelected === 'manual' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+                        <div className={`p-3 rounded border-2 ${bpmModalData.bpmSelected === 'manual' ? 'border-green-500 bg-green-50 dark:bg-emerald-500/10' : 'border-gray-200 bg-gray-50 dark:border-slate-700 dark:bg-slate-800/60'}`}>
                           <div className="flex items-center justify-between mb-2">
-                            <span className="font-semibold text-gray-700">Manual Override:</span>
+                            <span className="font-semibold text-gray-700 dark:text-slate-200">Manual Override:</span>
                             {bpmModalData.bpmSelected === 'manual' && bpmModalData.fullData?.bpmManual != null && (
                               <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">Selected: {Math.round(bpmModalData.fullData.bpmManual)}</span>
                             )}
@@ -4088,7 +4088,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                               value={manualBpm || bpmModalData.fullData?.bpmManual || ''}
                               onChange={(e) => setManualBpm(e.target.value)}
                               placeholder="Enter BPM"
-                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                               min="1"
                               max="300"
                             />
@@ -4119,7 +4119,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                 }
                               }}
                               disabled={isUpdatingSelection || (!manualBpm && !bpmModalData.fullData?.bpmManual)}
-                              className="text-xs bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white px-3 py-1 rounded transition-colors"
+                              className="text-xs bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white px-3 py-1 rounded transition-colors dark:bg-purple-500/70 dark:hover:bg-purple-500"
                             >
                               {isUpdatingSelection ? 'Saving...' : 'Save Manual'}
                             </button>
@@ -4131,16 +4131,16 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
                   {/* Key/Scale Section */}
                   <div>
-                    <h4 className="font-semibold text-gray-900 mb-3">Key & Scale</h4>
+                    <h4 className="font-semibold text-gray-900 dark:text-slate-100 mb-3">Key & Scale</h4>
                     <div className="space-y-3">
                       {/* Essentia Key */}
                       {bpmModalData.hasEssentiaKey && (
-                        <div className={`p-3 rounded border-2 ${bpmModalData.keySelected === 'essentia' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+                        <div className={`p-3 rounded border-2 ${bpmModalData.keySelected === 'essentia' ? 'border-green-500 bg-green-50 dark:bg-emerald-500/10' : 'border-gray-200 bg-gray-50 dark:border-slate-700 dark:bg-slate-800/60'}`}>
                           <div className="flex items-center justify-between">
                             <div>
                               <div className="flex items-center gap-2">
-                                <span className="font-semibold text-gray-700">Essentia:</span>
-                                <span className="text-gray-900">
+                                <span className="font-semibold text-gray-700 dark:text-slate-200">Essentia:</span>
+                                <span className="text-gray-900 dark:text-slate-100">
                                   {bpmModalData.fullData?.keyEssentia || 'N/A'} {bpmModalData.fullData?.scaleEssentia || ''}
                                 </span>
                                 {bpmModalData.fullData?.keyscaleConfidenceEssentia != null && (
@@ -4174,7 +4174,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                   }
                                 }}
                                 disabled={isUpdatingSelection}
-                                className="text-xs bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white px-2 py-1 rounded transition-colors"
+                                className="text-xs bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white px-2 py-1 rounded transition-colors dark:bg-emerald-500 dark:hover:bg-emerald-400"
                               >
                                 Use This
                               </button>
@@ -4185,12 +4185,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       
                       {/* Librosa Key */}
                       {bpmModalData.hasLibrosaKey && (
-                        <div className={`p-3 rounded border-2 ${bpmModalData.keySelected === 'librosa' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+                        <div className={`p-3 rounded border-2 ${bpmModalData.keySelected === 'librosa' ? 'border-green-500 bg-green-50 dark:bg-emerald-500/10' : 'border-gray-200 bg-gray-50 dark:border-slate-700 dark:bg-slate-800/60'}`}>
                           <div className="flex items-center justify-between">
                             <div>
                               <div className="flex items-center gap-2">
-                                <span className="font-semibold text-gray-700">Librosa:</span>
-                                <span className="text-gray-900">
+                                <span className="font-semibold text-gray-700 dark:text-slate-200">Librosa:</span>
+                                <span className="text-gray-900 dark:text-slate-100">
                                   {bpmModalData.fullData?.keyLibrosa || 'N/A'} {bpmModalData.fullData?.scaleLibrosa || ''}
                                 </span>
                                 {bpmModalData.fullData?.keyscaleConfidenceLibrosa != null && (
@@ -4224,7 +4224,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                   }
                                 }}
                                 disabled={isUpdatingSelection}
-                                className="text-xs bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white px-2 py-1 rounded transition-colors"
+                                className="text-xs bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white px-2 py-1 rounded transition-colors dark:bg-emerald-500 dark:hover:bg-emerald-400"
                               >
                                 Use This
                               </button>
@@ -4234,9 +4234,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       )}
                       
                       {isAdmin && (
-                        <div className={`p-3 rounded border-2 ${bpmModalData.keySelected === 'manual' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+                        <div className={`p-3 rounded border-2 ${bpmModalData.keySelected === 'manual' ? 'border-green-500 bg-green-50 dark:bg-emerald-500/10' : 'border-gray-200 bg-gray-50 dark:border-slate-700 dark:bg-slate-800/60'}`}>
                           <div className="flex items-center justify-between mb-2">
-                            <span className="font-semibold text-gray-700">Manual Override:</span>
+                            <span className="font-semibold text-gray-700 dark:text-slate-200">Manual Override:</span>
                             {bpmModalData.keySelected === 'manual' && bpmModalData.fullData?.keyManual && (
                               <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">
                                 Selected: {bpmModalData.fullData.keyManual} {bpmModalData.fullData.scaleManual}
@@ -4247,7 +4247,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             <select
                               value={manualKey || bpmModalData.fullData?.keyManual || ''}
                               onChange={(e) => setManualKey(e.target.value)}
-                              className="px-2 py-1 border border-gray-300 rounded text-sm"
+                              className="px-2 py-1 border border-gray-300 rounded text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                             >
                               <option value="">Select Key</option>
                               {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].map(k => (
@@ -4257,7 +4257,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             <select
                               value={manualScale || bpmModalData.fullData?.scaleManual || 'major'}
                               onChange={(e) => setManualScale(e.target.value)}
-                              className="px-2 py-1 border border-gray-300 rounded text-sm"
+                              className="px-2 py-1 border border-gray-300 rounded text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                             >
                               <option value="major">Major</option>
                               <option value="minor">Minor</option>
@@ -4292,7 +4292,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                 }
                               }}
                               disabled={isUpdatingSelection || (!manualKey && !bpmModalData.fullData?.keyManual)}
-                              className="text-xs bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white px-3 py-1 rounded transition-colors"
+                              className="text-xs bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white px-3 py-1 rounded transition-colors dark:bg-purple-500/70 dark:hover:bg-purple-500"
                             >
                               {isUpdatingSelection ? 'Saving...' : 'Save Manual'}
                             </button>
