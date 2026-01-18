@@ -8,7 +8,13 @@ import {
   streamRecordingsByCredit,
 } from '@/lib/musicbrainz/client'
 import { fetchDeezerTrackByIsrc } from '@/lib/deezer'
-import { hasMusoApiKey, listProfileCredits, searchProfilesByName } from '@/lib/muso'
+import {
+  getTrackDetailsById,
+  hasMusoApiKey,
+  listProfileCredits,
+  searchProfilesByName,
+  type MusoTrackDetails,
+} from '@/lib/muso'
 import { query } from '@/lib/db'
 import { withApiLogging } from '@/lib/logger'
 
@@ -87,8 +93,10 @@ export const GET = withApiLogging(async (request: Request) => {
   const { searchParams } = new URL(request.url)
   const name = searchParams.get('name')?.trim()
   const role = searchParams.get('role')?.trim().toLowerCase() || 'producer'
-  const limitParam = Number(searchParams.get('limit') ?? 25)
+  const limitParam = Number(searchParams.get('limit') ?? 20)
   const offsetParam = Number(searchParams.get('offset') ?? 0)
+  const releaseDateStart = searchParams.get('releaseDateStart')?.trim() || null
+  const releaseDateEnd = searchParams.get('releaseDateEnd')?.trim() || null
   const debugParam = searchParams.get('debug')
   const debug = debugParam !== null && debugParam.toLowerCase() !== 'false'
   const streamParam = searchParams.get('stream')
@@ -101,38 +109,147 @@ export const GET = withApiLogging(async (request: Request) => {
     return NextResponse.json({ error: 'Missing name parameter' }, { status: 400 })
   }
 
-  const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 50) : 25
+  const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 50) : 20
   const offset = Number.isFinite(offsetParam) ? Math.max(offsetParam, 0) : 0
   const nameKey = name.toLowerCase()
+  const profileSearchLimit = 5
 
   const loadCache = async () => {
     try {
-      const rows = await query<{ results: any }>(
-        'SELECT results FROM credits_cache WHERE name = $1 AND role = $2 LIMIT 1',
-        [nameKey, role]
+      const rows = await query<{ results: any; profile: any; total_count: number | null }>(
+        `
+        SELECT results, profile, total_count
+        FROM credits_cache
+        WHERE name = $1
+          AND role = $2
+          AND release_date_start IS NOT DISTINCT FROM $3
+          AND release_date_end IS NOT DISTINCT FROM $4
+        LIMIT 1
+        `,
+        [nameKey, role, releaseDateStart, releaseDateEnd]
       )
       if (!rows.length) return null
       const results = Array.isArray(rows[0]?.results) ? rows[0].results : null
-      return results
+      const rawProfile = rows[0]?.profile
+      let profile = rawProfile ?? null
+      if (typeof rawProfile === 'string') {
+        try {
+          profile = JSON.parse(rawProfile)
+        } catch {
+          profile = null
+        }
+      }
+      return {
+        results,
+        profile,
+        totalCount: typeof rows[0]?.total_count === 'number' ? rows[0].total_count : null,
+      }
     } catch {
       return null
     }
   }
 
-  const saveCache = async (results: TrackResult[]) => {
+  const saveCache = async (results: TrackResult[], options?: { profile?: Record<string, unknown> | null; totalCount?: number | null }) => {
     try {
       const isrcs = Array.from(new Set(results.map((item) => item.isrc).filter(Boolean))) as string[]
       await query(
         `
-        INSERT INTO credits_cache (name, role, results, isrcs, updated_at)
-        VALUES ($1, $2, $3, $4, NOW())
-        ON CONFLICT (name, role)
+        INSERT INTO credits_cache (name, role, release_date_start, release_date_end, results, isrcs, profile, total_count, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+        ON CONFLICT (name, role, release_date_start, release_date_end)
         DO UPDATE SET
           results = EXCLUDED.results,
           isrcs = EXCLUDED.isrcs,
+          profile = EXCLUDED.profile,
+          total_count = EXCLUDED.total_count,
           updated_at = NOW()
         `,
-        [nameKey, role, JSON.stringify(results), isrcs]
+        [
+          nameKey,
+          role,
+          releaseDateStart,
+          releaseDateEnd,
+          JSON.stringify(results),
+          isrcs,
+          options?.profile ? JSON.stringify(options.profile) : null,
+          typeof options?.totalCount === 'number' ? options.totalCount : null,
+        ]
+      )
+    } catch {
+      // ignore cache failures
+    }
+  }
+
+  const trackDetailsCache = new Map<string, MusoTrackDetails | null>()
+
+  const loadTrackCache = async (trackId: string): Promise<MusoTrackDetails | null> => {
+    if (trackDetailsCache.has(trackId)) {
+      return trackDetailsCache.get(trackId) ?? null
+    }
+    try {
+      const rows = await query<{ data: any }>(
+        'SELECT data FROM muso_track_cache WHERE muso_track_id = $1 LIMIT 1',
+        [trackId]
+      )
+      if (!rows.length) {
+        trackDetailsCache.set(trackId, null)
+        return null
+      }
+      const rawData = rows[0]?.data
+      let cached = rawData as MusoTrackDetails | null
+      if (typeof rawData === 'string') {
+        try {
+          cached = JSON.parse(rawData) as MusoTrackDetails
+        } catch {
+          cached = null
+        }
+      }
+      trackDetailsCache.set(trackId, cached ?? null)
+      return cached ?? null
+    } catch {
+      return null
+    }
+  }
+
+  const saveTrackCache = async (trackId: string, details: MusoTrackDetails | null) => {
+    if (!details) return
+    trackDetailsCache.set(trackId, details)
+    try {
+      const isrcs = Array.isArray(details.isrcs) ? details.isrcs : []
+      await query(
+        `
+        INSERT INTO muso_track_cache (muso_track_id, data, spotify_preview_url, isrcs, updated_at)
+        VALUES ($1, $2, $3, $4, NOW())
+        ON CONFLICT (muso_track_id)
+        DO UPDATE SET
+          data = EXCLUDED.data,
+          spotify_preview_url = EXCLUDED.spotify_preview_url,
+          isrcs = EXCLUDED.isrcs,
+          updated_at = NOW()
+        `,
+        [
+          trackId,
+          JSON.stringify(details),
+          details.spotifyPreviewUrl ?? null,
+          isrcs,
+        ]
+      )
+    } catch {
+      // ignore cache failures
+    }
+  }
+
+  const saveAlbumCache = async (album: { id?: string } | null | undefined) => {
+    if (!album?.id) return
+    try {
+      await query(
+        `
+        INSERT INTO muso_album_cache (muso_album_id, data, updated_at)
+        VALUES ($1, $2, NOW())
+        ON CONFLICT (muso_album_id)
+        DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()
+        `,
+        [album.id, JSON.stringify(album)]
       )
     } catch {
       // ignore cache failures
@@ -155,13 +272,13 @@ export const GET = withApiLogging(async (request: Request) => {
   const musoRoleCredits = (roleName: string) => {
     switch (roleName) {
       case 'songwriter':
-        return ['Songwriter', 'Writer', 'Composer', 'Lyricist']
+        return ['Composer']
       case 'mixer':
-        return ['Mixer', 'Mixing Engineer']
+        return ['Mixer']
       case 'engineer':
-        return ['Engineer', 'Recording Engineer', 'Mastering Engineer']
+        return ['Engineer']
       case 'artist':
-        return ['Artist', 'Primary Artist', 'Featured Artist']
+        return ['Artist']
       case 'producer':
       default:
         return ['Producer']
@@ -169,44 +286,66 @@ export const GET = withApiLogging(async (request: Request) => {
   }
 
   const fetchMusoResults = async () => {
-    const profiles = await searchProfilesByName(name)
+    const { items: profiles } = await searchProfilesByName(name, { limit: profileSearchLimit, offset: 0 })
     const profile = profiles[0]
     if (!profile?.id) {
-      return { results: [] as TrackResult[], totalCount: 0 }
+      return { results: [] as TrackResult[], totalCount: 0, profile: null }
     }
     const { items, totalCount } = await listProfileCredits({
       profileId: profile.id,
       credits: musoRoleCredits(role),
       limit,
       offset,
+      sortKey: 'releaseDate',
+      releaseDateStart: releaseDateStart ?? undefined,
+      releaseDateEnd: releaseDateEnd ?? undefined,
     })
-    const results = items.map((item) => {
+    const results: TrackResult[] = []
+    for (const item of items) {
       const track = item.track || {}
       const album = item.album || {}
-      const artists = Array.isArray(item.artists) ? item.artists : []
+      await saveAlbumCache(album)
+
+      const trackId = typeof track.id === 'string' ? track.id : ''
+      let trackDetails = trackId ? await loadTrackCache(trackId) : null
+      if (!trackDetails && trackId) {
+        trackDetails = await getTrackDetailsById({ idKey: 'id', idValue: trackId })
+        await saveTrackCache(trackId, trackDetails)
+      }
+      const artists = Array.isArray(trackDetails?.artists)
+        ? trackDetails?.artists
+        : (Array.isArray(item.artists) ? item.artists : [])
       const artistName = artists.map((artist) => artist?.name).filter(Boolean).join(', ')
-      const releaseDate = typeof item.releaseDate === 'string' ? item.releaseDate : ''
-      return {
+      const releaseDate = typeof trackDetails?.releaseDate === 'string'
+        ? trackDetails.releaseDate
+        : (typeof item.releaseDate === 'string' ? item.releaseDate : '')
+      const isrc = Array.isArray(trackDetails?.isrcs)
+        ? trackDetails?.isrcs[0]
+        : (Array.isArray(track.isrcs) ? track.isrcs[0] : undefined)
+
+      results.push({
         id: track.id || 'unknown',
-        title: track.title || 'Unknown title',
+        title: trackDetails?.title || track.title || 'Unknown title',
         artist: artistName || 'Unknown artist',
         album: album.title || 'Unknown release',
         releaseType: undefined,
         year: releaseDate ? releaseDate.split('-')[0] : '',
-        length: typeof track.duration === 'number' ? track.duration : 0,
-        isrc: Array.isArray(track.isrcs) ? track.isrcs[0] : undefined,
+        length: typeof trackDetails?.duration === 'number'
+          ? trackDetails.duration
+          : (typeof track.duration === 'number' ? track.duration : 0),
+        isrc,
         releaseId: album.id || 'unknown',
         coverArtUrl: album.albumArt || null,
-        previewUrl: track.spotifyPreviewUrl || null,
+        previewUrl: trackDetails?.spotifyPreviewUrl || track.spotifyPreviewUrl || null,
         source: 'muso',
-      } as TrackResult
-    })
-    return { results, totalCount }
+      })
+    }
+    return { results, totalCount, profile }
   }
 
   if (hasMusoApiKey()) {
     try {
-      const { results, totalCount } = await fetchMusoResults()
+      const { results, totalCount, profile } = await fetchMusoResults()
       if (stream) {
         const encoder = new TextEncoder()
         const streamBody = new ReadableStream({
@@ -215,8 +354,14 @@ export const GET = withApiLogging(async (request: Request) => {
               controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`))
             }
             try {
+              if (profile) {
+                send({ type: 'profile', profile })
+              }
+              if (typeof totalCount === 'number') {
+                send({ type: 'meta', totalWorks: totalCount })
+              }
               results.forEach((track) => send({ type: 'result', track }))
-              await saveCache(results)
+              await saveCache(results, { profile, totalCount })
               send({ type: 'done', count: results.length })
             } catch (error) {
               send({ type: 'error', message: error instanceof Error ? error.message : 'Unknown error' })
@@ -234,13 +379,14 @@ export const GET = withApiLogging(async (request: Request) => {
         })
       }
 
-      await saveCache(results)
+      await saveCache(results, { profile, totalCount })
       return NextResponse.json({
         releaseCount: totalCount,
         releaseOffset: offset,
         releaseLimit: limit,
         trackCount: results.length,
         results,
+        profile,
         source: 'muso',
       })
     } catch (error) {
@@ -256,12 +402,18 @@ export const GET = withApiLogging(async (request: Request) => {
 
   if (stream && !refresh) {
     const cached = await loadCache()
-    if (cached && cached.length) {
+    if (cached?.results && cached.results.length) {
       const encoder = new TextEncoder()
       const streamBody = new ReadableStream({
         start: async (controller) => {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'cached', results: cached })}\n\n`))
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done', count: cached.length })}\n\n`))
+          if (cached.profile) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'profile', profile: cached.profile })}\n\n`))
+          }
+          if (typeof cached.totalCount === 'number') {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'meta', totalWorks: cached.totalCount })}\n\n`))
+          }
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'cached', results: cached.results })}\n\n`))
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done', count: cached.results.length })}\n\n`))
           controller.close()
         },
       })
@@ -269,9 +421,9 @@ export const GET = withApiLogging(async (request: Request) => {
       void (async () => {
         if (hasMusoApiKey()) {
           try {
-            const { results } = await fetchMusoResults()
-            const merged = mergeResults(cached, results)
-            await saveCache(merged)
+            const { results, profile, totalCount } = await fetchMusoResults()
+            const merged = mergeResults(cached.results, results)
+            await saveCache(merged, { profile, totalCount })
             return
           } catch {
             // Fall back to MusicBrainz refresh.
@@ -320,8 +472,8 @@ export const GET = withApiLogging(async (request: Request) => {
             source: 'musicbrainz',
           })
         }
-        const merged = mergeResults(cached, collected)
-        await saveCache(merged)
+        const merged = mergeResults(cached.results, collected)
+        await saveCache(merged, { profile: cached.profile ?? null, totalCount: cached.totalCount ?? null })
       })()
 
       return new Response(streamBody, {
@@ -400,8 +552,8 @@ export const GET = withApiLogging(async (request: Request) => {
             collected.push(track)
           }
           const existing = await loadCache()
-          const merged = mergeResults(existing, collected)
-          await saveCache(merged)
+          const merged = mergeResults(existing?.results ?? null, collected)
+          await saveCache(merged, { profile: existing?.profile ?? null, totalCount: existing?.totalCount ?? null })
           send({ type: 'done', count: streamedCount })
         } catch (error) {
           send({ type: 'error', message: error instanceof Error ? error.message : 'Unknown error' })
@@ -424,7 +576,7 @@ export const GET = withApiLogging(async (request: Request) => {
     debugSteps.push({
       step: 1,
       name: 'Parse request params',
-      data: { name, role, limit, offset },
+      data: { name, role, limit, offset, releaseDateStart, releaseDateEnd },
     })
   }
   try {

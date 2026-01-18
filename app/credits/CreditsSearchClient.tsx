@@ -6,6 +6,14 @@ import { formatDuration } from '@/lib/musicbrainz'
 
 type RoleOption = 'producer' | 'songwriter' | 'mixer' | 'engineer' | 'artist'
 
+interface MusoProfileSummary {
+  id?: string
+  name?: string
+  avatarUrl?: string | null
+  creditCount?: number
+  collaboratorsCount?: number
+}
+
 interface SearchResult {
   id: string
   title: string
@@ -37,6 +45,7 @@ const ROLE_OPTIONS: Array<{ value: RoleOption; label: string }> = [
 export default function CreditsSearchClient() {
   const [name, setName] = useState('')
   const [role, setRole] = useState<RoleOption>('producer')
+  const [profileInfo, setProfileInfo] = useState<MusoProfileSummary | null>(null)
   const [results, setResults] = useState<SearchResult[]>([])
   const [trackCount, setTrackCount] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -55,25 +64,27 @@ export default function CreditsSearchClient() {
   const requestIdRef = useRef(0)
   const [lastBatchCount, setLastBatchCount] = useState(0)
   const [totalWorks, setTotalWorks] = useState<number | null>(null)
-  const [pageSize, setPageSize] = useState<number>(25)
+  const [pageSize, setPageSize] = useState<number>(20)
   const [currentPage, setCurrentPage] = useState(1)
   const totalWorksRef = useRef<number | null>(null)
   const autoLoadRef = useRef(true)
   const replaceOnFirstResultRef = useRef(false)
   const [sortField, setSortField] = useState<'title' | 'artist' | 'album' | 'duration' | 'year' | 'isrc' | null>('year')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
+  const [releaseDateStart, setReleaseDateStart] = useState('')
+  const [releaseDateEnd, setReleaseDateEnd] = useState('')
 
-  const limit = 25
+  const limit = Math.min(pageSize, 50)
   const historyKey = 'creditsSearchHistory'
   const pageSizeKey = 'credits_rows_per_page'
-  const cacheKeyFor = (searchName: string, searchRole: string) =>
-    `credits_cache_${searchRole}_${searchName.toLowerCase()}`
+  const cacheKeyFor = (searchName: string, searchRole: string, startDate: string, endDate: string) =>
+    `credits_cache_${searchRole}_${searchName.toLowerCase()}_${startDate || 'any'}_${endDate || 'any'}`
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     const storedPageSize = window.localStorage.getItem(pageSizeKey)
     if (storedPageSize && !Number.isNaN(Number(storedPageSize))) {
-      setPageSize(Number(storedPageSize))
+      setPageSize(Math.min(Number(storedPageSize), 50))
     }
     try {
       const stored = window.localStorage.getItem(historyKey)
@@ -162,11 +173,24 @@ export default function CreditsSearchClient() {
       setCurrentPage(1)
       autoLoadRef.current = true
       setShowingCached(false)
+      setProfileInfo(null)
     }
     replaceOnFirstResultRef.current = replaceOnFirstResult
     setStatusMessage(`Loading ${limit} results…`)
     const refreshParam = refresh ? '&refresh=true' : ''
-    const url = `/api/creditsearch?name=${encodeURIComponent(trimmed)}&role=${encodeURIComponent(role)}&limit=${limit}&offset=${offset}&stream=true${refreshParam}`
+    const params = new URLSearchParams()
+    params.set('name', trimmed)
+    params.set('role', role)
+    params.set('limit', String(limit))
+    params.set('offset', String(offset))
+    params.set('stream', 'true')
+    if (releaseDateStart) {
+      params.set('releaseDateStart', releaseDateStart)
+    }
+    if (releaseDateEnd) {
+      params.set('releaseDateEnd', releaseDateEnd)
+    }
+    const url = `/api/creditsearch?${params.toString()}${refreshParam}`
 
     const source = new EventSource(url)
     streamRef.current = source
@@ -185,6 +209,10 @@ export default function CreditsSearchClient() {
             setTotalWorks(payload.totalWorks)
             totalWorksRef.current = payload.totalWorks
           }
+          return
+        }
+        if (payload.type === 'profile') {
+          setProfileInfo(payload.profile || null)
           return
         }
         if (payload.type === 'cached' && Array.isArray(payload.results)) {
@@ -228,7 +256,10 @@ export default function CreditsSearchClient() {
           source.close()
           streamRef.current = null
           if (resultsRef.current.length > 0 && typeof window !== 'undefined') {
-            window.localStorage.setItem(cacheKeyFor(trimmed, role), JSON.stringify(resultsRef.current))
+            window.localStorage.setItem(
+              cacheKeyFor(trimmed, role, releaseDateStart, releaseDateEnd),
+              JSON.stringify(resultsRef.current)
+            )
           }
           if (autoLoadRef.current && streamedCount === limit) {
             window.setTimeout(() => {
@@ -288,8 +319,21 @@ export default function CreditsSearchClient() {
     setTotalWorks(null)
     totalWorksRef.current = null
     setDebugPayload(null)
+    setProfileInfo(null)
     try {
-      const url = `/api/creditsearch?name=${encodeURIComponent(trimmed)}&role=${encodeURIComponent(role)}&limit=${limit}&offset=0&debug=true`
+      const params = new URLSearchParams()
+      params.set('name', trimmed)
+      params.set('role', role)
+      params.set('limit', String(limit))
+      params.set('offset', '0')
+      params.set('debug', 'true')
+      if (releaseDateStart) {
+        params.set('releaseDateStart', releaseDateStart)
+      }
+      if (releaseDateEnd) {
+        params.set('releaseDateEnd', releaseDateEnd)
+      }
+      const url = `/api/creditsearch?${params.toString()}`
       const res = await fetch(url)
       const payload = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -299,6 +343,7 @@ export default function CreditsSearchClient() {
       setResults(incoming)
       setTrackCount(incoming.length)
       setDebugPayload(payload?.debug || null)
+      setProfileInfo(payload?.profile || null)
       setStatusMessage(`Loaded ${incoming.length} results (debug mode).`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Credits search failed')
@@ -332,7 +377,7 @@ export default function CreditsSearchClient() {
       return
     }
     if (typeof window !== 'undefined') {
-      const cached = window.localStorage.getItem(cacheKeyFor(trimmed, role))
+      const cached = window.localStorage.getItem(cacheKeyFor(trimmed, role, releaseDateStart, releaseDateEnd))
       if (cached) {
         try {
           const parsed = JSON.parse(cached)
@@ -364,7 +409,7 @@ export default function CreditsSearchClient() {
     setShowHistory(false)
     saveHistory(trimmed)
     if (typeof window !== 'undefined') {
-      const cached = window.localStorage.getItem(cacheKeyFor(trimmed, role))
+      const cached = window.localStorage.getItem(cacheKeyFor(trimmed, role, releaseDateStart, releaseDateEnd))
       if (cached) {
         try {
           const parsed = JSON.parse(cached)
@@ -537,6 +582,30 @@ export default function CreditsSearchClient() {
             {debugMode ? 'Debug on' : 'Debug off'}
           </button>
         </div>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1">
+            <label className="block text-xs font-semibold text-gray-600 mb-1">
+              Release date from
+            </label>
+            <input
+              type="date"
+              value={releaseDateStart}
+              onChange={(event) => setReleaseDateStart(event.target.value)}
+              className="w-full bg-transparent px-0 py-2 text-sm text-gray-900 border-b border-gray-300 focus:outline-none focus:border-gray-500"
+            />
+          </div>
+          <div className="flex-1">
+            <label className="block text-xs font-semibold text-gray-600 mb-1">
+              Release date to
+            </label>
+            <input
+              type="date"
+              value={releaseDateEnd}
+              onChange={(event) => setReleaseDateEnd(event.target.value)}
+              className="w-full bg-transparent px-0 py-2 text-sm text-gray-900 border-b border-gray-300 focus:outline-none focus:border-gray-500"
+            />
+          </div>
+        </div>
         <p className="text-xs text-gray-500">
           Searches Muso credits by role and name, with MusicBrainz as fallback.
         </p>
@@ -550,6 +619,34 @@ export default function CreditsSearchClient() {
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
           {error}
+        </div>
+      )}
+
+      {profileInfo && (
+        <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-[0_4px_20px_rgba(0,0,0,0.05)]">
+          <div className="flex items-center gap-3">
+            {profileInfo.avatarUrl ? (
+              <Image
+                src={profileInfo.avatarUrl}
+                alt={profileInfo.name || 'Profile'}
+                width={48}
+                height={48}
+                className="h-12 w-12 rounded-full object-cover"
+              />
+            ) : (
+              <div className="h-12 w-12 rounded-full bg-gray-100 text-xs text-gray-400 flex items-center justify-center">
+                Muso
+              </div>
+            )}
+            <div>
+              <div className="text-sm font-semibold text-gray-900">
+                {profileInfo.name || 'Muso profile'}
+              </div>
+              <div className="text-xs text-gray-500">
+                Credits: {profileInfo.creditCount ?? '—'} • Collaborators: {profileInfo.collaboratorsCount ?? '—'}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -605,7 +702,7 @@ export default function CreditsSearchClient() {
           <select
             value={pageSize}
             onChange={(event) => {
-              const value = Number(event.target.value)
+              const value = Math.min(Number(event.target.value), 50)
               setPageSize(value)
               setCurrentPage(1)
               if (typeof window !== 'undefined') {
@@ -616,9 +713,7 @@ export default function CreditsSearchClient() {
           >
             <option value="10">10</option>
             <option value="20">20</option>
-            <option value="25">25</option>
             <option value="50">50</option>
-            <option value="100">100</option>
           </select>
           <div
             className={`flex items-center gap-2 ml-auto text-xs sm:text-sm text-gray-600 ${

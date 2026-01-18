@@ -8,7 +8,9 @@
   * Replace YOUR_MUSO_API_KEY with your actual Muso API key from your environment variables.
   *
   * Test 'searchProfilesByName':
-  * curl -H "x-api-key: YOUR_MUSO_API_KEY" "https://api.developer.muso.ai/v4/profiles/search?names=John%20Doe"
+  * curl -X POST -H "x-api-key: YOUR_MUSO_API_KEY" -H "Content-Type: application/json" \
+  *   "https://api.developer.muso.ai/v4/search" \
+  *   --data '{"keyword":"John Doe","type":["profile"],"limit":5,"offset":0}'
   *
   * Test 'listProfileCredits':
   * curl -H "x-api-key: YOUR_MUSO_API_KEY" "https://api.developer.muso.ai/v4/profile/PROFILE_ID/credits"
@@ -71,6 +73,7 @@ type MusoTrackDetails = {
   isrcs?: string[]
   spotifyPreviewUrl?: string | null
   releaseDate?: string | null
+  duration?: number
   bpm?: number | null
   key?: string | null
   credits?: Array<{
@@ -178,11 +181,40 @@ async function musoFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>
 }
 
-export async function searchProfilesByName(name: string): Promise<MusoProfile[]> {
-  const params = new URLSearchParams()
-  params.append('names', name)
-  const payload = await musoFetch<MusoResponse<MusoProfile[]>>(`/profiles/search?${params.toString()}`)
-  return Array.isArray(payload?.data) ? payload.data : []
+export async function searchProfilesByName(
+  name: string,
+  options?: { limit?: number; offset?: number }
+): Promise<{ items: MusoProfile[]; totalCount: number }> {
+  const payload = await musoFetch<
+    MusoResponse<{
+      profiles?: { total?: number; items?: MusoProfile[] }
+      items?: MusoProfile[]
+      results?: MusoProfile[]
+    }> | MusoProfile[]
+  >('/search', {
+    method: 'POST',
+    body: JSON.stringify({
+      keyword: name,
+      type: ['profile'],
+      limit: typeof options?.limit === 'number' ? options.limit : 5,
+      offset: typeof options?.offset === 'number' ? options.offset : 0,
+    }),
+  })
+  if (Array.isArray(payload)) {
+    return { items: payload, totalCount: payload.length }
+  }
+  const data = payload?.data
+  if (Array.isArray(data)) {
+    return { items: data, totalCount: data.length }
+  }
+  if (Array.isArray(data?.profiles?.items)) {
+    return {
+      items: data.profiles.items,
+      totalCount: typeof data.profiles.total === 'number' ? data.profiles.total : data.profiles.items.length,
+    }
+  }
+  const items = (data?.items || data?.results || []) as MusoProfile[]
+  return { items, totalCount: items.length }
 }
 
 export async function listProfileCredits(params: {
@@ -191,6 +223,9 @@ export async function listProfileCredits(params: {
   limit?: number
   offset?: number
   keyword?: string
+  sortKey?: string
+  releaseDateStart?: string
+  releaseDateEnd?: string
 }): Promise<{ items: MusoProfileCreditItem[]; totalCount: number }> {
   const search = new URLSearchParams()
   if (params.keyword) {
@@ -198,6 +233,15 @@ export async function listProfileCredits(params: {
   }
   if (params.credits && params.credits.length > 0) {
     params.credits.forEach((credit) => search.append('credit', credit))
+  }
+  if (params.sortKey) {
+    search.set('sortKey', params.sortKey)
+  }
+  if (params.releaseDateStart) {
+    search.set('releaseDateStart', params.releaseDateStart)
+  }
+  if (params.releaseDateEnd) {
+    search.set('releaseDateEnd', params.releaseDateEnd)
   }
   if (typeof params.limit === 'number') {
     search.set('limit', String(params.limit))
@@ -215,6 +259,16 @@ export async function listProfileCredits(params: {
 
 export async function getTrackDetailsByIsrc(isrc: string): Promise<MusoTrackDetails | null> {
   const payload = await musoFetch<MusoResponse<MusoTrackDetails>>(`/track/isrc/${encodeURIComponent(isrc)}`)
+  return payload?.data ?? null
+}
+
+export async function getTrackDetailsById(params: {
+  idKey: string
+  idValue: string
+}): Promise<MusoTrackDetails | null> {
+  const payload = await musoFetch<MusoResponse<MusoTrackDetails>>(
+    `/track/${encodeURIComponent(params.idKey)}/${encodeURIComponent(params.idValue)}`
+  )
   return payload?.data ?? null
 }
 

@@ -8,7 +8,9 @@
 # You can get your API key from the MUSO_API_KEY environment variable in your project's configuration.
 
 echo "--- Testing Muso API: searchProfilesByName ---"
-curl -H "x-api-key: YOUR_MUSO_API_KEY" "https://api.developer.muso.ai/v4/profiles/search?names=John%20Doe"
+curl -X POST -H "x-api-key: YOUR_MUSO_API_KEY" -H "Content-Type: application/json" \
+  "https://api.developer.muso.ai/v4/search" \
+  --data '{"keyword":"John Doe","type":["profile"],"limit":5,"offset":0}'
 echo -e "\n"
 
 echo "--- Testing Muso API: listProfileCredits ---"
