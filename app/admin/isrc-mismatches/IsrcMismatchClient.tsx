@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type PreviewUrlEntry = {
   url: string
@@ -54,32 +54,13 @@ export default function IsrcMismatchClient() {
     audioRef.current = event.currentTarget
   }
 
-  const loadMismatches = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch('/api/admin/isrc-mismatches')
-      if (!res.ok) {
-        throw new Error('Failed to load ISRC mismatches')
-      }
-      const data = await res.json()
-      const nextItems = Array.isArray(data?.items) ? data.items : []
-      setItems(nextItems)
-      void hydrateMissingPreviewMeta(nextItems)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load ISRC mismatches')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const needsPreviewMeta = (item: IsrcMismatchItem) => {
+  const needsPreviewMeta = useCallback((item: IsrcMismatchItem) => {
     const entry = getPreviewEntry(item)
     if (!entry) return true
     return !entry.artist || !entry.title || !entry.isrc
-  }
+  }, [])
 
-  const hydrateMissingPreviewMeta = async (rows: IsrcMismatchItem[]) => {
+  const hydrateMissingPreviewMeta = useCallback(async (rows: IsrcMismatchItem[]) => {
     const targets = rows.filter(needsPreviewMeta)
     if (targets.length === 0) return
     setIsHydratingPreview(true)
@@ -105,11 +86,30 @@ export default function IsrcMismatchClient() {
       }
     }
     setIsHydratingPreview(false)
-  }
+  }, [needsPreviewMeta])
+
+  const loadMismatches = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/isrc-mismatches')
+      if (!res.ok) {
+        throw new Error('Failed to load ISRC mismatches')
+      }
+      const data = await res.json()
+      const nextItems = Array.isArray(data?.items) ? data.items : []
+      setItems(nextItems)
+      void hydrateMissingPreviewMeta(nextItems)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load ISRC mismatches')
+    } finally {
+      setLoading(false)
+    }
+  }, [hydrateMissingPreviewMeta])
 
   useEffect(() => {
     loadMismatches()
-  }, [])
+  }, [loadMismatches])
 
   const handleReview = async (spotifyTrackId: string, action: 'confirm_match' | 'confirm_mismatch') => {
     setLoading(true)

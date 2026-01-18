@@ -412,8 +412,9 @@ export const GET = withApiLogging(async (request: Request) => {
           if (typeof cached.totalCount === 'number') {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'meta', totalWorks: cached.totalCount })}\n\n`))
           }
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'cached', results: cached.results })}\n\n`))
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done', count: cached.results.length })}\n\n`))
+          const cachedResults = cached.results || []
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'cached', results: cachedResults })}\n\n`))
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done', count: cachedResults.length })}\n\n`))
           controller.close()
         },
       })
