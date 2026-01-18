@@ -286,12 +286,54 @@ export const GET = withApiLogging(async (request: Request) => {
   }
 
   const fetchMusoResults = async () => {
-    const { items: profiles } = await searchProfilesByName(name, { limit: profileSearchLimit, offset: 0 })
+    const profileSearchRequest = {
+      endpoint: '/search',
+      method: 'POST',
+      body: {
+        keyword: name,
+        type: ['profile'],
+        limit: profileSearchLimit,
+        offset: 0,
+      },
+    }
+    const { items: profiles, totalCount: profileTotal, raw: profileRaw } = await searchProfilesByName(name, {
+      limit: profileSearchLimit,
+      offset: 0,
+      debug,
+    })
+    if (debug) {
+      debugSteps.push({
+        step: 2,
+        name: 'Muso profile search',
+        data: {
+          request: profileSearchRequest,
+          response: profileRaw ?? { totalCount: profileTotal, itemsCount: profiles.length },
+        },
+      })
+    }
     const profile = profiles[0]
     if (!profile?.id) {
+      if (debug) {
+        debugSteps.push({
+          step: 3,
+          name: 'Muso profile missing',
+          data: { totalCount: profileTotal, itemsCount: profiles.length },
+        })
+      }
       return { results: [] as TrackResult[], totalCount: 0, profile: null }
     }
-    const { items, totalCount } = await listProfileCredits({
+    const creditsRequest = {
+      endpoint: `/profile/${profile.id}/credits`,
+      params: {
+        credits: musoRoleCredits(role),
+        limit,
+        offset,
+        sortKey: 'releaseDate',
+        releaseDateStart: releaseDateStart ?? undefined,
+        releaseDateEnd: releaseDateEnd ?? undefined,
+      },
+    }
+    const { items, totalCount, raw: creditsRaw } = await listProfileCredits({
       profileId: profile.id,
       credits: musoRoleCredits(role),
       limit,
@@ -299,8 +341,23 @@ export const GET = withApiLogging(async (request: Request) => {
       sortKey: 'releaseDate',
       releaseDateStart: releaseDateStart ?? undefined,
       releaseDateEnd: releaseDateEnd ?? undefined,
+      debug,
     })
+    if (debug) {
+      debugSteps.push({
+        step: 4,
+        name: 'Muso credits search',
+        data: {
+          request: creditsRequest,
+          response: creditsRaw ?? { totalCount, itemsCount: items.length },
+        },
+      })
+    }
     const results: TrackResult[] = []
+    let trackDetailsRequested = 0
+    let trackDetailsFetched = 0
+    let trackDetailsCacheHits = 0
+    const trackDetailsSamples: Array<Record<string, unknown>> = []
     for (const item of items) {
       const track = item.track || {}
       const album = item.album || {}
@@ -308,9 +365,23 @@ export const GET = withApiLogging(async (request: Request) => {
 
       const trackId = typeof track.id === 'string' ? track.id : ''
       let trackDetails = trackId ? await loadTrackCache(trackId) : null
+      if (trackId) {
+        trackDetailsRequested += 1
+      }
       if (!trackDetails && trackId) {
         trackDetails = await getTrackDetailsById({ idKey: 'id', idValue: trackId })
+        trackDetailsFetched += 1
         await saveTrackCache(trackId, trackDetails)
+      } else if (trackDetails && trackId) {
+        trackDetailsCacheHits += 1
+      }
+      if (debug && trackId && trackDetails && trackDetailsSamples.length < 3) {
+        trackDetailsSamples.push({
+          trackId,
+          title: trackDetails.title,
+          releaseDate: trackDetails.releaseDate,
+          spotifyPreviewUrl: trackDetails.spotifyPreviewUrl,
+        })
       }
       const artists = Array.isArray(trackDetails?.artists)
         ? trackDetails?.artists
@@ -338,6 +409,18 @@ export const GET = withApiLogging(async (request: Request) => {
         coverArtUrl: album.albumArt || null,
         previewUrl: trackDetails?.spotifyPreviewUrl || track.spotifyPreviewUrl || null,
         source: 'muso',
+      })
+    }
+    if (debug) {
+      debugSteps.push({
+        step: 5,
+        name: 'Muso track details',
+        data: {
+          requested: trackDetailsRequested,
+          fetched: trackDetailsFetched,
+          cacheHits: trackDetailsCacheHits,
+          samples: trackDetailsSamples,
+        },
       })
     }
     return { results, totalCount, profile }
@@ -387,6 +470,7 @@ export const GET = withApiLogging(async (request: Request) => {
         trackCount: results.length,
         results,
         profile,
+        debug: debug ? debugSteps : undefined,
         source: 'muso',
       })
     } catch (error) {

@@ -183,8 +183,8 @@ async function musoFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
 export async function searchProfilesByName(
   name: string,
-  options?: { limit?: number; offset?: number }
-): Promise<{ items: MusoProfile[]; totalCount: number }> {
+  options?: { limit?: number; offset?: number; debug?: boolean }
+): Promise<{ items: MusoProfile[]; totalCount: number; raw?: unknown }> {
   const payload = await musoFetch<
     MusoResponse<{
       profiles?: { total?: number; items?: MusoProfile[] }
@@ -201,20 +201,21 @@ export async function searchProfilesByName(
     }),
   })
   if (Array.isArray(payload)) {
-    return { items: payload, totalCount: payload.length }
+    return { items: payload, totalCount: payload.length, raw: options?.debug ? payload : undefined }
   }
   const data = payload?.data
   if (Array.isArray(data)) {
-    return { items: data, totalCount: data.length }
+    return { items: data, totalCount: data.length, raw: options?.debug ? payload : undefined }
   }
   if (Array.isArray(data?.profiles?.items)) {
     return {
       items: data.profiles.items,
       totalCount: typeof data.profiles.total === 'number' ? data.profiles.total : data.profiles.items.length,
+      raw: options?.debug ? payload : undefined,
     }
   }
   const items = (data?.items || data?.results || []) as MusoProfile[]
-  return { items, totalCount: items.length }
+  return { items, totalCount: items.length, raw: options?.debug ? payload : undefined }
 }
 
 export async function listProfileCredits(params: {
@@ -226,7 +227,8 @@ export async function listProfileCredits(params: {
   sortKey?: string
   releaseDateStart?: string
   releaseDateEnd?: string
-}): Promise<{ items: MusoProfileCreditItem[]; totalCount: number }> {
+  debug?: boolean
+}): Promise<{ items: MusoProfileCreditItem[]; totalCount: number; raw?: unknown }> {
   const search = new URLSearchParams()
   if (params.keyword) {
     search.set('keyword', params.keyword)
@@ -254,7 +256,7 @@ export async function listProfileCredits(params: {
   )
   const items = Array.isArray(payload?.data?.items) ? payload.data.items : []
   const totalCount = typeof payload?.data?.totalCount === 'number' ? payload.data.totalCount : items.length
-  return { items, totalCount }
+  return { items, totalCount, raw: params.debug ? payload : undefined }
 }
 
 export async function getTrackDetailsByIsrc(isrc: string): Promise<MusoTrackDetails | null> {
