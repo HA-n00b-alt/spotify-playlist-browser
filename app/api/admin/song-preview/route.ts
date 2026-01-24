@@ -34,6 +34,7 @@ export const POST = withApiLogging(async (request: Request) => {
     previewIsrc,
     previewTitle,
     previewArtist,
+    request,
   })
 
   await query(

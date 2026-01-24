@@ -1575,10 +1575,17 @@ export async function computeBpmFromPreviewUrl(params: {
   previewIsrc?: string | null
   previewTitle?: string | null
   previewArtist?: string | null
+  request?: Request
+  proxyOrigin?: string | null
 }): Promise<BpmResult> {
-  const { spotifyTrackId, previewUrl, source, previewIsrc, previewTitle, previewArtist } = params
+  const { spotifyTrackId, previewUrl, source, previewIsrc, previewTitle, previewArtist, request, proxyOrigin } = params
+  const origin = proxyOrigin ?? (request ? new URL(request.url).origin : null)
+  const bpmPreviewUrl =
+    origin && !previewUrl.includes('/api/audio-proxy')
+      ? `${origin}/api/audio-proxy?url=${encodeURIComponent(previewUrl)}`
+      : previewUrl
   const identifiers = await extractSpotifyIdentifiers(spotifyTrackId)
-  const result = await computeBpmFromService(previewUrl)
+  const result = await computeBpmFromService(bpmPreviewUrl)
   const urls: PreviewUrlEntry[] = [
     {
       url: previewUrl,

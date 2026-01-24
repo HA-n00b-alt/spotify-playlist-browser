@@ -106,6 +106,7 @@ export const PATCH = withApiLogging(async (request: Request) => {
       previewArtist: Array.isArray(spotifyTrack?.artists)
         ? spotifyTrack.artists.map((artist: any) => artist?.name).filter(Boolean).join(', ')
         : null,
+      request,
     })
   }
 

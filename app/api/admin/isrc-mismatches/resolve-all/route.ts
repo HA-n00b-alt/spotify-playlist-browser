@@ -105,6 +105,7 @@ export const POST = withApiLogging(async (request: Request) => {
         previewArtist: Array.isArray(musoDetails?.artists)
           ? musoDetails?.artists?.map((artist) => artist?.name).filter(Boolean).join(', ')
           : spotifyArtist || null,
+        request,
       })
 
       await query(

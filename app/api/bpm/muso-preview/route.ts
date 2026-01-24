@@ -46,6 +46,7 @@ export const POST = withApiLogging(async (request: Request) => {
       previewArtist: Array.isArray(spotifyTrack?.artists)
         ? spotifyTrack.artists.map((artist: any) => artist?.name).filter(Boolean).join(', ')
         : null,
+      request,
     })
 
     trackApiRequest(userId, '/api/bpm/muso-preview', 'POST', 200).catch(() => {})
