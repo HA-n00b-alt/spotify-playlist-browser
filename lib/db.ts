@@ -58,9 +58,11 @@ export async function query<T = any>(text: string, params?: any[]): Promise<T[]>
       hasParams: paramsCount > 0,
     })
     
-    // Use Neon serverless for API routes (works in both Edge and Node runtime)
-    const sqlClient = neon(DATABASE_URL)
-    const result = await sqlClient(text, params || [])
+    if (!sql) {
+      throw new Error('Database client is not initialized')
+    }
+    // Use shared Neon serverless client for API routes.
+    const result = await sql(text, params || [])
     
     const durationMs = Date.now() - start
     const resultCount = Array.isArray(result) ? result.length : 'non-array'

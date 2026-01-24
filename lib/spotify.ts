@@ -450,36 +450,85 @@ export async function makeSpotifyRequest<T>(
   return response.json() as Promise<T>
 }
 
-export async function getPlaylists(): Promise<any[]> {
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  iterator: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length)
+  let index = 0
+  const worker = async () => {
+    while (index < items.length) {
+      const currentIndex = index++
+      results[currentIndex] = await iterator(items[currentIndex])
+    }
+  }
+  const concurrency = Math.max(1, Math.min(limit, items.length))
+  const workers = Array.from({ length: concurrency }, worker)
+  await Promise.all(workers)
+  return results
+}
+
+export async function getPlaylists(options?: { includeFollowers?: boolean }): Promise<any[]> {
   // Use pagination helper to fetch all playlists
   const allPlaylists = await paginateSpotify<any>('/me/playlists?limit=50')
 
-  // For each playlist, fetch full details to get followers if not present
-  const playlistsWithFollowers = await Promise.all(
-    allPlaylists.map(async (playlist) => {
-      // If followers is missing, try to get it from the full playlist endpoint
-      if (!playlist.followers) {
-        try {
-          const fullPlaylist = await makeSpotifyRequest<any>(
-            `/playlists/${playlist.id}?fields=followers`
-          )
-          if (fullPlaylist.followers) {
-            playlist.followers = fullPlaylist.followers
+  if (options?.includeFollowers === false) {
+    return allPlaylists
+  }
+
+  const missingFollowerIds = allPlaylists.filter((playlist) => !playlist.followers).map((playlist) => playlist.id)
+  if (missingFollowerIds.length > 0) {
+    try {
+      const cachedRows = await query<{ playlist_id: string; playlist_data: any }>(
+        `SELECT playlist_id, playlist_data
+         FROM playlist_cache
+         WHERE playlist_id = ANY($1)`,
+        [missingFollowerIds]
+      )
+      const cachedMap = new Map<string, any>(
+        cachedRows.map((row) => [row.playlist_id, row.playlist_data])
+      )
+      for (const playlist of allPlaylists) {
+        if (!playlist.followers) {
+          const cached = cachedMap.get(playlist.id)
+          if (cached?.followers) {
+            playlist.followers = cached.followers
           }
-        } catch (error) {
-          // If fetching fails, continue without followers
-          logError(error, {
-            component: 'spotify.getPlaylists',
-            playlistId: playlist.id,
-            action: 'fetching_followers'
-          })
         }
       }
-      return playlist
-    })
-  )
+    } catch (error) {
+      logWarning('Failed to hydrate followers from cache', {
+        component: 'spotify.getPlaylists',
+        error,
+      })
+    }
+  }
 
-  return playlistsWithFollowers
+  const stillMissing = allPlaylists.filter((playlist) => !playlist.followers)
+  if (stillMissing.length === 0) {
+    return allPlaylists
+  }
+
+  const concurrency = Number.parseInt(process.env.SPOTIFY_FOLLOWERS_CONCURRENCY || '5', 10)
+  await mapWithConcurrency(stillMissing, concurrency, async (playlist) => {
+    try {
+      const fullPlaylist = await makeSpotifyRequest<any>(
+        `/playlists/${playlist.id}?fields=followers`
+      )
+      if (fullPlaylist.followers) {
+        playlist.followers = fullPlaylist.followers
+      }
+    } catch (error) {
+      logError(error, {
+        component: 'spotify.getPlaylists',
+        playlistId: playlist.id,
+        action: 'fetching_followers',
+      })
+    }
+  })
+
+  return allPlaylists
 }
 
 interface PlaylistCacheRecord {
@@ -492,17 +541,29 @@ interface PlaylistCacheRecord {
   updated_at: Date
 }
 
-/**
- * Check if playlist is cached and matches current snapshot_id
- */
-async function getCachedPlaylist(playlistId: string): Promise<{
+type PlaylistCacheEntry = {
   playlist: any
   tracks: any[]
   snapshotId: string
-} | null> {
+  updatedAt: Date
+}
+
+const playlistRefreshInFlight = new Map<string, Promise<PlaylistCacheEntry>>()
+const playlistCacheTtlMs = Number.parseInt(process.env.PLAYLIST_CACHE_TTL_MS || '300000', 10)
+
+function isCacheFresh(updatedAt: Date | null | undefined): boolean {
+  if (!updatedAt || !Number.isFinite(playlistCacheTtlMs)) return false
+  const ageMs = Date.now() - updatedAt.getTime()
+  return ageMs >= 0 && ageMs < playlistCacheTtlMs
+}
+
+/**
+ * Check if playlist is cached and matches current snapshot_id
+ */
+async function getCachedPlaylist(playlistId: string): Promise<PlaylistCacheEntry | null> {
   try {
     const results = await query<PlaylistCacheRecord>(
-      `SELECT playlist_id, snapshot_id, playlist_data, tracks_data 
+      `SELECT playlist_id, snapshot_id, playlist_data, tracks_data, updated_at
        FROM playlist_cache 
        WHERE playlist_id = $1`,
       [playlistId]
@@ -514,6 +575,7 @@ async function getCachedPlaylist(playlistId: string): Promise<{
         playlist: cached.playlist_data,
         tracks: cached.tracks_data,
         snapshotId: cached.snapshot_id,
+        updatedAt: cached.updated_at,
       }
     }
     return null
@@ -523,6 +585,46 @@ async function getCachedPlaylist(playlistId: string): Promise<{
       playlistId,
     })
     return null
+  }
+}
+
+async function getPlaylistSnapshot(playlistId: string): Promise<string | null> {
+  try {
+    const currentPlaylist = await makeSpotifyRequest<any>(`/playlists/${playlistId}?fields=snapshot_id`)
+    return currentPlaylist?.snapshot_id || null
+  } catch (error) {
+    logWarning('Failed to fetch playlist snapshot', {
+      component: 'spotify.getPlaylistSnapshot',
+      playlistId,
+      error,
+    })
+    return null
+  }
+}
+
+async function refreshPlaylistCache(playlistId: string): Promise<PlaylistCacheEntry> {
+  if (playlistRefreshInFlight.has(playlistId)) {
+    return playlistRefreshInFlight.get(playlistId)!
+  }
+  const refreshPromise = (async () => {
+    const playlist = await makeSpotifyRequest<any>(`/playlists/${playlistId}`)
+    const tracks = await getPlaylistTracksInternal(playlistId)
+    const snapshotId = playlist?.snapshot_id || ''
+    if (snapshotId) {
+      await cachePlaylist(playlistId, snapshotId, playlist, tracks)
+    }
+    return {
+      playlist,
+      tracks,
+      snapshotId,
+      updatedAt: new Date(),
+    }
+  })()
+  playlistRefreshInFlight.set(playlistId, refreshPromise)
+  try {
+    return await refreshPromise
+  } finally {
+    playlistRefreshInFlight.delete(playlistId)
   }
 }
 
@@ -566,48 +668,45 @@ export async function getPlaylist(playlistId: string, useCache = true): Promise<
   if (useCache) {
     const cached = await getCachedPlaylist(playlistId)
     if (cached) {
-      // Verify snapshot_id is still current by making a minimal API call
-      try {
-        // Create a temporary request function that doesn't use cache for verification
-        const currentPlaylist = await makeSpotifyRequest<any>(`/playlists/${playlistId}?fields=snapshot_id`)
-        if (currentPlaylist.snapshot_id === cached.snapshotId) {
-          logInfo(`Using cached playlist ${playlistId} (snapshot matches)`, {
-            component: 'spotify.getPlaylist',
-            playlistId,
-            cache: 'hit',
-          })
-          return cached.playlist
-        } else {
-          logInfo(`Playlist ${playlistId} snapshot changed, fetching fresh data`, {
-            component: 'spotify.getPlaylist',
-            playlistId,
-            cache: 'miss',
-            reason: 'snapshot_changed',
-          })
-        }
-      } catch (error) {
-        // If API call fails, use cached data as fallback
-        logWarning(`Failed to verify snapshot, using cached data for playlist ${playlistId}`, {
+      if (isCacheFresh(cached.updatedAt)) {
+        logInfo(`Using cached playlist ${playlistId} (fresh TTL)`, {
           component: 'spotify.getPlaylist',
           playlistId,
-          error,
+          cache: 'hit',
+          reason: 'ttl_fresh',
         })
         return cached.playlist
       }
+
+      const currentSnapshot = await getPlaylistSnapshot(playlistId)
+      if (!currentSnapshot) {
+        logWarning(`Failed to verify snapshot, using cached data for playlist ${playlistId}`, {
+          component: 'spotify.getPlaylist',
+          playlistId,
+        })
+        return cached.playlist
+      }
+
+      if (currentSnapshot === cached.snapshotId) {
+        logInfo(`Using cached playlist ${playlistId} (snapshot matches)`, {
+          component: 'spotify.getPlaylist',
+          playlistId,
+          cache: 'hit',
+        })
+        return cached.playlist
+      }
+
+      logInfo(`Playlist ${playlistId} snapshot changed, refreshing cache`, {
+        component: 'spotify.getPlaylist',
+        playlistId,
+        cache: 'miss',
+        reason: 'snapshot_changed',
+      })
     }
   }
   
-  // Fetch fresh data from API
-  const playlist = await makeSpotifyRequest<any>(`/playlists/${playlistId}`)
-  
-  // Cache the result if we have a snapshot_id (only if useCache is true)
-  if (playlist.snapshot_id && useCache) {
-    // Fetch tracks separately to cache them too (don't use cache when fetching for caching)
-    const tracks = await getPlaylistTracksInternal(playlistId)
-    await cachePlaylist(playlistId, playlist.snapshot_id, playlist, tracks)
-  }
-  
-  return playlist
+  const refreshed = await refreshPlaylistCache(playlistId)
+  return refreshed.playlist
 }
 
 /**
@@ -638,36 +737,43 @@ export async function getPlaylistTracks(playlistId: string, useCache = true): Pr
   if (useCache) {
     const cached = await getCachedPlaylist(playlistId)
     if (cached) {
-      // Verify snapshot_id is still current
-      try {
-        const currentPlaylist = await makeSpotifyRequest<any>(`/playlists/${playlistId}?fields=snapshot_id`)
-        if (currentPlaylist.snapshot_id === cached.snapshotId) {
-          logInfo(`Using cached tracks for playlist ${playlistId}`, {
-            component: 'spotify.getPlaylistTracks',
-            playlistId,
-            cache: 'hit',
-          })
-          return cached.tracks
-        } else {
-          logInfo(`Playlist ${playlistId} snapshot changed, fetching fresh tracks`, {
-            component: 'spotify.getPlaylistTracks',
-            playlistId,
-            cache: 'miss',
-            reason: 'snapshot_changed',
-          })
-        }
-      } catch (error) {
-        // If API call fails, use cached data as fallback
-        logWarning(`Failed to verify snapshot, using cached tracks for playlist ${playlistId}`, {
+      if (isCacheFresh(cached.updatedAt)) {
+        logInfo(`Using cached tracks for playlist ${playlistId} (fresh TTL)`, {
           component: 'spotify.getPlaylistTracks',
           playlistId,
-          error,
+          cache: 'hit',
+          reason: 'ttl_fresh',
         })
         return cached.tracks
       }
+
+      const currentSnapshot = await getPlaylistSnapshot(playlistId)
+      if (!currentSnapshot) {
+        logWarning(`Failed to verify snapshot, using cached tracks for playlist ${playlistId}`, {
+          component: 'spotify.getPlaylistTracks',
+          playlistId,
+        })
+        return cached.tracks
+      }
+
+      if (currentSnapshot === cached.snapshotId) {
+        logInfo(`Using cached tracks for playlist ${playlistId}`, {
+          component: 'spotify.getPlaylistTracks',
+          playlistId,
+          cache: 'hit',
+        })
+        return cached.tracks
+      }
+
+      logInfo(`Playlist ${playlistId} snapshot changed, refreshing cache`, {
+        component: 'spotify.getPlaylistTracks',
+        playlistId,
+        cache: 'miss',
+        reason: 'snapshot_changed',
+      })
     }
   }
   
-  // Fetch fresh tracks
-  return await getPlaylistTracksInternal(playlistId)
+  const refreshed = await refreshPlaylistCache(playlistId)
+  return refreshed.tracks
 }
