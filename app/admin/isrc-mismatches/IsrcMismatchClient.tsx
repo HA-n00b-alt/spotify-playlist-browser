@@ -8,6 +8,9 @@ type PreviewUrlEntry = {
   isrc?: string
   title?: string
   artist?: string
+  provider?: 'deezer_isrc' | 'muso_spotify' | 'itunes_search' | 'deezer_search'
+  itunesRequestUrl?: string
+  itunesResponse?: string
 }
 
 type IsrcMismatchItem = {
@@ -37,6 +40,13 @@ function getPreviewUrl(item: IsrcMismatchItem): string | null {
   return getPreviewEntry(item)?.url || null
 }
 
+function getItunesEntry(item: IsrcMismatchItem): PreviewUrlEntry | null {
+  const urls = item.urls || []
+  const byProvider = urls.find((entry) => entry.provider === 'itunes_search')
+  if (byProvider) return byProvider
+  return urls.find((entry) => entry.itunesRequestUrl || entry.url.includes('itunes.apple.com') || entry.url.includes('mzstatic')) || null
+}
+
 export default function IsrcMismatchClient() {
   const [items, setItems] = useState<IsrcMismatchItem[]>([])
   const [loading, setLoading] = useState(false)
@@ -46,6 +56,9 @@ export default function IsrcMismatchClient() {
   const [isHydratingPreview, setIsHydratingPreview] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const [pageSize, setPageSize] = useState(20)
+  const [itunesDebugOpen, setItunesDebugOpen] = useState<Record<string, boolean>>({})
+  const [spotifyPreviewMap, setSpotifyPreviewMap] = useState<Record<string, { url?: string | null; loading?: boolean; error?: string }>>({})
+  const [deezerPreviewMap, setDeezerPreviewMap] = useState<Record<string, { url?: string | null; loading?: boolean }>>({})
 
   const handlePlay = (event: React.SyntheticEvent<HTMLAudioElement>) => {
     if (audioRef.current && audioRef.current !== event.currentTarget) {
@@ -132,6 +145,81 @@ export default function IsrcMismatchClient() {
     }
   }
 
+  const handleResolveWithMuso = async (spotifyTrackId: string) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/isrc-mismatches', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ spotifyTrackId, action: 'resolve_with_muso' }),
+      })
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}))
+        throw new Error(payload?.error || 'Failed to resolve with Muso preview')
+      }
+      await loadMismatches()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to resolve with Muso preview')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleLoadSpotifyPreview = async (spotifyTrackId: string) => {
+    setSpotifyPreviewMap((prev) => ({
+      ...prev,
+      [spotifyTrackId]: { url: prev[spotifyTrackId]?.url ?? null, loading: true, error: undefined },
+    }))
+    try {
+      const res = await fetch('/api/muso/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ spotifyTrackId }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(payload?.error || 'Unable to fetch Spotify preview')
+      }
+      setSpotifyPreviewMap((prev) => ({
+        ...prev,
+        [spotifyTrackId]: { url: payload.previewUrl || null, loading: false, error: undefined },
+      }))
+    } catch (err) {
+      setSpotifyPreviewMap((prev) => ({
+        ...prev,
+        [spotifyTrackId]: {
+          url: prev[spotifyTrackId]?.url ?? null,
+          loading: false,
+          error: err instanceof Error ? err.message : 'Unable to fetch Spotify preview',
+        },
+      }))
+    }
+  }
+
+  const handleLoadDeezerPreview = async (spotifyTrackId: string, apiUrl: string) => {
+    setDeezerPreviewMap((prev) => ({
+      ...prev,
+      [spotifyTrackId]: { url: prev[spotifyTrackId]?.url ?? null, loading: true },
+    }))
+    try {
+      const res = await fetch(`/api/deezer-preview?url=${encodeURIComponent(apiUrl)}`)
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok || !payload?.previewUrl) {
+        throw new Error('Unable to resolve Deezer preview')
+      }
+      setDeezerPreviewMap((prev) => ({
+        ...prev,
+        [spotifyTrackId]: { url: payload.previewUrl, loading: false },
+      }))
+    } catch {
+      setDeezerPreviewMap((prev) => ({
+        ...prev,
+        [spotifyTrackId]: { url: prev[spotifyTrackId]?.url ?? null, loading: false },
+      }))
+    }
+  }
+
   const [pendingItems, reviewedItems] = useMemo(() => {
     const pending = items.filter((item) => !item.isrc_mismatch_review_status)
     const reviewed = items.filter((item) => item.isrc_mismatch_review_status)
@@ -195,7 +283,11 @@ export default function IsrcMismatchClient() {
         ) : null}
         {paginatedItems.map((item) => {
           const previewEntry = getPreviewEntry(item)
+          const itunesEntry = getItunesEntry(item)
           const previewUrl = previewEntry?.url || item.preview_url
+          const isDeezerApiUrl = Boolean(previewUrl && previewUrl.includes('api.deezer.com'))
+          const resolvedDeezerUrl = isDeezerApiUrl ? deezerPreviewMap[item.spotify_track_id]?.url || null : null
+          const audioUrl = isDeezerApiUrl ? resolvedDeezerUrl : previewUrl
           const reviewLabel = item.isrc_mismatch_review_status
             ? item.isrc_mismatch_review_status === 'match'
               ? 'Confirmed match'
@@ -214,16 +306,28 @@ export default function IsrcMismatchClient() {
                   <div className="mt-1 text-xs text-gray-500">
                     Spotify ISRC: {item.isrc || 'Missing'} | Spotify ID: {item.spotify_track_id}
                   </div>
+                  <div className="mt-1 text-xs text-gray-500">
+                    iTunes ISRC: {itunesEntry?.isrc || 'Unknown'}
+                  </div>
                 </div>
                 <div className="text-xs font-semibold text-gray-500">{reviewLabel}</div>
               </div>
               <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
                 <div className="space-y-2 text-sm text-gray-600">
                   <div className="text-xs uppercase tracking-[0.18em] text-gray-400">Preview</div>
-                  {previewUrl ? (
+                  {audioUrl ? (
                     <audio controls preload="none" className="w-full" onPlay={handlePlay}>
-                      <source src={previewUrl} />
+                      <source src={audioUrl} />
                     </audio>
+                  ) : isDeezerApiUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => handleLoadDeezerPreview(item.spotify_track_id, previewUrl as string)}
+                      className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100"
+                      disabled={deezerPreviewMap[item.spotify_track_id]?.loading}
+                    >
+                      {deezerPreviewMap[item.spotify_track_id]?.loading ? 'Loading preview...' : 'Load Deezer preview'}
+                    </button>
                   ) : (
                     <div className="text-xs text-gray-500">No preview URL available.</div>
                   )}
@@ -240,6 +344,36 @@ export default function IsrcMismatchClient() {
                       </div>
                     </div>
                   ) : null}
+                  {itunesEntry?.itunesRequestUrl && (
+                    <div className="text-xs text-gray-500">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setItunesDebugOpen((prev) => ({
+                            ...prev,
+                            [item.spotify_track_id]: !prev[item.spotify_track_id],
+                          }))
+                        }
+                        className="mt-2 rounded-full border border-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-600 hover:text-gray-900"
+                      >
+                        {itunesDebugOpen[item.spotify_track_id] ? 'Hide iTunes request/response' : 'Show iTunes request/response'}
+                      </button>
+                      {itunesDebugOpen[item.spotify_track_id] && (
+                        <div className="mt-2 space-y-2">
+                          <div>
+                            <div className="text-[11px] uppercase tracking-[0.18em] text-gray-400">Request</div>
+                            <div className="break-all text-[11px] text-gray-600">{itunesEntry.itunesRequestUrl}</div>
+                          </div>
+                          <div>
+                            <div className="text-[11px] uppercase tracking-[0.18em] text-gray-400">Response</div>
+                            <pre className="max-h-56 overflow-auto rounded-md bg-gray-100 p-2 text-[11px] text-gray-600">
+                              {itunesEntry.itunesResponse || 'No response captured.'}
+                            </pre>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {item.error ? <div className="text-xs text-rose-600">{item.error}</div> : null}
                   {item.isrc_mismatch_reviewed_at ? (
                     <div className="text-xs text-gray-400">
@@ -247,6 +381,26 @@ export default function IsrcMismatchClient() {
                       {item.isrc_mismatch_reviewed_by || 'unknown'}
                     </div>
                   ) : null}
+                  <div className="pt-2 space-y-2">
+                    <div className="text-xs uppercase tracking-[0.18em] text-gray-400">Spotify preview (Muso)</div>
+                    {spotifyPreviewMap[item.spotify_track_id]?.url ? (
+                      <audio controls preload="none" className="w-full" onPlay={handlePlay}>
+                        <source src={spotifyPreviewMap[item.spotify_track_id]?.url || undefined} />
+                      </audio>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleLoadSpotifyPreview(item.spotify_track_id)}
+                        className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-600 hover:text-gray-900"
+                        disabled={spotifyPreviewMap[item.spotify_track_id]?.loading}
+                      >
+                        {spotifyPreviewMap[item.spotify_track_id]?.loading ? 'Loading Spotify preview...' : 'Load Spotify preview'}
+                      </button>
+                    )}
+                    {spotifyPreviewMap[item.spotify_track_id]?.error ? (
+                      <div className="text-xs text-rose-600">{spotifyPreviewMap[item.spotify_track_id]?.error}</div>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -264,6 +418,14 @@ export default function IsrcMismatchClient() {
                     disabled={loading}
                   >
                     Confirm mismatch
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleResolveWithMuso(item.spotify_track_id)}
+                    className="rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100"
+                    disabled={loading}
+                  >
+                    Resolve with Muso preview
                   </button>
                 </div>
               </div>

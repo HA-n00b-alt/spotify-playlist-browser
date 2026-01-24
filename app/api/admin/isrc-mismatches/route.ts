@@ -2,10 +2,19 @@ import { NextResponse } from 'next/server'
 import { isAdminUser, getCurrentUserId } from '@/lib/analytics'
 import { query } from '@/lib/db'
 import { withApiLogging } from '@/lib/logger'
+import { computeBpmFromPreviewUrl } from '@/lib/bpm'
+import { getTrack } from '@/lib/spotify'
+import { getTrackDetailsByIsrc, hasMusoApiKey } from '@/lib/muso'
 
 type PreviewUrlEntry = {
   url: string
   successful?: boolean
+  isrc?: string
+  title?: string
+  artist?: string
+  provider?: 'deezer_isrc' | 'muso_spotify' | 'itunes_search' | 'deezer_search'
+  itunesRequestUrl?: string
+  itunesResponse?: string
 }
 
 type IsrcMismatchRow = {
@@ -66,13 +75,39 @@ export const PATCH = withApiLogging(async (request: Request) => {
     return NextResponse.json({ error: 'spotifyTrackId is required' }, { status: 400 })
   }
 
-  if (action !== 'confirm_match' && action !== 'confirm_mismatch') {
+  if (action !== 'confirm_match' && action !== 'confirm_mismatch' && action !== 'resolve_with_muso') {
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   }
 
   const reviewerId = await getCurrentUserId()
-  const reviewStatus = action === 'confirm_match' ? 'match' : 'mismatch'
-  const mismatchValue = action === 'confirm_match' ? false : true
+  const reviewStatus = action === 'confirm_match' || action === 'resolve_with_muso' ? 'match' : 'mismatch'
+  const mismatchValue = action === 'confirm_match' || action === 'resolve_with_muso' ? false : true
+
+  if (action === 'resolve_with_muso') {
+    if (!hasMusoApiKey()) {
+      return NextResponse.json({ error: 'Muso API key is not configured' }, { status: 400 })
+    }
+    const spotifyTrack = await getTrack(spotifyTrackId)
+    const spotifyIsrc = spotifyTrack?.external_ids?.isrc || null
+    if (!spotifyIsrc) {
+      return NextResponse.json({ error: 'Spotify ISRC not available for this track' }, { status: 400 })
+    }
+    const musoDetails = await getTrackDetailsByIsrc(spotifyIsrc)
+    const previewUrl = musoDetails?.spotifyPreviewUrl || null
+    if (!previewUrl) {
+      return NextResponse.json({ error: 'No Spotify preview URL found via Muso' }, { status: 404 })
+    }
+    await computeBpmFromPreviewUrl({
+      spotifyTrackId,
+      previewUrl,
+      source: 'muso_spotify_preview',
+      previewIsrc: spotifyIsrc,
+      previewTitle: spotifyTrack?.name || null,
+      previewArtist: Array.isArray(spotifyTrack?.artists)
+        ? spotifyTrack.artists.map((artist: any) => artist?.name).filter(Boolean).join(', ')
+        : null,
+    })
+  }
 
   await query(
     `UPDATE track_bpm_cache

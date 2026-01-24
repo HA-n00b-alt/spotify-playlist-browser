@@ -1,5 +1,6 @@
 import { query } from './db'
 import { getTrack } from './spotify'
+import { getTrackDetailsByIsrc, hasMusoApiKey } from './muso'
 import { GoogleAuth } from 'google-auth-library'
 import { isValidSpotifyTrackId } from './spotify-validation'
 import { logError } from './logger'
@@ -10,6 +11,9 @@ type PreviewUrlEntry = {
   isrc?: string
   title?: string
   artist?: string
+  provider?: 'deezer_isrc' | 'muso_spotify' | 'itunes_search' | 'deezer_search'
+  itunesRequestUrl?: string
+  itunesResponse?: string
 }
 
 interface PreviewUrlResult {
@@ -331,34 +335,51 @@ export async function ensureSuccessfulPreviewUrlForTrack(params: {
   if (!urls || urls.length === 0) {
     return { urls, error }
   }
+  if (!urls.some((entry) => entry.successful)) {
+    const deezerEntry = urls.find((entry) => entry.url.includes('api.deezer.com'))
+    if (deezerEntry) {
+      const updatedUrls = urls.map((entry) =>
+        entry === deezerEntry ? { ...entry, successful: true } : entry
+      )
+      await query(
+        `UPDATE track_bpm_cache
+         SET urls = $1::jsonb,
+             error = COALESCE($2, error),
+             updated_at = NOW()
+         WHERE spotify_track_id = $3`,
+        [JSON.stringify(updatedUrls), error ?? null, spotifyTrackId]
+      )
+      return { urls: updatedUrls, error }
+    }
+  }
   if (urls.some((entry) => entry.successful)) {
     return { urls, error }
   }
 
   const normalizedUrls: PreviewUrlEntry[] = []
   for (const entry of urls) {
-    if (entry.url.includes('api.deezer.com')) {
-      const previewUrl = await resolveDeezerApiPreviewUrl(entry.url)
-      if (previewUrl) {
-        normalizedUrls.push({ ...entry, url: previewUrl })
-        continue
-      }
+    const isDeezerTimed = (entry.url.includes('cdn-preview') || entry.url.includes('cdnt-preview') || entry.url.includes('e-cdn-preview'))
+      && !entry.url.includes('api.deezer.com')
+    if (isDeezerTimed && entry.isrc) {
+      const apiUrl = `https://api.deezer.com/track/isrc:${encodeURIComponent(entry.isrc)}`
+      normalizedUrls.push({ ...entry, url: apiUrl, successful: true, provider: entry.provider ?? 'deezer_isrc' })
+      continue
     }
     normalizedUrls.push({ ...entry })
   }
 
   if (normalizedUrls.length === 1) {
     if (normalizedUrls[0].url.includes('api.deezer.com')) {
-      const finalError = error || 'No preview audio available from any source (iTunes, Deezer)'
+      const updatedUrls = [{ ...normalizedUrls[0], successful: true }]
       await query(
         `UPDATE track_bpm_cache
          SET urls = $1::jsonb,
-             error = $2,
+             error = COALESCE($2, error),
              updated_at = NOW()
          WHERE spotify_track_id = $3`,
-        [JSON.stringify(normalizedUrls), finalError, spotifyTrackId]
+        [JSON.stringify(updatedUrls), error ?? null, spotifyTrackId]
       )
-      return { urls: normalizedUrls, error: finalError }
+      return { urls: updatedUrls, error }
     }
     const updatedUrls = [{ ...normalizedUrls[0], successful: true }]
     await query(
@@ -417,7 +438,7 @@ export async function ensureSuccessfulPreviewUrlForTrack(params: {
 
 /**
  * Resolve preview URL from multiple sources using ISRC
- * Priority: 1. Deezer ISRC, 2. iTunes search with ISRC matching, 3. Deezer search
+ * Priority: 1. Deezer ISRC, 2. Muso ISRC (Spotify preview), 3. iTunes search with ISRC matching
  * Stops at first successful source
  */
 async function resolvePreviewUrl(params: {
@@ -447,14 +468,15 @@ async function resolvePreviewUrl(params: {
           const trackData = await response.json() as any
           if (trackData.id && trackData.preview) {
             urls.push({
-              url: trackData.preview,
+              url: deezerIsrcUrl,
               successful: true,
               isrc: trackData.isrc,
               title: trackData.title,
               artist: trackData.artist?.name,
+              provider: 'deezer_isrc',
             })
             return { 
-              url: trackData.preview, 
+              url: deezerIsrcUrl, 
               source: 'deezer_isrc', 
               urls,
               isrcMismatch: false // ISRC lookup is always accurate
@@ -473,8 +495,40 @@ async function resolvePreviewUrl(params: {
       })
     }
   }
-  
-  // 2. Try iTunes search by artist + title, then match ISRC
+
+  // 2. Try Muso ISRC lookup (Spotify preview URL)
+  if (isrc && hasMusoApiKey()) {
+    try {
+      const details = await getTrackDetailsByIsrc(isrc)
+      if (details?.spotifyPreviewUrl) {
+        const artistName = Array.isArray(details.artists)
+          ? details.artists.map((artist) => artist?.name).filter(Boolean).join(', ')
+          : artists
+        urls.push({
+          url: details.spotifyPreviewUrl,
+          successful: true,
+          isrc,
+          title: details.title || title,
+          artist: artistName || artists,
+          provider: 'muso_spotify',
+        })
+        return {
+          url: details.spotifyPreviewUrl,
+          source: 'muso_spotify',
+          urls,
+          isrcMismatch: false,
+        }
+      }
+    } catch (error) {
+      logError(error, {
+        component: 'bpm.resolvePreviewUrl',
+        isrc,
+        action: 'muso_isrc_lookup',
+      })
+    }
+  }
+
+  // 3. Try iTunes search by artist + title, then match ISRC
   try {
     const searchTerm = `${artists} ${title}`
     const itunesSearchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(searchTerm)}&media=music&entity=song&country=${countryCode}&limit=20`
@@ -493,11 +547,11 @@ async function resolvePreviewUrl(params: {
         const data = await response.json() as any
         if (data.resultCount > 0 && data.results) {
           // Filter to items where kind === "song" and previewUrl exists
-          const tracks = data.results.filter((r: any) => 
+          const tracks = data.results.filter((r: any) =>
             (r.kind === 'song' || r.wrapperType === 'track') && r.previewUrl
           )
           
-            if (tracks.length > 0) {
+          if (tracks.length > 0) {
             let selectedTrack = tracks[0]
             let isrcMismatch = false
             
@@ -510,15 +564,16 @@ async function resolvePreviewUrl(params: {
               } else {
                 isrcMismatch = true
                 // Don't return the URL if ISRC doesn't match - treat as error
-                if (selectedTrack.previewUrl) {
-                  urls.push({
-                    url: selectedTrack.previewUrl,
-                    successful: false,
-                    isrc: selectedTrack.isrc,
-                    title: selectedTrack.trackName,
-                    artist: selectedTrack.artistName,
-                  })
-                }
+                urls.push({
+                  url: selectedTrack.previewUrl,
+                  successful: false,
+                  isrc: selectedTrack.isrc,
+                  title: selectedTrack.trackName,
+                  artist: selectedTrack.artistName,
+                  provider: 'itunes_search',
+                  itunesRequestUrl: itunesSearchUrl,
+                  itunesResponse: JSON.stringify(data),
+                })
                 return { 
                   url: null, 
                   source: 'computed_failed', 
@@ -535,6 +590,9 @@ async function resolvePreviewUrl(params: {
                 isrc: selectedTrack.isrc,
                 title: selectedTrack.trackName,
                 artist: selectedTrack.artistName,
+                provider: 'itunes_search',
+                itunesRequestUrl: itunesSearchUrl,
+                itunesResponse: JSON.stringify(data),
               })
             }
             return { 
@@ -556,89 +614,6 @@ async function resolvePreviewUrl(params: {
       title,
       artists,
       action: 'itunes_search'
-    })
-  }
-  
-  // 3. Try Deezer search (fallback)
-  try {
-    const deezerQuery = `${artists} ${title}`
-    const deezerUrl = `https://api.deezer.com/search?q=${encodeURIComponent(deezerQuery)}&limit=10`
-    // track Deezer search attempt only via preview URL if found
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 5000)
-    
-    try {
-      const response = await fetch(deezerUrl, {
-        signal: controller.signal,
-      })
-      clearTimeout(timeoutId)
-      
-      if (response.ok) {
-        const data = await response.json() as any
-        if (data.data && Array.isArray(data.data)) {
-          // Filter out items missing preview
-          const tracksWithPreview = data.data.filter((t: any) => t.preview)
-          
-          if (tracksWithPreview.length > 0) {
-            let selectedTrack = tracksWithPreview[0]
-            let isrcMismatch = false
-            
-            // If we have ISRC from Spotify, try to match it
-            if (isrc) {
-              const matchingTrack = tracksWithPreview.find((t: any) => t.isrc === isrc)
-              if (matchingTrack) {
-                selectedTrack = matchingTrack
-                isrcMismatch = false
-              } else {
-                isrcMismatch = true
-                // Don't return the URL if ISRC doesn't match - treat as error
-                if (selectedTrack.preview) {
-                  urls.push({
-                    url: selectedTrack.preview,
-                    successful: false,
-                    isrc: selectedTrack.isrc,
-                    title: selectedTrack.title,
-                    artist: selectedTrack.artist?.name,
-                  })
-                }
-                return { 
-                  url: null, 
-                  source: 'computed_failed', 
-                  urls,
-                  isrcMismatch: true
-                }
-              }
-            }
-            
-            if (selectedTrack.preview) {
-              urls.push({
-                url: selectedTrack.preview,
-                successful: true,
-                isrc: selectedTrack.isrc,
-                title: selectedTrack.title,
-                artist: selectedTrack.artist?.name,
-              })
-            }
-
-            return { 
-              url: selectedTrack.preview, 
-              source: 'deezer_search', 
-              urls,
-              isrcMismatch
-            }
-          }
-        }
-      }
-    } catch (error) {
-      clearTimeout(timeoutId)
-      throw error
-    }
-  } catch (error) {
-    logError(error, {
-      component: 'bpm.resolvePreviewUrl',
-      title,
-      artists,
-      action: 'deezer_search'
     })
   }
   
@@ -1611,6 +1586,7 @@ export async function computeBpmFromPreviewUrl(params: {
       isrc: previewIsrc ?? identifiers.isrc ?? undefined,
       title: previewTitle ?? identifiers.title,
       artist: previewArtist ?? identifiers.artists,
+      provider: source === 'muso_spotify_preview' ? 'muso_spotify' : undefined,
     },
   ]
   const sourceLabel = source || 'external_preview'
