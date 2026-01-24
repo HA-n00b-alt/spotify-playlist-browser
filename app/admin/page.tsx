@@ -18,6 +18,12 @@ const tools = [
     roles: ['admin', 'superadmin'],
   },
   {
+    title: 'ISRC Debug',
+    description: 'Inspect playlist tracks that are missing ISRC values.',
+    href: '/admin/isrc-debug',
+    roles: ['admin', 'superadmin'],
+  },
+  {
     title: 'Observability',
     description: 'Monitor Vercel and GCP services with logging and performance links.',
     href: '/admin/observability',

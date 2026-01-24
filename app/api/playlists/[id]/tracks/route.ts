@@ -51,9 +51,10 @@ export const GET = withApiLogging(async (
       }
     }
     
+    const includeMissingIsrc = url.searchParams.get('includeMissingIsrc') === 'true'
     const tracks = await getPlaylistTracks(params.id, !forceRefresh)
     const missingIsrc = tracks.filter((track: any) => !track?.external_ids?.isrc).length
-    const filteredTracks = tracks.filter((track: any) => track?.external_ids?.isrc)
+    const filteredTracks = includeMissingIsrc ? tracks : tracks.filter((track: any) => track?.external_ids?.isrc)
     
     // Return with cache info in headers
     const response = NextResponse.json(filteredTracks)
