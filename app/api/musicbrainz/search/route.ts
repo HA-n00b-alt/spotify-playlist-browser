@@ -89,6 +89,14 @@ function selectReleaseInfo(releases: any[]) {
   }
 }
 
+const normalizeMusoDurationMs = (duration?: number) => {
+  if (typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0) {
+    return 0
+  }
+  // Muso durations appear to be reported in seconds; convert when values are too small for ms.
+  return duration < 10000 ? duration * 1000 : duration
+}
+
 export const GET = withApiLogging(async (request: Request) => {
   const { searchParams } = new URL(request.url)
   const name = searchParams.get('name')?.trim()
@@ -401,9 +409,11 @@ export const GET = withApiLogging(async (request: Request) => {
         album: album.title || 'Unknown release',
         releaseType: undefined,
         year: releaseDate ? releaseDate.split('-')[0] : '',
-        length: typeof trackDetails?.duration === 'number'
-          ? trackDetails.duration
-          : (typeof track.duration === 'number' ? track.duration : 0),
+        length: normalizeMusoDurationMs(
+          typeof trackDetails?.duration === 'number'
+            ? trackDetails.duration
+            : (typeof track.duration === 'number' ? track.duration : undefined)
+        ),
         isrc,
         releaseId: album.id || 'unknown',
         coverArtUrl: album.albumArt || null,
