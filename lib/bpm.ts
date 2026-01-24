@@ -1592,3 +1592,107 @@ export async function refreshPreviewUrlsForTrack(
 
   return { urls: previewResult.urls, error: null }
 }
+
+export async function computeBpmFromPreviewUrl(params: {
+  spotifyTrackId: string
+  previewUrl: string
+  source?: string
+  previewIsrc?: string | null
+  previewTitle?: string | null
+  previewArtist?: string | null
+}): Promise<BpmResult> {
+  const { spotifyTrackId, previewUrl, source, previewIsrc, previewTitle, previewArtist } = params
+  const identifiers = await extractSpotifyIdentifiers(spotifyTrackId)
+  const result = await computeBpmFromService(previewUrl)
+  const urls: PreviewUrlEntry[] = [
+    {
+      url: previewUrl,
+      successful: true,
+      isrc: previewIsrc ?? identifiers.isrc ?? undefined,
+      title: previewTitle ?? identifiers.title,
+      artist: previewArtist ?? identifiers.artists,
+    },
+  ]
+  const sourceLabel = source || 'external_preview'
+
+  await storeInCache({
+    spotifyTrackId,
+    isrc: identifiers.isrc,
+    artist: identifiers.artists,
+    title: identifiers.title,
+    bpmEssentia: result.bpmEssentia ?? null,
+    bpmRawEssentia: result.bpmRawEssentia ?? null,
+    bpmConfidenceEssentia: result.bpmConfidenceEssentia ?? null,
+    bpmLibrosa: result.bpmLibrosa ?? null,
+    bpmRawLibrosa: result.bpmRawLibrosa ?? null,
+    bpmConfidenceLibrosa: result.bpmConfidenceLibrosa ?? null,
+    keyEssentia: result.keyEssentia ?? null,
+    scaleEssentia: result.scaleEssentia ?? null,
+    keyscaleConfidenceEssentia: result.keyscaleConfidenceEssentia ?? null,
+    keyLibrosa: result.keyLibrosa ?? null,
+    scaleLibrosa: result.scaleLibrosa ?? null,
+    keyscaleConfidenceLibrosa: result.keyscaleConfidenceLibrosa ?? null,
+    source: sourceLabel,
+    error: null,
+    urls,
+    isrcMismatch: false,
+    debugTxt: result.debugTxt ?? null,
+  })
+
+  const bpmSelected = selectBestBpm(
+    result.bpmEssentia,
+    result.bpmConfidenceEssentia,
+    result.bpmLibrosa,
+    result.bpmConfidenceLibrosa
+  )
+  const keySelected = selectBestKey(
+    result.keyEssentia,
+    result.keyscaleConfidenceEssentia,
+    result.keyLibrosa,
+    result.keyscaleConfidenceLibrosa
+  )
+  const selectedBpm = bpmSelected === 'librosa'
+    ? result.bpmLibrosa ?? result.bpmEssentia
+    : result.bpmEssentia ?? result.bpmLibrosa
+  const selectedBpmRaw = bpmSelected === 'librosa'
+    ? result.bpmRawLibrosa ?? result.bpmRawEssentia
+    : result.bpmRawEssentia ?? result.bpmRawLibrosa
+  const selectedKey = keySelected === 'librosa'
+    ? result.keyLibrosa ?? result.keyEssentia
+    : result.keyEssentia ?? result.keyLibrosa
+  const selectedScale = keySelected === 'librosa'
+    ? result.scaleLibrosa ?? result.scaleEssentia
+    : result.scaleEssentia ?? result.scaleLibrosa
+  const selectedKeyConfidence = keySelected === 'librosa'
+    ? result.keyscaleConfidenceLibrosa ?? result.keyscaleConfidenceEssentia
+    : result.keyscaleConfidenceEssentia ?? result.keyscaleConfidenceLibrosa
+  const selectedBpmConfidence = bpmSelected === 'librosa'
+    ? result.bpmConfidenceLibrosa ?? result.bpmConfidenceEssentia
+    : result.bpmConfidenceEssentia ?? result.bpmConfidenceLibrosa
+
+  return {
+    bpm: selectedBpm ?? null,
+    source: sourceLabel,
+    bpmRaw: selectedBpmRaw ?? undefined,
+    urls,
+    key: selectedKey ?? undefined,
+    scale: selectedScale ?? undefined,
+    keyConfidence: selectedKeyConfidence ?? undefined,
+    bpmConfidence: selectedBpmConfidence ?? undefined,
+    bpmEssentia: result.bpmEssentia ?? undefined,
+    bpmRawEssentia: result.bpmRawEssentia ?? undefined,
+    bpmConfidenceEssentia: result.bpmConfidenceEssentia ?? undefined,
+    bpmLibrosa: result.bpmLibrosa ?? undefined,
+    bpmRawLibrosa: result.bpmRawLibrosa ?? undefined,
+    bpmConfidenceLibrosa: result.bpmConfidenceLibrosa ?? undefined,
+    keyEssentia: result.keyEssentia ?? undefined,
+    scaleEssentia: result.scaleEssentia ?? undefined,
+    keyscaleConfidenceEssentia: result.keyscaleConfidenceEssentia ?? undefined,
+    keyLibrosa: result.keyLibrosa ?? undefined,
+    scaleLibrosa: result.scaleLibrosa ?? undefined,
+    keyscaleConfidenceLibrosa: result.keyscaleConfidenceLibrosa ?? undefined,
+    bpmSelected,
+    keySelected,
+    debugTxt: result.debugTxt ?? undefined,
+  }
+}

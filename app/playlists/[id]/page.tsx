@@ -75,6 +75,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const [bpmConfidenceThreshold, setBpmConfidenceThreshold] = useState('0.65')
   const [bpmDebugInfo, setBpmDebugInfo] = useState<Record<string, any>>({})
   const [bpmDetails, setBpmDetails] = useState<Record<string, { source?: string; error?: string }>>({})
+  const [musoPreviewStatus, setMusoPreviewStatus] = useState<{ loading: boolean; success?: boolean; error?: string } | null>(null)
+  const [mismatchPreviewUrls, setMismatchPreviewUrls] = useState<{ itunes?: string | null; spotify?: string | null; loading?: boolean }>({})
   const [previewUrls, setPreviewUrls] = useState<Record<string, string | null>>({}) // Store successful preview URLs from DB
   // Store all BPM data (Essentia + Librosa) for modal
   const [bpmFullData, setBpmFullData] = useState<Record<string, {
@@ -151,6 +153,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       setManualScale('major')
     }
   }, [showBpmModal, selectedBpmTrack, bpmFullData])
+  useEffect(() => {
+    setMusoPreviewStatus(null)
+  }, [showBpmModal, selectedBpmTrack])
   const [showBpmMoreInfo, setShowBpmMoreInfo] = useState(false)
   const [countryCode, setCountryCode] = useState<string>('us')
   const [tracksInDb, setTracksInDb] = useState<Set<string>>(new Set()) // Track IDs that are already in the DB
@@ -1572,6 +1577,33 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     }
   }
 
+  const handleMusoPreviewBpm = async (trackId: string) => {
+    setMusoPreviewStatus({ loading: true })
+    try {
+      const res = await fetch('/api/bpm/muso-preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ spotifyTrackId: trackId }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(payload?.error || 'Failed to calculate BPM from Muso preview')
+      }
+      const previewUrl = getPreviewUrlFromMeta({ urls: payload.urls })
+      if (previewUrl) {
+        setPreviewUrls((prev) => ({ ...prev, [trackId]: previewUrl }))
+      }
+      await fetchBpmsBatch()
+      setMusoPreviewStatus({ loading: false, success: true })
+    } catch (error) {
+      setMusoPreviewStatus({
+        loading: false,
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to calculate BPM from Muso preview',
+      })
+    }
+  }
+
   const fetchCreditsForTrack = async (track: Track) => {
     setSelectedCreditsTrack(track)
     setShowCreditsModal(true)
@@ -2351,6 +2383,56 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       hasLibrosaKey,
     }
   }, [showBpmModal, selectedBpmTrack, bpmFullData, trackBpms, trackKeys, trackScales])
+  const isrcMismatchDetails = useMemo(() => {
+    if (!selectedBpmTrack) return null
+    const error = bpmDetails[selectedBpmTrack.id]?.error || ''
+    if (!error.toLowerCase().includes('isrc mismatch')) return null
+    const spotifyIsrc = selectedBpmTrack.external_ids?.isrc || null
+    const urls = bpmDebugInfo[selectedBpmTrack.id]?.urls || []
+    const itunesEntry = urls.find((entry: any) => {
+      const url = typeof entry?.url === 'string' ? entry.url : ''
+      return url.includes('itunes.apple.com') || url.includes('mzstatic')
+    })
+    const previewEntry = itunesEntry || urls.find((entry: any) => entry?.isrc && entry.isrc !== spotifyIsrc)
+    return {
+      spotifyIsrc,
+      previewIsrc: previewEntry?.isrc || null,
+      previewUrl: previewEntry?.url || null,
+    }
+  }, [selectedBpmTrack, bpmDetails, bpmDebugInfo])
+  useEffect(() => {
+    if (!showBpmModal || !selectedBpmTrack || !isrcMismatchDetails) {
+      setMismatchPreviewUrls({})
+      return
+    }
+    const itunesUrl = isrcMismatchDetails.previewUrl || null
+    setMismatchPreviewUrls((prev) => ({ ...prev, itunes: itunesUrl }))
+    if (mismatchPreviewUrls.spotify || mismatchPreviewUrls.loading) {
+      return
+    }
+    const fetchSpotifyPreview = async () => {
+      setMismatchPreviewUrls((prev) => ({ ...prev, loading: true }))
+      try {
+        const res = await fetch('/api/muso/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ spotifyTrackId: selectedBpmTrack.id }),
+        })
+        const payload = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          throw new Error(payload?.error || 'Unable to fetch Spotify preview')
+        }
+        setMismatchPreviewUrls((prev) => ({
+          ...prev,
+          spotify: payload.previewUrl || null,
+          loading: false,
+        }))
+      } catch {
+        setMismatchPreviewUrls((prev) => ({ ...prev, loading: false }))
+      }
+    }
+    void fetchSpotifyPreview()
+  }, [showBpmModal, selectedBpmTrack, isrcMismatchDetails, mismatchPreviewUrls.spotify, mismatchPreviewUrls.loading])
 
   const bpmSummary = useMemo(() => {
     const totalTracks = tracks.length
@@ -3808,6 +3890,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               setManualBpm('')
               setManualKey('')
               setManualScale('major')
+              setMusoPreviewStatus(null)
+              setMismatchPreviewUrls({})
             }}
           >
             <div 
@@ -3825,6 +3909,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     setManualBpm('')
                     setManualKey('')
                     setManualScale('major')
+                    setMusoPreviewStatus(null)
+                    setMismatchPreviewUrls({})
                   }}
                   className="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 text-2xl"
                 >
@@ -3946,6 +4032,55 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       <span className="text-gray-600 text-sm dark:text-slate-300">
                         BPM data is being calculated or no preview audio is available for this track.
                       </span>
+                    </div>
+                  )}
+                  {isrcMismatchDetails && (
+                    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+                      <div className="font-semibold">ISRC mismatch details</div>
+                      <div>Spotify ISRC: {isrcMismatchDetails.spotifyIsrc || 'Unknown'}</div>
+                      <div>iTunes ISRC: {isrcMismatchDetails.previewIsrc || 'Unknown'}</div>
+                    </div>
+                  )}
+                  {isrcMismatchDetails && (
+                    <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+                      <div className="font-semibold text-gray-800 dark:text-slate-100">Compare audio previews</div>
+                      <div className="mt-2 space-y-2">
+                        <div>
+                          <div className="text-[11px] uppercase tracking-[0.08em] text-gray-500 dark:text-slate-400">iTunes preview</div>
+                          {mismatchPreviewUrls.itunes ? (
+                            <audio controls src={mismatchPreviewUrls.itunes} className="mt-1 w-full" />
+                          ) : (
+                            <div className="text-xs text-gray-500 dark:text-slate-400">No iTunes preview URL available.</div>
+                          )}
+                        </div>
+                        <div>
+                          <div className="text-[11px] uppercase tracking-[0.08em] text-gray-500 dark:text-slate-400">Spotify preview</div>
+                          {mismatchPreviewUrls.loading ? (
+                            <div className="text-xs text-gray-500 dark:text-slate-400">Loading Spotify preview…</div>
+                          ) : mismatchPreviewUrls.spotify ? (
+                            <audio controls src={mismatchPreviewUrls.spotify} className="mt-1 w-full" />
+                          ) : (
+                            <div className="text-xs text-gray-500 dark:text-slate-400">No Spotify preview URL available.</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {isrcMismatchDetails && (
+                    <div>
+                      <button
+                        onClick={() => handleMusoPreviewBpm(bpmModalData.trackId)}
+                        disabled={musoPreviewStatus?.loading}
+                        className="bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 text-white text-xs font-semibold py-2 px-4 rounded transition-colors"
+                      >
+                        {musoPreviewStatus?.loading ? 'Fetching Muso preview...' : 'Use Muso Spotify preview'}
+                      </button>
+                      {musoPreviewStatus?.error && (
+                        <div className="mt-1 text-xs text-red-600">{musoPreviewStatus.error}</div>
+                      )}
+                      {musoPreviewStatus?.success && (
+                        <div className="mt-1 text-xs text-green-600">BPM calculated from Muso preview.</div>
+                      )}
                     </div>
                   )}
                   {loadingBpmFields.has(bpmModalData.trackId) && trackBpms[bpmModalData.trackId] == null && (

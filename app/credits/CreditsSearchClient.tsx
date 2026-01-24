@@ -22,6 +22,7 @@ interface SearchResult {
   year: string
   length: number
   isrc?: string
+  spotifyTrackId?: string
   isrcDetails?: Array<{
     value: string
     hasDeezer: boolean
@@ -69,10 +70,19 @@ export default function CreditsSearchClient() {
   const totalWorksRef = useRef<number | null>(null)
   const autoLoadRef = useRef(true)
   const replaceOnFirstResultRef = useRef(false)
-  const [sortField, setSortField] = useState<'title' | 'artist' | 'album' | 'duration' | 'year' | 'isrc' | null>('year')
+  const [sortField, setSortField] = useState<'title' | 'artist' | 'album' | 'duration' | 'bpm' | 'key' | 'year' | null>('year')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const [releaseDateStart, setReleaseDateStart] = useState('')
   const [releaseDateEnd, setReleaseDateEnd] = useState('')
+  const [bpmByIsrc, setBpmByIsrc] = useState<Record<string, number | null>>({})
+  const [keyByIsrc, setKeyByIsrc] = useState<Record<string, string | null>>({})
+  const [scaleByIsrc, setScaleByIsrc] = useState<Record<string, string | null>>({})
+  const [bpmErrorByIsrc, setBpmErrorByIsrc] = useState<Record<string, string | null>>({})
+  const [bpmLoadingIsrcs, setBpmLoadingIsrcs] = useState<Set<string>>(new Set())
+  const [bpmBatchLoading, setBpmBatchLoading] = useState(false)
+  const [bpmBulkLoading, setBpmBulkLoading] = useState(false)
+  const bpmFetchedIsrcsRef = useRef<Set<string>>(new Set())
+  const bpmFetchTimeoutRef = useRef<number | null>(null)
 
   const limit = Math.min(pageSize, 50)
   const historyKey = 'creditsSearchHistory'
@@ -115,6 +125,84 @@ export default function CreditsSearchClient() {
       }
     }
   }, [])
+
+  const fetchBpmCacheForIsrcs = async (isrcs: string[]) => {
+    if (isrcs.length === 0) return
+    setBpmBatchLoading(true)
+    try {
+      const res = await fetch('/api/bpm/by-isrc/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isrcs }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      const results = payload?.results || {}
+      setBpmByIsrc((prev) => {
+        const next = { ...prev }
+        for (const isrc of isrcs) {
+          if (results[isrc]?.bpm !== undefined) {
+            next[isrc] = results[isrc].bpm
+          }
+        }
+        return next
+      })
+      setKeyByIsrc((prev) => {
+        const next = { ...prev }
+        for (const isrc of isrcs) {
+          if (results[isrc]?.key !== undefined) {
+            next[isrc] = results[isrc].key ?? null
+          }
+        }
+        return next
+      })
+      setScaleByIsrc((prev) => {
+        const next = { ...prev }
+        for (const isrc of isrcs) {
+          if (results[isrc]?.scale !== undefined) {
+            next[isrc] = results[isrc].scale ?? null
+          }
+        }
+        return next
+      })
+      setBpmErrorByIsrc((prev) => {
+        const next = { ...prev }
+        for (const isrc of isrcs) {
+          if (results[isrc]?.error !== undefined) {
+            next[isrc] = results[isrc].error || null
+          }
+        }
+        return next
+      })
+    } catch {
+      // Ignore cache failures
+    } finally {
+      setBpmBatchLoading(false)
+      setBpmLoadingIsrcs((prev) => {
+        const next = new Set(prev)
+        isrcs.forEach((isrc) => next.delete(isrc))
+        return next
+      })
+    }
+  }
+
+  useEffect(() => {
+    const pendingIsrcs = Array.from(new Set(results.map((item) => item.isrc).filter(Boolean))) as string[]
+    const unseenIsrcs = pendingIsrcs.filter((isrc) => !bpmFetchedIsrcsRef.current.has(isrc))
+    if (unseenIsrcs.length === 0) return
+
+    if (bpmFetchTimeoutRef.current) {
+      window.clearTimeout(bpmFetchTimeoutRef.current)
+    }
+    bpmFetchTimeoutRef.current = window.setTimeout(() => {
+      unseenIsrcs.forEach((isrc) => bpmFetchedIsrcsRef.current.add(isrc))
+      setBpmLoadingIsrcs((prev) => {
+        const next = new Set(prev)
+        unseenIsrcs.forEach((isrc) => next.add(isrc))
+        return next
+      })
+      fetchBpmCacheForIsrcs(unseenIsrcs)
+    }, 300)
+  }, [results])
 
   const handleTogglePreview = (track: SearchResult) => {
     if (!track.previewUrl) return
@@ -174,6 +262,17 @@ export default function CreditsSearchClient() {
       autoLoadRef.current = true
       setShowingCached(false)
       setProfileInfo(null)
+      setBpmByIsrc({})
+      setKeyByIsrc({})
+      setScaleByIsrc({})
+      setBpmErrorByIsrc({})
+      setBpmLoadingIsrcs(new Set())
+      setBpmBatchLoading(false)
+      bpmFetchedIsrcsRef.current = new Set()
+      if (bpmFetchTimeoutRef.current) {
+        window.clearTimeout(bpmFetchTimeoutRef.current)
+        bpmFetchTimeoutRef.current = null
+      }
     }
     replaceOnFirstResultRef.current = replaceOnFirstResult
     setStatusMessage(`Loading ${limit} results…`)
@@ -320,6 +419,18 @@ export default function CreditsSearchClient() {
     totalWorksRef.current = null
     setDebugPayload(null)
     setProfileInfo(null)
+    setBpmByIsrc({})
+    setKeyByIsrc({})
+    setScaleByIsrc({})
+    setBpmErrorByIsrc({})
+    setBpmLoadingIsrcs(new Set())
+    setBpmBatchLoading(false)
+    setBpmBulkLoading(false)
+    bpmFetchedIsrcsRef.current = new Set()
+    if (bpmFetchTimeoutRef.current) {
+      window.clearTimeout(bpmFetchTimeoutRef.current)
+      bpmFetchTimeoutRef.current = null
+    }
     try {
       const params = new URLSearchParams()
       params.set('name', trimmed)
@@ -442,11 +553,146 @@ export default function CreditsSearchClient() {
     }, 150)
   }
 
+  const handleBpmRequest = async (track: SearchResult) => {
+    if (!track.isrc) return
+    if (bpmLoadingIsrcs.has(track.isrc)) return
+    setBpmLoadingIsrcs((prev) => new Set(prev).add(track.isrc as string))
+    try {
+      const res = await fetch('/api/bpm/by-isrc/compute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          isrc: track.isrc,
+          title: track.title,
+          artist: track.artist,
+          spotifyTrackId: track.spotifyTrackId,
+        }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(payload?.error || 'BPM calculation failed')
+      }
+      setBpmByIsrc((prev) => ({ ...prev, [track.isrc as string]: payload.bpm ?? null }))
+      setKeyByIsrc((prev) => ({ ...prev, [track.isrc as string]: payload.key ?? null }))
+      setScaleByIsrc((prev) => ({ ...prev, [track.isrc as string]: payload.scale ?? null }))
+      setBpmErrorByIsrc((prev) => ({ ...prev, [track.isrc as string]: payload.error || null }))
+    } catch (err) {
+      setBpmErrorByIsrc((prev) => ({
+        ...prev,
+        [track.isrc as string]: err instanceof Error ? err.message : 'BPM calculation failed',
+      }))
+    } finally {
+      setBpmLoadingIsrcs((prev) => {
+        const next = new Set(prev)
+        next.delete(track.isrc as string)
+        return next
+      })
+    }
+  }
+
+  const handleCalculateAllBpms = async () => {
+    if (bpmBulkLoading) return
+    const targets = results.filter((track) => {
+      const isrc = track.isrc
+      if (!isrc) return false
+      if (bpmLoadingIsrcs.has(isrc)) return false
+      return bpmByIsrc[isrc] == null
+    })
+    if (targets.length === 0) return
+    setBpmBulkLoading(true)
+    try {
+      for (const track of targets) {
+        await handleBpmRequest(track)
+      }
+    } finally {
+      setBpmBulkLoading(false)
+    }
+  }
+
+  const renderBpmBadge = (track: SearchResult, compact = false) => {
+    const sizeClass = compact ? 'px-2.5 py-0.5 text-[11px]' : 'px-2.5 py-1 text-xs'
+    if (!track.isrc) {
+      return (
+        <span className={`inline-flex ${compact ? 'w-14' : 'w-16'} items-center justify-center rounded-full border border-gray-200 bg-transparent ${sizeClass} font-medium text-gray-500 dark:border-slate-600 dark:text-slate-400`}>
+          -
+        </span>
+      )
+    }
+    if (bpmLoadingIsrcs.has(track.isrc)) {
+      return (
+        <span className={`inline-flex ${compact ? 'w-14' : 'w-16'} items-center justify-center text-gray-400`}>
+          <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+        </span>
+      )
+    }
+    const bpm = bpmByIsrc[track.isrc]
+    if (bpm != null) {
+      return (
+        <button
+          onClick={(event) => {
+            event.stopPropagation()
+          }}
+          className={`inline-flex ${compact ? 'w-14' : 'w-16'} items-center justify-center rounded-full border border-blue-200 bg-transparent ${sizeClass} font-medium text-blue-700 dark:border-emerald-500/40 dark:text-emerald-300`}
+          title="BPM from cache"
+        >
+          {Math.round(bpm)}
+        </button>
+      )
+    }
+    return (
+      <button
+        onClick={(event) => {
+          event.stopPropagation()
+          handleBpmRequest(track)
+        }}
+        className={`inline-flex ${compact ? 'w-14' : 'w-16'} items-center justify-center rounded-full border border-amber-200 bg-transparent ${sizeClass} font-medium text-amber-700 dark:border-amber-500/40 dark:text-amber-300`}
+        title={bpmErrorByIsrc[track.isrc] || 'Click to calculate BPM'}
+      >
+        N/A
+      </button>
+    )
+  }
+
+  const renderKeyBadge = (track: SearchResult, compact = false) => {
+    const sizeClass = compact ? 'px-2.5 py-0.5 text-[11px]' : 'px-2.5 py-1 text-xs'
+    if (!track.isrc) {
+      return (
+        <span className={`inline-flex ${compact ? 'w-20' : 'w-24'} items-center justify-center rounded-full border border-gray-200 bg-transparent ${sizeClass} font-medium text-gray-500 dark:border-slate-600 dark:text-slate-400`}>
+          -
+        </span>
+      )
+    }
+    const key = keyByIsrc[track.isrc]
+    const scale = scaleByIsrc[track.isrc]
+    if (key || scale) {
+      return (
+        <span className={`inline-flex ${compact ? 'w-20' : 'w-24'} items-center justify-center rounded-full border border-slate-200 bg-transparent ${sizeClass} font-medium text-slate-700 whitespace-nowrap dark:border-slate-600 dark:text-slate-200`}>
+          {key && scale ? `${key} ${scale}` : key || scale}
+        </span>
+      )
+    }
+    return (
+      <span className={`inline-flex ${compact ? 'w-20' : 'w-24'} items-center justify-center rounded-full border border-gray-200 bg-transparent ${sizeClass} font-medium text-gray-500 dark:border-slate-600 dark:text-slate-400`}>
+        -
+      </span>
+    )
+  }
+
   const hasMore = lastBatchCount === limit
   const totalPages = Math.max(1, Math.ceil(results.length / pageSize))
   const safePage = Math.min(currentPage, totalPages)
   const startIndex = (safePage - 1) * pageSize
   const endIndex = startIndex + pageSize
+  const bpmValueFor = (track: SearchResult) => (track.isrc ? bpmByIsrc[track.isrc] ?? null : null)
+  const keyValueFor = (track: SearchResult) => {
+    if (!track.isrc) return ''
+    const key = keyByIsrc[track.isrc]
+    const scale = scaleByIsrc[track.isrc]
+    return `${key ?? ''} ${scale ?? ''}`.trim()
+  }
   const sortedResults = [...results].sort((a, b) => {
     if (!sortField) return 0
     const aValue = (() => {
@@ -459,10 +705,12 @@ export default function CreditsSearchClient() {
           return a.album.toLowerCase()
         case 'duration':
           return a.length ?? 0
+        case 'bpm':
+          return bpmValueFor(a) ?? 0
+        case 'key':
+          return keyValueFor(a).toLowerCase()
         case 'year':
           return a.year ? Number(a.year) : 0
-        case 'isrc':
-          return a.isrc ?? ''
         default:
           return ''
       }
@@ -477,10 +725,12 @@ export default function CreditsSearchClient() {
           return b.album.toLowerCase()
         case 'duration':
           return b.length ?? 0
+        case 'bpm':
+          return bpmValueFor(b) ?? 0
+        case 'key':
+          return keyValueFor(b).toLowerCase()
         case 'year':
           return b.year ? Number(b.year) : 0
-        case 'isrc':
-          return b.isrc ?? ''
         default:
           return ''
       }
@@ -631,6 +881,7 @@ export default function CreditsSearchClient() {
                 alt={profileInfo.name || 'Profile'}
                 width={48}
                 height={48}
+                unoptimized
                 className="h-12 w-12 rounded-full object-cover"
               />
             ) : (
@@ -692,8 +943,19 @@ export default function CreditsSearchClient() {
           >
             Refresh cache
           </button>
+          <button
+            type="button"
+            onClick={handleCalculateAllBpms}
+            className="text-xs font-semibold text-emerald-600 hover:text-emerald-700"
+            disabled={bpmBulkLoading || results.length === 0}
+          >
+            {bpmBulkLoading ? 'Calculating BPM…' : 'Calculate all BPM'}
+          </button>
           {showingCached ? (
             <span className="text-xs text-gray-400 dark:text-slate-500">Cached results</span>
+          ) : null}
+          {bpmBatchLoading ? (
+            <span className="text-xs text-gray-400 dark:text-slate-500">Loading BPM cache…</span>
           ) : null}
         </div>
 
@@ -786,13 +1048,12 @@ export default function CreditsSearchClient() {
                         {track.album} {track.year ? `• ${track.year}` : ''}
                       </div>
                       <div className="text-xs text-gray-500">
-                        {track.length ? formatDuration(track.length) : '-'} {track.isrc ? `• ${track.isrc}` : ''}
+                        {track.length ? formatDuration(track.length) : '-'}
                       </div>
-                      {track.isrc ? (
-                        <div className="mt-1 text-[11px] text-gray-400">
-                          {track.isrc}
-                        </div>
-                      ) : null}
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                        {renderBpmBadge(track, true)}
+                        {renderKeyBadge(track, true)}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -804,14 +1065,12 @@ export default function CreditsSearchClient() {
                 <table className="w-full">
                   <thead className="bg-white/70 dark:bg-slate-900/90">
                     <tr>
-                      <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] w-12 dark:text-slate-500">
+                      <th className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 w-12">
                         #
                       </th>
-                      <th className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] w-12 lg:w-16 dark:text-slate-500">
-                        Cover
-                      </th>
+                      <th className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 w-12 lg:w-16" aria-label="Cover"></th>
                       <th
-                        className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none dark:text-slate-500 dark:hover:text-slate-200"
+                        className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 cursor-pointer hover:text-gray-700 dark:hover:text-slate-200 select-none"
                         onClick={() => handleSort('title')}
                       >
                         <div className="flex items-center">
@@ -820,7 +1079,7 @@ export default function CreditsSearchClient() {
                         </div>
                       </th>
                       <th
-                        className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden md:table-cell max-w-[140px] cursor-pointer hover:text-gray-700 select-none dark:text-slate-500 dark:hover:text-slate-200"
+                        className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 cursor-pointer hover:text-gray-700 dark:hover:text-slate-200 select-none hidden md:table-cell max-w-[120px]"
                         onClick={() => handleSort('artist')}
                       >
                         <div className="flex items-center">
@@ -829,16 +1088,16 @@ export default function CreditsSearchClient() {
                         </div>
                       </th>
                       <th
-                        className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden lg:table-cell max-w-[160px] cursor-pointer hover:text-gray-700 select-none dark:text-slate-500 dark:hover:text-slate-200"
+                        className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 cursor-pointer hover:text-gray-700 dark:hover:text-slate-200 select-none hidden lg:table-cell max-w-[150px]"
                         onClick={() => handleSort('album')}
                       >
                         <div className="flex items-center">
-                          Release
+                          Album
                           <SortIcon field="album" />
                         </div>
                       </th>
                       <th
-                        className="px-3 lg:px-4 py-2 lg:py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden md:table-cell cursor-pointer hover:text-gray-700 select-none dark:text-slate-500 dark:hover:text-slate-200"
+                        className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 cursor-pointer hover:text-gray-700 dark:hover:text-slate-200 select-none hidden md:table-cell"
                         onClick={() => handleSort('duration')}
                       >
                         <div className="flex items-center justify-end">
@@ -847,7 +1106,19 @@ export default function CreditsSearchClient() {
                         </div>
                       </th>
                       <th
-                        className="px-3 lg:px-4 py-2 lg:py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] cursor-pointer hover:text-gray-700 select-none dark:text-slate-500 dark:hover:text-slate-200"
+                        className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 cursor-pointer hover:text-gray-700 dark:hover:text-slate-200 select-none hidden md:table-cell"
+                        onClick={() => handleSort('bpm')}
+                      >
+                        <div className="flex items-center justify-end">
+                          BPM
+                          <SortIcon field="bpm" />
+                        </div>
+                      </th>
+                      <th className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 hidden md:table-cell min-w-[96px]">
+                        Key
+                      </th>
+                      <th
+                        className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 cursor-pointer hover:text-gray-700 dark:hover:text-slate-200 select-none"
                         onClick={() => handleSort('year')}
                       >
                         <div className="flex items-center justify-end">
@@ -855,71 +1126,120 @@ export default function CreditsSearchClient() {
                           <SortIcon field="year" />
                         </div>
                       </th>
-                      <th
-                        className="px-3 lg:px-4 py-2 lg:py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] hidden lg:table-cell cursor-pointer hover:text-gray-700 select-none dark:text-slate-500 dark:hover:text-slate-200"
-                        onClick={() => handleSort('isrc')}
-                      >
-                        <div className="flex items-center">
-                          ISRC
-                          <SortIcon field="isrc" />
-                        </div>
+                      <th className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 hidden lg:table-cell">
+                        Popularity
+                      </th>
+                      <th className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 hidden lg:table-cell">
+                        Added
+                      </th>
+                      <th className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500">
+                        <span className="sr-only">Options</span>
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-slate-800">
+                  <tbody>
                     {visibleResults.map((track, index) => (
                       <tr
                         key={`${track.id}-${track.releaseId}`}
-                        className="cursor-pointer hover:bg-[#F9FAFB] dark:hover:bg-slate-800/60"
+                        className={`group transition-colors cursor-pointer ${
+                          playingId === track.id
+                            ? 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20'
+                            : 'hover:bg-[#F9FAFB] dark:hover:bg-slate-800/60'
+                        }`}
                         onClick={() => handleTogglePreview(track)}
                       >
-                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-500 text-xs sm:text-sm dark:text-slate-400">
-                          {startIndex + index + 1}
+                        <td className="px-3 lg:px-4 py-4 text-gray-400 dark:text-slate-500 text-xs sm:text-sm">
+                          <div className="flex items-center justify-center">
+                            {playingId === track.id ? (
+                              <svg className="w-4 h-4 text-green-600 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                              </svg>
+                            ) : (
+                              startIndex + index + 1
+                            )}
+                          </div>
                         </td>
-                        <td className="px-3 lg:px-4 py-2 lg:py-3">
+                        <td className="px-3 lg:px-4 py-4">
                           {track.coverArtUrl ? (
                             <Image
                               src={track.coverArtUrl}
                               alt={track.album}
                               width={40}
                               height={40}
-                              className="w-8 h-8 sm:w-10 sm:h-10 object-cover rounded-md"
+                              className="w-8 h-8 sm:w-10 sm:h-10 object-cover rounded-xl flex-shrink-0"
                             />
                           ) : (
-                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 rounded-md flex items-center justify-center dark:bg-slate-800">
-                              <span className="text-gray-400 text-xs dark:text-slate-500">No image</span>
+                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 rounded-xl flex-shrink-0 flex items-center justify-center dark:bg-slate-800">
+                              <span className="text-gray-400 dark:text-slate-500 text-xs">No image</span>
                             </div>
                           )}
                         </td>
-                        <td className="px-3 lg:px-4 py-2 lg:py-3">
-                          {track.source === 'musicbrainz' ? (
-                            <a
-                              href={`https://musicbrainz.org/recording/${encodeURIComponent(track.id)}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="font-medium text-gray-900 text-xs sm:text-sm hover:text-green-600 hover:underline dark:text-slate-100"
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              {track.title}
-                            </a>
-                          ) : (
-                            <span className="font-medium text-gray-900 text-xs sm:text-sm dark:text-slate-100">{track.title}</span>
-                          )}
+                        <td className="px-3 lg:px-4 py-4">
+                          <div className="flex items-center gap-2">
+                            {track.source === 'musicbrainz' ? (
+                              <a
+                                href={`https://musicbrainz.org/recording/${encodeURIComponent(track.id)}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="font-semibold text-slate-900 dark:text-slate-100 text-xs sm:text-sm hover:text-emerald-600 hover:underline"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                {track.title}
+                              </a>
+                            ) : (
+                              <span className="font-semibold text-slate-900 dark:text-slate-100 text-xs sm:text-sm">{track.title}</span>
+                            )}
+                          </div>
                         </td>
-                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-700 text-xs sm:text-sm hidden md:table-cell max-w-[140px] truncate dark:text-slate-200">
+                        <td className="px-3 lg:px-4 py-4 text-gray-500 dark:text-slate-400 text-xs sm:text-sm hidden md:table-cell max-w-[120px] truncate" title={track.artist}>
                           {track.artist}
                         </td>
-                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-700 text-xs sm:text-sm hidden lg:table-cell max-w-[160px] truncate dark:text-slate-200">
-                          {track.album}
+                        <td className="px-3 lg:px-4 py-4 text-gray-500 dark:text-slate-400 text-xs sm:text-sm hidden lg:table-cell max-w-[150px] truncate" title={track.album}>
+                          {track.releaseId ? (
+                            <a
+                              href={`https://musicbrainz.org/release/${encodeURIComponent(track.releaseId)}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-emerald-600 hover:text-emerald-700 hover:underline"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              {track.album}
+                            </a>
+                          ) : (
+                            <span>{track.album}</span>
+                          )}
                         </td>
-                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-right text-gray-600 text-xs sm:text-sm hidden md:table-cell dark:text-slate-300">
+                        <td className="px-3 lg:px-4 py-4 text-gray-500 dark:text-slate-400 text-xs sm:text-sm hidden md:table-cell text-right">
                           {track.length ? formatDuration(track.length) : '-'}
                         </td>
-                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-right text-gray-600 text-xs sm:text-sm dark:text-slate-300">
+                        <td className="px-3 lg:px-4 py-4 text-xs sm:text-sm hidden md:table-cell text-right" onClick={(event) => event.stopPropagation()}>
+                          <div className="flex justify-end">
+                            {renderBpmBadge(track)}
+                          </div>
+                        </td>
+                        <td className="px-3 lg:px-4 py-4 text-xs sm:text-sm hidden md:table-cell whitespace-nowrap min-w-[96px] text-right">
+                          <div className="flex justify-end">
+                            {renderKeyBadge(track)}
+                          </div>
+                        </td>
+                        <td className="px-3 lg:px-4 py-4 text-gray-500 dark:text-slate-400 text-xs sm:text-sm text-right">
                           {track.year || '-'}
                         </td>
-                        <td className="px-3 lg:px-4 py-2 lg:py-3 text-gray-600 text-xs sm:text-sm hidden lg:table-cell dark:text-slate-300">
-                          {track.isrc || '-'}
+                        <td className="px-3 lg:px-4 py-4 text-gray-500 dark:text-slate-400 text-xs sm:text-sm text-right hidden lg:table-cell">
+                          <span className="text-gray-400 dark:text-slate-500">N/A</span>
+                        </td>
+                        <td className="px-3 lg:px-4 py-4 text-gray-500 dark:text-slate-400 text-xs sm:text-sm text-right hidden lg:table-cell">
+                          <span className="text-gray-400 dark:text-slate-500">N/A</span>
+                        </td>
+                        <td className="px-3 lg:px-4 py-4 text-right">
+                          <button
+                            type="button"
+                            className="opacity-0 transition-opacity text-gray-400 dark:text-slate-500 hover:text-gray-600 group-hover:opacity-100"
+                            onClick={(event) => event.stopPropagation()}
+                            aria-label="More options"
+                          >
+                            ...
+                          </button>
                         </td>
                       </tr>
                     ))}

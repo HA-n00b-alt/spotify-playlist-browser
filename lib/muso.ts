@@ -71,6 +71,7 @@ type MusoTrackDetails = {
   id?: string
   title?: string
   isrcs?: string[]
+  spotifyId?: string | null
   spotifyPreviewUrl?: string | null
   releaseDate?: string | null
   duration?: number

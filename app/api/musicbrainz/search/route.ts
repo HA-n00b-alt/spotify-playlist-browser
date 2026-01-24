@@ -29,6 +29,7 @@ interface TrackResult {
   year: string
   length: number
   isrc?: string
+  spotifyTrackId?: string
   isrcDetails?: Array<{
     value: string
     hasDeezer: boolean
@@ -415,6 +416,7 @@ export const GET = withApiLogging(async (request: Request) => {
             : (typeof track.duration === 'number' ? track.duration : undefined)
         ),
         isrc,
+        spotifyTrackId: trackDetails?.spotifyId || track.spotifyId || undefined,
         releaseId: album.id || 'unknown',
         coverArtUrl: album.albumArt || null,
         previewUrl: trackDetails?.spotifyPreviewUrl || track.spotifyPreviewUrl || null,
