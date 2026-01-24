@@ -13,6 +13,54 @@ type PreviewUrlEntry = {
   itunesResponse?: string
 }
 
+type SongSearchPreview = {
+  url: string
+  provider: 'spotify_preview' | 'muso_spotify' | 'deezer_isrc' | 'deezer_search' | 'itunes_search'
+  isrc?: string
+  title?: string
+  artist?: string
+}
+
+type SpotifyTrackSummary = {
+  id: string
+  title: string
+  artist: string
+  isrc?: string | null
+  previewUrl?: string | null
+  album?: string | null
+}
+
+type SongSearchResult = {
+  spotifyTrack?: SpotifyTrackSummary | null
+  spotifyTracks?: SpotifyTrackSummary[]
+  previewUrls?: SongSearchPreview[]
+  query?: {
+    isrc?: string | null
+    title?: string | null
+    artist?: string | null
+  }
+}
+
+type BpmInfo = {
+  bpm: number | null
+  key?: string | null
+  scale?: string | null
+  source?: string
+  bpmSelected?: string
+  keySelected?: string
+  bpmManual?: number | null
+  keyManual?: string | null
+  scaleManual?: string | null
+  error?: string
+}
+
+type ApiLogEntry = {
+  id: string
+  timestamp: string
+  level: 'info' | 'success' | 'error'
+  message: string
+}
+
 type IsrcMismatchItem = {
   spotify_track_id: string
   isrc: string | null
@@ -59,6 +107,23 @@ export default function IsrcMismatchClient() {
   const [itunesDebugOpen, setItunesDebugOpen] = useState<Record<string, boolean>>({})
   const [spotifyPreviewMap, setSpotifyPreviewMap] = useState<Record<string, { url?: string | null; loading?: boolean; error?: string }>>({})
   const [deezerPreviewMap, setDeezerPreviewMap] = useState<Record<string, { url?: string | null; loading?: boolean }>>({})
+  const [resolveAllLoading, setResolveAllLoading] = useState(false)
+  const [resolveAllSummary, setResolveAllSummary] = useState<{ processed: number; resolved: number; skipped: number } | null>(null)
+  const [songSearchInput, setSongSearchInput] = useState({
+    isrc: '',
+    title: '',
+    artist: '',
+    spotifyTrackId: '',
+  })
+  const [songSearchResult, setSongSearchResult] = useState<SongSearchResult | null>(null)
+  const [songSearchLoading, setSongSearchLoading] = useState(false)
+  const [songSearchError, setSongSearchError] = useState<string | null>(null)
+  const [bpmInfo, setBpmInfo] = useState<BpmInfo | null>(null)
+  const [bpmLoading, setBpmLoading] = useState(false)
+  const [manualBpm, setManualBpm] = useState('')
+  const [manualKey, setManualKey] = useState('')
+  const [manualScale, setManualScale] = useState('')
+  const [apiLogs, setApiLogs] = useState<ApiLogEntry[]>([])
 
   const handlePlay = (event: React.SyntheticEvent<HTMLAudioElement>) => {
     if (audioRef.current && audioRef.current !== event.currentTarget) {
@@ -66,6 +131,14 @@ export default function IsrcMismatchClient() {
     }
     audioRef.current = event.currentTarget
   }
+
+  const addLog = useCallback((level: ApiLogEntry['level'], message: string) => {
+    const timestamp = new Date().toLocaleTimeString()
+    setApiLogs((prev) => [
+      { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, timestamp, level, message },
+      ...prev,
+    ])
+  }, [])
 
   const needsPreviewMeta = useCallback((item: IsrcMismatchItem) => {
     const entry = getPreviewEntry(item)
@@ -220,6 +293,220 @@ export default function IsrcMismatchClient() {
     }
   }
 
+  const handleResolveAllWithMuso = async () => {
+    setResolveAllLoading(true)
+    setError(null)
+    addLog('info', 'Resolving outstanding mismatches with Muso preview URLs...')
+    try {
+      const res = await fetch('/api/admin/isrc-mismatches/resolve-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(payload?.error || 'Failed to resolve mismatches')
+      }
+      setResolveAllSummary({
+        processed: Number(payload?.processed ?? 0),
+        resolved: Number(payload?.resolved ?? 0),
+        skipped: Number(payload?.skipped ?? 0),
+      })
+      addLog('success', `Resolved ${payload?.resolved ?? 0} mismatches via Muso.`)
+      await loadMismatches()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to resolve mismatches'
+      setError(message)
+      addLog('error', message)
+    } finally {
+      setResolveAllLoading(false)
+    }
+  }
+
+  const fetchBpmInfo = useCallback(async (spotifyTrackId: string) => {
+    setBpmLoading(true)
+    addLog('info', `Fetching BPM/key for ${spotifyTrackId}...`)
+    try {
+      const res = await fetch(`/api/bpm?spotifyTrackId=${encodeURIComponent(spotifyTrackId)}`)
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(payload?.error || 'Failed to fetch BPM data')
+      }
+      setBpmInfo(payload)
+      addLog('success', 'BPM/key data loaded.')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch BPM data'
+      setBpmInfo({ bpm: null, error: message })
+      addLog('error', message)
+    } finally {
+      setBpmLoading(false)
+    }
+  }, [addLog])
+
+  const handleSongSearch = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setSongSearchError(null)
+    setSongSearchResult(null)
+    setBpmInfo(null)
+    const payload = {
+      isrc: songSearchInput.isrc.trim() || undefined,
+      title: songSearchInput.title.trim() || undefined,
+      artist: songSearchInput.artist.trim() || undefined,
+      spotifyTrackId: songSearchInput.spotifyTrackId.trim() || undefined,
+    }
+    if (!payload.isrc && !payload.title && !payload.artist && !payload.spotifyTrackId) {
+      setSongSearchError('Enter an ISRC, title, artist, or Spotify track ID to search.')
+      return
+    }
+    setSongSearchLoading(true)
+    addLog('info', 'Searching song data sources...')
+    try {
+      const res = await fetch('/api/admin/song-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data?.error || 'Song search failed')
+      }
+      setSongSearchResult(data)
+      addLog('success', `Search completed with ${data?.previewUrls?.length ?? 0} preview options.`)
+      const spotifyTrackId = data?.spotifyTrack?.id
+      if (spotifyTrackId) {
+        await fetchBpmInfo(spotifyTrackId)
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Song search failed'
+      setSongSearchError(message)
+      addLog('error', message)
+    } finally {
+      setSongSearchLoading(false)
+    }
+  }
+
+  const handleApplyPreview = async (preview: SongSearchPreview) => {
+    const spotifyTrackId = songSearchResult?.spotifyTrack?.id
+    if (!spotifyTrackId) {
+      setSongSearchError('Select a Spotify track before applying a preview URL.')
+      return
+    }
+    setSongSearchError(null)
+    setBpmLoading(true)
+    addLog('info', `Applying preview from ${preview.provider}...`)
+    try {
+      const res = await fetch('/api/admin/song-preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          spotifyTrackId,
+          previewUrl: preview.url,
+          source: preview.provider,
+          previewIsrc: preview.isrc,
+          previewTitle: preview.title,
+          previewArtist: preview.artist,
+        }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(payload?.error || 'Failed to apply preview URL')
+      }
+      setBpmInfo(payload?.bpmResult || null)
+      addLog('success', 'Preview applied and BPM recalculated.')
+      await loadMismatches()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to apply preview URL'
+      setSongSearchError(message)
+      addLog('error', message)
+    } finally {
+      setBpmLoading(false)
+    }
+  }
+
+  const handleRecomputeBpm = async () => {
+    const spotifyTrackId = songSearchResult?.spotifyTrack?.id
+    if (!spotifyTrackId) {
+      setSongSearchError('Search for a song to recompute BPM.')
+      return
+    }
+    setSongSearchError(null)
+    setBpmLoading(true)
+    addLog('info', 'Clearing cache and recomputing BPM/key...')
+    try {
+      const res = await fetch('/api/bpm/recalculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trackIds: [spotifyTrackId] }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(payload?.error || 'Failed to clear BPM cache')
+      }
+      addLog('success', 'Cache cleared, recalculating...')
+      await fetchBpmInfo(spotifyTrackId)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to recompute BPM'
+      setSongSearchError(message)
+      addLog('error', message)
+      setBpmLoading(false)
+    }
+  }
+
+  const handleManualOverride = async () => {
+    const spotifyTrackId = songSearchResult?.spotifyTrack?.id
+    if (!spotifyTrackId) {
+      setSongSearchError('Search for a song to apply a manual override.')
+      return
+    }
+
+    const bpmManualValue = manualBpm.trim() ? Number(manualBpm) : null
+    if (manualBpm.trim() && (!Number.isFinite(bpmManualValue) || bpmManualValue <= 0)) {
+      setSongSearchError('Manual BPM must be a positive number.')
+      return
+    }
+
+    if ((manualKey.trim() && !manualScale.trim()) || (!manualKey.trim() && manualScale.trim())) {
+      setSongSearchError('Provide both key and scale for a manual key override.')
+      return
+    }
+
+    const payload: Record<string, any> = { spotifyTrackId }
+    if (bpmManualValue) {
+      payload.bpmSelected = 'manual'
+      payload.bpmManual = bpmManualValue
+    }
+    if (manualKey.trim() && manualScale.trim()) {
+      payload.keySelected = 'manual'
+      payload.keyManual = manualKey.trim()
+      payload.scaleManual = manualScale.trim()
+    }
+
+    if (!payload.bpmSelected && !payload.keySelected) {
+      setSongSearchError('Enter manual BPM and/or key/scale values before saving.')
+      return
+    }
+
+    setSongSearchError(null)
+    addLog('info', 'Applying manual override...')
+    try {
+      const res = await fetch('/api/bpm/update-selection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const responsePayload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(responsePayload?.error || 'Failed to apply manual override')
+      }
+      addLog('success', 'Manual override saved.')
+      await fetchBpmInfo(spotifyTrackId)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to apply manual override'
+      setSongSearchError(message)
+      addLog('error', message)
+    }
+  }
+
   const [pendingItems, reviewedItems] = useMemo(() => {
     const pending = items.filter((item) => !item.isrc_mismatch_review_status)
     const reviewed = items.filter((item) => item.isrc_mismatch_review_status)
@@ -240,12 +527,277 @@ export default function IsrcMismatchClient() {
 
   return (
     <div className="space-y-6">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-[0_4px_24px_rgba(0,0,0,0.06)]">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Song data tools</h2>
+              <p className="text-sm text-gray-500">
+                Search by ISRC, title, artist, or Spotify track ID to compare preview sources and manage BPM/key data.
+              </p>
+            </div>
+            <div className="text-xs text-gray-400">Updates apply to the selected Spotify track.</div>
+          </div>
+          <form onSubmit={handleSongSearch} className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="text-xs font-semibold text-gray-500">
+              ISRC
+              <input
+                value={songSearchInput.isrc}
+                onChange={(event) => setSongSearchInput((prev) => ({ ...prev, isrc: event.target.value }))}
+                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700"
+                placeholder="USUM71703861"
+              />
+            </label>
+            <label className="text-xs font-semibold text-gray-500">
+              Spotify track ID
+              <input
+                value={songSearchInput.spotifyTrackId}
+                onChange={(event) => setSongSearchInput((prev) => ({ ...prev, spotifyTrackId: event.target.value }))}
+                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700"
+                placeholder="Spotify track ID"
+              />
+            </label>
+            <label className="text-xs font-semibold text-gray-500">
+              Title
+              <input
+                value={songSearchInput.title}
+                onChange={(event) => setSongSearchInput((prev) => ({ ...prev, title: event.target.value }))}
+                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700"
+                placeholder="Song title"
+              />
+            </label>
+            <label className="text-xs font-semibold text-gray-500">
+              Artist
+              <input
+                value={songSearchInput.artist}
+                onChange={(event) => setSongSearchInput((prev) => ({ ...prev, artist: event.target.value }))}
+                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700"
+                placeholder="Artist name"
+              />
+            </label>
+            <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
+              <button
+                type="submit"
+                className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                disabled={songSearchLoading}
+              >
+                {songSearchLoading ? 'Searching...' : 'Search song data'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSongSearchInput({ isrc: '', title: '', artist: '', spotifyTrackId: '' })
+                  setSongSearchResult(null)
+                  setSongSearchError(null)
+                  setBpmInfo(null)
+                }}
+                className="rounded-full border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900"
+              >
+                Clear
+              </button>
+            </div>
+          </form>
+          {songSearchError ? (
+            <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-xs text-rose-700">
+              {songSearchError}
+            </div>
+          ) : null}
+          {songSearchResult?.spotifyTrack ? (
+            <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+              <div className="text-sm font-semibold text-gray-900">
+                {songSearchResult.spotifyTrack.artist} - {songSearchResult.spotifyTrack.title}
+              </div>
+              <div className="mt-1 text-xs text-gray-500">
+                Spotify ID: {songSearchResult.spotifyTrack.id} | ISRC: {songSearchResult.spotifyTrack.isrc || 'Unknown'}
+              </div>
+              {songSearchResult.spotifyTrack.previewUrl ? (
+                <audio controls preload="none" className="mt-2 w-full" onPlay={handlePlay}>
+                  <source src={songSearchResult.spotifyTrack.previewUrl} />
+                </audio>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="mt-4">
+            <div className="text-xs uppercase tracking-[0.2em] text-gray-400">Preview options</div>
+            {songSearchResult?.previewUrls && songSearchResult.previewUrls.length > 0 ? (
+              <div className="mt-2 grid gap-3">
+                {songSearchResult.previewUrls.map((preview, index) => (
+                  <div key={`${preview.url}-${index}`} className="rounded-xl border border-gray-100 bg-white p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">
+                          {preview.provider.replace(/_/g, ' ')}
+                        </div>
+                        <div className="text-sm font-semibold text-gray-900">
+                          {(preview.artist || 'Unknown artist') + ' - ' + (preview.title || 'Unknown title')}
+                        </div>
+                        <div className="text-xs text-gray-500">ISRC: {preview.isrc || 'Unknown'}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleApplyPreview(preview)}
+                        className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100"
+                        disabled={!songSearchResult?.spotifyTrack?.id || bpmLoading}
+                      >
+                        Use this preview
+                      </button>
+                    </div>
+                    <audio controls preload="none" className="mt-2 w-full" onPlay={handlePlay}>
+                      <source src={preview.url} />
+                    </audio>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-2 text-xs text-gray-500">No preview URLs found yet.</div>
+            )}
+          </div>
+          <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-4 py-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-gray-900">BPM & key</div>
+                <div className="text-xs text-gray-500">Refresh, recompute, or manually override BPM/key data.</div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const spotifyTrackId = songSearchResult?.spotifyTrack?.id
+                    if (spotifyTrackId) {
+                      void fetchBpmInfo(spotifyTrackId)
+                    } else {
+                      setSongSearchError('Search for a song to load BPM data.')
+                    }
+                  }}
+                  className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-600 hover:text-gray-900"
+                  disabled={bpmLoading}
+                >
+                  {bpmLoading ? 'Loading...' : 'Refresh BPM'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRecomputeBpm}
+                  className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-100"
+                  disabled={bpmLoading}
+                >
+                  Recompute BPM/key
+                </button>
+              </div>
+            </div>
+            {bpmInfo ? (
+              <div className="mt-3 grid gap-2 text-xs text-gray-600 sm:grid-cols-2">
+                <div>
+                  <strong>BPM:</strong> {bpmInfo.bpm ?? 'N/A'}
+                </div>
+                <div>
+                  <strong>Key:</strong>{' '}
+                  {bpmInfo.key && bpmInfo.scale ? `${bpmInfo.key} ${bpmInfo.scale}` : 'N/A'}
+                </div>
+                <div>
+                  <strong>Source:</strong> {bpmInfo.source || 'N/A'}
+                </div>
+                <div>
+                  <strong>Selected:</strong> BPM {bpmInfo.bpmSelected || 'N/A'} / Key {bpmInfo.keySelected || 'N/A'}
+                </div>
+                {bpmInfo.error ? <div className="text-rose-600">{bpmInfo.error}</div> : null}
+              </div>
+            ) : (
+              <div className="mt-3 text-xs text-gray-500">No BPM data loaded yet.</div>
+            )}
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <label className="text-xs font-semibold text-gray-500">
+                Manual BPM
+                <input
+                  value={manualBpm}
+                  onChange={(event) => setManualBpm(event.target.value)}
+                  className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700"
+                  placeholder="128"
+                />
+              </label>
+              <label className="text-xs font-semibold text-gray-500">
+                Manual key
+                <input
+                  value={manualKey}
+                  onChange={(event) => setManualKey(event.target.value)}
+                  className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700"
+                  placeholder="C#"
+                />
+              </label>
+              <label className="text-xs font-semibold text-gray-500">
+                Manual scale
+                <input
+                  value={manualScale}
+                  onChange={(event) => setManualScale(event.target.value)}
+                  className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700"
+                  placeholder="minor"
+                />
+              </label>
+            </div>
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={handleManualOverride}
+                className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                disabled={bpmLoading}
+              >
+                Apply manual override
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-[0_4px_24px_rgba(0,0,0,0.06)]">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900">Live API logs</h3>
+              <p className="text-xs text-gray-500">Events from actions run in this panel.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setApiLogs([])}
+              className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-600 hover:text-gray-900"
+            >
+              Clear logs
+            </button>
+          </div>
+          <div className="mt-4 max-h-[420px] space-y-2 overflow-auto text-xs">
+            {apiLogs.length === 0 ? (
+              <div className="text-gray-500">Run a search or action to populate logs.</div>
+            ) : (
+              apiLogs.map((entry) => (
+                <div key={entry.id} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                  <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.18em] text-gray-400">
+                    <span>{entry.level}</span>
+                    <span>{entry.timestamp}</span>
+                  </div>
+                  <div
+                    className={
+                      entry.level === 'error'
+                        ? 'text-rose-600'
+                        : entry.level === 'success'
+                          ? 'text-emerald-600'
+                          : 'text-gray-600'
+                    }
+                  >
+                    {entry.message}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-white p-5 shadow-[0_4px_24px_rgba(0,0,0,0.06)]">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">ISRC Mismatch Review</h2>
+          <h2 className="text-lg font-semibold text-gray-900">ISRC mismatches</h2>
           <p className="text-sm text-gray-500">
             Review preview audio for ISRC mismatches and confirm the correct status.
           </p>
+          {resolveAllSummary ? (
+            <div className="mt-2 text-xs text-gray-500">
+              Resolved {resolveAllSummary.resolved} of {resolveAllSummary.processed} (skipped {resolveAllSummary.skipped}).
+            </div>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {isHydratingPreview ? (
@@ -257,6 +809,14 @@ export default function IsrcMismatchClient() {
             className="rounded-full border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900"
           >
             {showMatched ? 'Hide matched' : 'Show matched'}
+          </button>
+          <button
+            type="button"
+            onClick={handleResolveAllWithMuso}
+            className="rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100"
+            disabled={resolveAllLoading}
+          >
+            {resolveAllLoading ? 'Resolving...' : 'Resolve all with Muso'}
           </button>
           <button
             type="button"

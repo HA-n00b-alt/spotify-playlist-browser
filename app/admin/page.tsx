@@ -12,8 +12,8 @@ const tools = [
     roles: ['admin', 'superadmin'],
   },
   {
-    title: 'ISRC Mismatch Review',
-    description: 'Review ISRC mismatches, preview audio, and confirm match or mismatch.',
+    title: 'Song data administration',
+    description: 'Resolve ISRC mismatches, manage previews, and administer BPM/key data.',
     href: '/admin/isrc-mismatches',
     roles: ['admin', 'superadmin'],
   },
