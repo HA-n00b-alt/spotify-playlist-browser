@@ -459,8 +459,9 @@ export default function IsrcMismatchClient() {
       return
     }
 
-    const bpmManualValue = manualBpm.trim() ? Number(manualBpm) : undefined
-    if (manualBpm.trim() && (!Number.isFinite(bpmManualValue) || bpmManualValue <= 0)) {
+    const bpmManualRaw = manualBpm.trim()
+    const bpmManualValue = bpmManualRaw ? Number(bpmManualRaw) : undefined
+    if (bpmManualRaw && (!Number.isFinite(bpmManualValue) || bpmManualValue <= 0)) {
       setSongSearchError('Manual BPM must be a positive number.')
       return
     }
