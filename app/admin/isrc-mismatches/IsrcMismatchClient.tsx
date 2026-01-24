@@ -459,7 +459,7 @@ export default function IsrcMismatchClient() {
       return
     }
 
-    const bpmManualValue = manualBpm.trim() ? Number(manualBpm) : null
+    const bpmManualValue = manualBpm.trim() ? Number(manualBpm) : undefined
     if (manualBpm.trim() && (!Number.isFinite(bpmManualValue) || bpmManualValue <= 0)) {
       setSongSearchError('Manual BPM must be a positive number.')
       return
@@ -471,7 +471,7 @@ export default function IsrcMismatchClient() {
     }
 
     const payload: Record<string, any> = { spotifyTrackId }
-    if (bpmManualValue) {
+    if (bpmManualValue !== undefined) {
       payload.bpmSelected = 'manual'
       payload.bpmManual = bpmManualValue
     }
