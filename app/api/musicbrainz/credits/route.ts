@@ -116,28 +116,48 @@ export const GET = withApiLogging(async (request: Request) => {
     const masterRoles = new Set(['mastering', 'mastering engineer'])
     const compositionRoles = new Set(['composer', 'lyricist'])
 
-    const collectNamesForRoles = (relations: any[], roles: Set<string>) =>
-      Array.from(
-        new Set(
-          relations
-            .filter((rel: any) => {
-              const role = String(rel?.type).toLowerCase()
-              if (roles.has(role)) return true
-              const attributes = Array.isArray(rel?.attributes) ? rel.attributes : []
-              return attributes.some((attr: any) => roles.has(String(attr).toLowerCase()))
-            })
-            .map((rel: any) => {
-              if (typeof rel?.artist?.name === 'string') return rel.artist.name
-              if (typeof rel?.name === 'string') return rel.name
-              return null
-            })
-            .filter(Boolean)
-        )
-      )
+    const producedBySet = new Set<string>()
+    const mixedBySet = new Set<string>()
+    const masteredBySet = new Set<string>()
+    const compositionSet = new Set<string>()
+    const seenWorkIds = new Set<string>()
 
-    const producedBy = collectNamesForRoles(recordingRelations, producerRoles)
-    const mixedBy = collectNamesForRoles(recordingRelations, mixRoles)
-    const masteredBy = collectNamesForRoles(recordingRelations, masterRoles)
+    const addName = (set: Set<string>, rel: any) => {
+      if (typeof rel?.artist?.name === 'string') {
+        set.add(rel.artist.name)
+        return
+      }
+      if (typeof rel?.name === 'string') {
+        set.add(rel.name)
+      }
+    }
+
+    for (const rel of recordingRelations) {
+      const role = String(rel?.type).toLowerCase()
+      const attributes = Array.isArray(rel?.attributes) ? rel.attributes : []
+      const hasRole = (roles: Set<string>) =>
+        roles.has(role) || attributes.some((attr: any) => roles.has(String(attr).toLowerCase()))
+
+      if (hasRole(producerRoles)) addName(producedBySet, rel)
+      if (hasRole(mixRoles)) addName(mixedBySet, rel)
+      if (hasRole(masterRoles)) addName(masteredBySet, rel)
+      if (compositionRoles.has(role)) addName(compositionSet, rel)
+
+      const work = rel?.work
+      const workId = typeof work?.id === 'string' ? work.id : null
+      if (workId && !seenWorkIds.has(workId) && Array.isArray(work?.relations)) {
+        seenWorkIds.add(workId)
+        for (const workRel of work.relations) {
+          const workRole = String(workRel?.type).toLowerCase()
+          if (!compositionRoles.has(workRole)) continue
+          addName(compositionSet, workRel)
+        }
+      }
+    }
+
+    const producedBy = Array.from(producedBySet)
+    const mixedBy = Array.from(mixedBySet)
+    const masteredBy = Array.from(masteredBySet)
 
     let releaseProducedBy: string[] = []
     let releaseMixedBy: string[] = []
@@ -157,6 +177,24 @@ export const GET = withApiLogging(async (request: Request) => {
           const releaseRelations = Array.isArray(release?.relations)
             ? release.relations
             : []
+          const collectNamesForRoles = (relations: any[], roles: Set<string>) =>
+            Array.from(
+              new Set(
+                relations
+                  .filter((rel: any) => {
+                    const role = String(rel?.type).toLowerCase()
+                    if (roles.has(role)) return true
+                    const attributes = Array.isArray(rel?.attributes) ? rel.attributes : []
+                    return attributes.some((attr: any) => roles.has(String(attr).toLowerCase()))
+                  })
+                  .map((rel: any) => {
+                    if (typeof rel?.artist?.name === 'string') return rel.artist.name
+                    if (typeof rel?.name === 'string') return rel.name
+                    return null
+                  })
+                  .filter(Boolean)
+              )
+            )
           releaseProducedBy = collectNamesForRoles(releaseRelations, producerRoles)
           releaseMixedBy = collectNamesForRoles(releaseRelations, mixRoles)
           releaseMasteredBy = collectNamesForRoles(releaseRelations, masterRoles)
@@ -168,37 +206,7 @@ export const GET = withApiLogging(async (request: Request) => {
       }
     }
 
-    const composition = Array.from(
-      new Set(
-        recordingRelations
-          .filter((rel: any) => compositionRoles.has(String(rel?.type).toLowerCase()))
-          .map((rel: any) => {
-            if (typeof rel?.artist?.name === 'string') return rel.artist.name
-            if (typeof rel?.name === 'string') return rel.name
-            return null
-          })
-          .filter(Boolean)
-      )
-    )
-
-    // Some work relations include nested work->relations with composer/lyricist credits.
-    const workRelations = recordingRelations.filter((rel: any) => rel?.work?.relations)
-    for (const rel of workRelations) {
-      const workRels = Array.isArray(rel.work?.relations) ? rel.work.relations : []
-      for (const workRel of workRels) {
-        const role = String(workRel?.type).toLowerCase()
-        if (!compositionRoles.has(role)) continue
-        const name =
-          typeof workRel?.artist?.name === 'string'
-            ? workRel.artist.name
-            : typeof workRel?.name === 'string'
-              ? workRel.name
-              : null
-        if (name) composition.push(name)
-      }
-    }
-
-    const uniqueComposition = Array.from(new Set(composition))
+    const uniqueComposition = Array.from(compositionSet)
 
     return NextResponse.json({
       performedBy: performers,

@@ -18,6 +18,7 @@ const COVER_CACHE_TTL_MS = 60 * 60 * 1000
 const rateLimiters = new Map<string, { lastRequestTime: number; queue: Promise<unknown> }>()
 const responseCache = new Map<string, { expiresAt: number; value: unknown }>()
 const coverArtCache = new Map<string, { expiresAt: number; value: string | null }>()
+const inFlightRequests = new Map<string, Promise<unknown>>()
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -71,7 +72,12 @@ export async function fetchMusicBrainzJson<T>(path: string, params?: MusicBrainz
     responseCache.delete(url)
   }
 
-  return scheduleRequest(url, async () => {
+  const existing = inFlightRequests.get(url)
+  if (existing) {
+    return existing as Promise<T>
+  }
+
+  const requestPromise = scheduleRequest(url, async () => {
     const maxAttempts = 3
 
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -141,6 +147,13 @@ export async function fetchMusicBrainzJson<T>(path: string, params?: MusicBrainz
       retryable: true,
     })
   })
+
+  inFlightRequests.set(url, requestPromise)
+  try {
+    return await requestPromise
+  } finally {
+    inFlightRequests.delete(url)
+  }
 }
 
 export async function fetchCoverArtUrl(releaseId: string): Promise<string | null> {

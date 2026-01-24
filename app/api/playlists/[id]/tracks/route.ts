@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getPlaylistTracks } from '@/lib/spotify'
+import { getPlaylistTracks, isPlaylistCacheFresh } from '@/lib/spotify'
 import { query } from '@/lib/db'
 import { AuthenticationError } from '@/lib/errors'
 import { logError, withApiLogging } from '@/lib/logger'
@@ -34,11 +34,12 @@ export const GET = withApiLogging(async (
         
         if (cacheResults.length > 0) {
           const cached = cacheResults[0]
-          // For tracks, we'll check snapshot when fetching playlist
-          isCached = true
-          cacheInfo = {
-            snapshotId: cached.snapshot_id,
-            cachedAt: cached.updated_at,
+          if (isPlaylistCacheFresh(cached.updated_at)) {
+            isCached = true
+            cacheInfo = {
+              snapshotId: cached.snapshot_id,
+              cachedAt: cached.updated_at,
+            }
           }
         }
       } catch (error) {

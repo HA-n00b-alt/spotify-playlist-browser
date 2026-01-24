@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getPlaylist } from '@/lib/spotify'
+import { getPlaylist, isPlaylistCacheFresh } from '@/lib/spotify'
 import { query } from '@/lib/db'
 import { AuthenticationError } from '@/lib/errors'
 import { logError, withApiLogging } from '@/lib/logger'
@@ -34,18 +34,7 @@ export const GET = withApiLogging(async (
         
         if (cacheResults.length > 0) {
           const cached = cacheResults[0]
-          // Verify snapshot is still current
-          try {
-            const currentPlaylist = await getPlaylist(params.id, false) // Don't use cache for verification
-            if (currentPlaylist.snapshot_id === cached.snapshot_id) {
-              isCached = true
-              cacheInfo = {
-                snapshotId: cached.snapshot_id,
-                cachedAt: cached.updated_at,
-              }
-            }
-          } catch (error) {
-            // If verification fails, still try to use cache
+          if (isPlaylistCacheFresh(cached.updated_at)) {
             isCached = true
             cacheInfo = {
               snapshotId: cached.snapshot_id,

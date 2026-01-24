@@ -150,27 +150,34 @@ export default function IsrcMismatchClient() {
     const targets = rows.filter(needsPreviewMeta)
     if (targets.length === 0) return
     setIsHydratingPreview(true)
-    for (const item of targets) {
-      try {
-        const res = await fetch(`/api/bpm?spotifyTrackId=${encodeURIComponent(item.spotify_track_id)}`)
-        if (!res.ok) {
-          continue
-        }
-        const data = await res.json().catch(() => ({}))
-        if (!Array.isArray(data?.urls)) {
-          continue
-        }
-        setItems((prev) =>
-          prev.map((current) =>
-            current.spotify_track_id === item.spotify_track_id
-              ? { ...current, urls: data.urls }
-              : current
+    const concurrency = 4
+    let index = 0
+    const worker = async () => {
+      while (index < targets.length) {
+        const current = targets[index]
+        index += 1
+        try {
+          const res = await fetch(`/api/bpm?spotifyTrackId=${encodeURIComponent(current.spotify_track_id)}`)
+          if (!res.ok) {
+            continue
+          }
+          const data = await res.json().catch(() => ({}))
+          if (!Array.isArray(data?.urls)) {
+            continue
+          }
+          setItems((prev) =>
+            prev.map((item) =>
+              item.spotify_track_id === current.spotify_track_id
+                ? { ...item, urls: data.urls }
+                : item
+            )
           )
-        )
-      } catch {
-        // Ignore preview metadata fetch errors.
+        } catch {
+          // Ignore preview metadata fetch errors.
+        }
       }
     }
+    await Promise.all(Array.from({ length: Math.min(concurrency, targets.length) }, worker))
     setIsHydratingPreview(false)
   }, [needsPreviewMeta])
 

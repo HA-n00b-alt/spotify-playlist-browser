@@ -49,14 +49,18 @@ export async function query<T = any>(text: string, params?: any[]): Promise<T[]>
   const paramsCount = params?.length || 0
   
   const start = Date.now()
+  const logLevel = process.env.DB_LOG_LEVEL || 'info'
+  const shouldLogInfo = logLevel !== 'silent'
   const slowThresholdMs = Number.parseInt(process.env.DB_SLOW_QUERY_MS || '500', 10)
   try {
-    logInfo('Executing database query', {
-      component: 'db.query',
-      queryPreview,
-      paramsCount,
-      hasParams: paramsCount > 0,
-    })
+    if (shouldLogInfo) {
+      logInfo('Executing database query', {
+        component: 'db.query',
+        queryPreview,
+        paramsCount,
+        hasParams: paramsCount > 0,
+      })
+    }
     
     if (!sql) {
       throw new Error('Database client is not initialized')
@@ -77,7 +81,7 @@ export async function query<T = any>(text: string, params?: any[]): Promise<T[]>
         ...logPayload,
         slowThresholdMs,
       })
-    } else {
+    } else if (shouldLogInfo) {
       logInfo('Database query completed', logPayload)
     }
     

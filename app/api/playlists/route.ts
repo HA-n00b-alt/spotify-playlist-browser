@@ -15,7 +15,9 @@ export const GET = withApiLogging(async (request: Request) => {
       userId: userId || 'anonymous',
     })
     
-    const playlists = await getPlaylistsWithMetadata()
+    const url = new URL(request.url)
+    const includeFollowers = url.searchParams.get('includeFollowers') === 'true'
+    const playlists = await getPlaylistsWithMetadata({ includeFollowers })
     response = NextResponse.json(playlists)
     
     logInfo('Playlists fetched successfully', {

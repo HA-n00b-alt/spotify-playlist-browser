@@ -557,6 +557,10 @@ function isCacheFresh(updatedAt: Date | null | undefined): boolean {
   return ageMs >= 0 && ageMs < playlistCacheTtlMs
 }
 
+export function isPlaylistCacheFresh(updatedAt: Date | null | undefined): boolean {
+  return isCacheFresh(updatedAt)
+}
+
 /**
  * Check if playlist is cached and matches current snapshot_id
  */
@@ -713,10 +717,14 @@ export async function getPlaylist(playlistId: string, useCache = true): Promise<
  * Internal function to fetch tracks without cache check (used when caching)
  */
 async function getPlaylistTracksInternal(playlistId: string): Promise<any[]> {
+  const fields = [
+    'items(added_at,track(id,name,artists,album,external_urls,external_ids,preview_url,uri,explicit,duration_ms,track_number,disc_number,popularity,is_local,is_playable,linked_from))',
+    'next',
+  ].join(',')
   const allItems = await paginateSpotify<{
     added_at: string
     track: any
-  }>(`/playlists/${playlistId}/tracks?limit=50`)
+  }>(`/playlists/${playlistId}/tracks?limit=50&fields=${encodeURIComponent(fields)}`)
 
   const tracksWithMetadata = allItems
     .filter((item) => item.track)

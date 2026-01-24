@@ -59,72 +59,81 @@ export const POST = withApiLogging(async (request: Request) => {
   const results: ResolveResult[] = []
   let resolved = 0
   let skipped = 0
+  let index = 0
+  const concurrency = Number.parseInt(process.env.MUSO_RESOLVE_CONCURRENCY || '3', 10)
+  const limitConcurrency = Number.isFinite(concurrency) && concurrency > 0 ? concurrency : 3
 
-  for (const row of rows) {
-    const spotifyTrackId = row.spotify_track_id
-    let spotifyIsrc = row.isrc
-    let spotifyTitle = row.title
-    let spotifyArtist = row.artist
+  const worker = async () => {
+    while (index < rows.length) {
+      const row = rows[index]
+      index += 1
+      const spotifyTrackId = row.spotify_track_id
+      let spotifyIsrc = row.isrc
+      let spotifyTitle = row.title
+      let spotifyArtist = row.artist
 
-    if (!spotifyIsrc) {
-      try {
-        const track = await getTrack(spotifyTrackId)
-        spotifyIsrc = track?.external_ids?.isrc || null
-        spotifyTitle = spotifyTitle || track?.name || null
-        spotifyArtist =
-          spotifyArtist ||
-          (Array.isArray(track?.artists)
-            ? track.artists.map((artist: any) => artist?.name).filter(Boolean).join(', ')
-            : null)
-      } catch {
-        spotifyIsrc = null
+      if (!spotifyIsrc) {
+        try {
+          const track = await getTrack(spotifyTrackId)
+          spotifyIsrc = track?.external_ids?.isrc || null
+          spotifyTitle = spotifyTitle || track?.name || null
+          spotifyArtist =
+            spotifyArtist ||
+            (Array.isArray(track?.artists)
+              ? track.artists.map((artist: any) => artist?.name).filter(Boolean).join(', ')
+              : null)
+        } catch {
+          spotifyIsrc = null
+        }
       }
-    }
 
-    if (!spotifyIsrc) {
-      results.push({ spotifyTrackId, status: 'skipped', reason: 'missing_isrc' })
-      skipped += 1
-      continue
-    }
-
-    try {
-      const musoDetails = await getTrackDetailsByIsrc(spotifyIsrc)
-      const previewUrl = musoDetails?.spotifyPreviewUrl || null
-      if (!previewUrl) {
-        results.push({ spotifyTrackId, status: 'skipped', reason: 'no_preview', isrc: spotifyIsrc })
+      if (!spotifyIsrc) {
+        results.push({ spotifyTrackId, status: 'skipped', reason: 'missing_isrc' })
         skipped += 1
         continue
       }
 
-      await computeBpmFromPreviewUrl({
-        spotifyTrackId,
-        previewUrl,
-        source: 'muso_spotify_preview',
-        previewIsrc: spotifyIsrc,
-        previewTitle: musoDetails?.title || spotifyTitle || null,
-        previewArtist: Array.isArray(musoDetails?.artists)
-          ? musoDetails?.artists?.map((artist) => artist?.name).filter(Boolean).join(', ')
-          : spotifyArtist || null,
-        request,
-      })
+      try {
+        const musoDetails = await getTrackDetailsByIsrc(spotifyIsrc)
+        const previewUrl = musoDetails?.spotifyPreviewUrl || null
+        if (!previewUrl) {
+          results.push({ spotifyTrackId, status: 'skipped', reason: 'no_preview', isrc: spotifyIsrc })
+          skipped += 1
+          continue
+        }
 
-      await query(
-        `UPDATE track_bpm_cache
-            SET isrc_mismatch = false,
-                isrc_mismatch_review_status = 'match',
-                isrc_mismatch_reviewed_by = $2,
-                isrc_mismatch_reviewed_at = NOW()
-          WHERE spotify_track_id = $1`,
-        [spotifyTrackId, reviewerId]
-      )
+        await computeBpmFromPreviewUrl({
+          spotifyTrackId,
+          previewUrl,
+          source: 'muso_spotify_preview',
+          previewIsrc: spotifyIsrc,
+          previewTitle: musoDetails?.title || spotifyTitle || null,
+          previewArtist: Array.isArray(musoDetails?.artists)
+            ? musoDetails?.artists?.map((artist) => artist?.name).filter(Boolean).join(', ')
+            : spotifyArtist || null,
+          request,
+        })
 
-      results.push({ spotifyTrackId, status: 'resolved', previewUrl, isrc: spotifyIsrc })
-      resolved += 1
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'failed'
-      results.push({ spotifyTrackId, status: 'failed', reason: message, isrc: spotifyIsrc })
+        await query(
+          `UPDATE track_bpm_cache
+              SET isrc_mismatch = false,
+                  isrc_mismatch_review_status = 'match',
+                  isrc_mismatch_reviewed_by = $2,
+                  isrc_mismatch_reviewed_at = NOW()
+            WHERE spotify_track_id = $1`,
+          [spotifyTrackId, reviewerId]
+        )
+
+        results.push({ spotifyTrackId, status: 'resolved', previewUrl, isrc: spotifyIsrc })
+        resolved += 1
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'failed'
+        results.push({ spotifyTrackId, status: 'failed', reason: message, isrc: spotifyIsrc })
+      }
     }
   }
+
+  await Promise.all(Array.from({ length: Math.min(limitConcurrency, rows.length) }, worker))
 
   return NextResponse.json({
     processed: rows.length,

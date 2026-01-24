@@ -451,80 +451,96 @@ async function resolvePreviewUrl(params: {
   
   const urls: PreviewUrlEntry[] = []
   
-  // 1. Try Deezer ISRC lookup (most accurate)
-  if (isrc) {
-    try {
-      const deezerIsrcUrl = `https://api.deezer.com/track/isrc:${encodeURIComponent(isrc)}`
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 5000)
-      
-      try {
-        const response = await fetch(deezerIsrcUrl, {
-          signal: controller.signal,
-        })
-        clearTimeout(timeoutId)
-        
-        if (response.ok) {
-          const trackData = await response.json() as any
-          if (trackData.id && trackData.preview) {
-            urls.push({
-              url: trackData.preview,
-              successful: true,
-              isrc: trackData.isrc,
-              title: trackData.title,
-              artist: trackData.artist?.name,
-              provider: 'deezer_isrc',
+  const deezerPromise = isrc
+    ? (async () => {
+        try {
+          const deezerIsrcUrl = `https://api.deezer.com/track/isrc:${encodeURIComponent(isrc)}`
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 5000)
+          
+          try {
+            const response = await fetch(deezerIsrcUrl, {
+              signal: controller.signal,
             })
-            return { 
-              url: trackData.preview, 
-              source: 'deezer_isrc', 
-              urls,
-              isrcMismatch: false // ISRC lookup is always accurate
+            clearTimeout(timeoutId)
+            
+            if (response.ok) {
+              const trackData = await response.json() as any
+              if (trackData.id && trackData.preview) {
+                return {
+                  url: trackData.preview,
+                  successful: true,
+                  isrc: trackData.isrc,
+                  title: trackData.title,
+                  artist: trackData.artist?.name,
+                  provider: 'deezer_isrc' as const,
+                }
+              }
+            }
+          } catch (error) {
+            clearTimeout(timeoutId)
+            throw error
+          }
+        } catch (error) {
+          logError(error, {
+            component: 'bpm.resolvePreviewUrl',
+            isrc,
+            action: 'deezer_isrc_lookup'
+          })
+        }
+        return null
+      })()
+    : null
+
+  const musoPromise = isrc && hasMusoApiKey()
+    ? (async () => {
+        try {
+          const details = await getTrackDetailsByIsrc(isrc)
+          if (details?.spotifyPreviewUrl) {
+            const artistName = Array.isArray(details.artists)
+              ? details.artists.map((artist) => artist?.name).filter(Boolean).join(', ')
+              : artists
+            return {
+              url: details.spotifyPreviewUrl,
+              successful: true,
+              isrc,
+              title: details.title || title,
+              artist: artistName || artists,
+              provider: 'muso_spotify' as const,
             }
           }
+        } catch (error) {
+          logError(error, {
+            component: 'bpm.resolvePreviewUrl',
+            isrc,
+            action: 'muso_isrc_lookup',
+          })
         }
-      } catch (error) {
-        clearTimeout(timeoutId)
-        throw error
-      }
-    } catch (error) {
-      logError(error, {
-        component: 'bpm.resolvePreviewUrl',
-        isrc,
-        action: 'deezer_isrc_lookup'
-      })
+        return null
+      })()
+    : null
+
+  // 1. Try Deezer ISRC lookup (most accurate)
+  const deezerEntry = deezerPromise ? await deezerPromise : null
+  if (deezerEntry) {
+    urls.push(deezerEntry)
+    return { 
+      url: deezerEntry.url, 
+      source: 'deezer_isrc', 
+      urls,
+      isrcMismatch: false // ISRC lookup is always accurate
     }
   }
 
   // 2. Try Muso ISRC lookup (Spotify preview URL)
-  if (isrc && hasMusoApiKey()) {
-    try {
-      const details = await getTrackDetailsByIsrc(isrc)
-      if (details?.spotifyPreviewUrl) {
-        const artistName = Array.isArray(details.artists)
-          ? details.artists.map((artist) => artist?.name).filter(Boolean).join(', ')
-          : artists
-        urls.push({
-          url: details.spotifyPreviewUrl,
-          successful: true,
-          isrc,
-          title: details.title || title,
-          artist: artistName || artists,
-          provider: 'muso_spotify',
-        })
-        return {
-          url: details.spotifyPreviewUrl,
-          source: 'muso_spotify',
-          urls,
-          isrcMismatch: false,
-        }
-      }
-    } catch (error) {
-      logError(error, {
-        component: 'bpm.resolvePreviewUrl',
-        isrc,
-        action: 'muso_isrc_lookup',
-      })
+  const musoEntry = musoPromise ? await musoPromise : null
+  if (musoEntry) {
+    urls.push(musoEntry)
+    return {
+      url: musoEntry.url,
+      source: 'muso_spotify',
+      urls,
+      isrcMismatch: false,
     }
   }
 
@@ -717,7 +733,8 @@ async function computeBpmFromService(previewUrl: string): Promise<{
     
     // Step 2: Poll /batch/{batch_id} until completed
     const maxWaitTime = 120000 // 120 seconds max (2 minutes, matching timeout)
-    const pollInterval = 1000 // Poll every 1 second
+    let pollInterval = 500
+    const maxPollInterval = 2000
     const startTime = Date.now()
     
     let batchStatus: {
@@ -768,6 +785,7 @@ async function computeBpmFromService(previewUrl: string): Promise<{
       
       // Wait before next poll
       await new Promise(resolve => setTimeout(resolve, pollInterval))
+      pollInterval = Math.min(maxPollInterval, Math.floor(pollInterval * 1.4))
     }
     
     clearTimeout(timeoutId)
@@ -980,7 +998,8 @@ export async function prepareBpmStreamingBatch(params: {
     isrcMismatch?: boolean
   }> = {}
 
-  const batchSize = 5
+  const parsedBatchSize = Number.parseInt(process.env.BPM_STREAM_BATCH_SIZE || '5', 10)
+  const batchSize = Number.isFinite(parsedBatchSize) && parsedBatchSize > 0 ? parsedBatchSize : 5
   for (let i = 0; i < spotifyTrackIds.length; i += batchSize) {
     const batch = spotifyTrackIds.slice(i, i + batchSize)
     const batchResults = await Promise.all(

@@ -15,8 +15,8 @@ interface PlaylistCacheRecord {
  * - cached_at: when it was cached
  * Returns playlists in Spotify's original order
  */
-export async function getPlaylistsWithMetadata() {
-  const playlists = await getPlaylists()
+export async function getPlaylistsWithMetadata(options?: { includeFollowers?: boolean }) {
+  const playlists = await getPlaylists({ includeFollowers: options?.includeFollowers ?? false })
 
   if (playlists.length === 0) {
     return playlists
@@ -57,4 +57,3 @@ export async function getPlaylistsWithMetadata() {
 
   return playlistsWithMetadata
 }
-

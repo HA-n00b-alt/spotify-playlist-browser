@@ -53,7 +53,7 @@ export default async function PlaylistsPage() {
   let playlists: Playlist[] = []
   let error: string | null = null
   try {
-    playlists = await getPlaylistsWithMetadata() as Playlist[]
+    playlists = await getPlaylistsWithMetadata({ includeFollowers: false }) as Playlist[]
   } catch (e) {
     if (e instanceof Error) {
       // Handle forbidden (403) specifically

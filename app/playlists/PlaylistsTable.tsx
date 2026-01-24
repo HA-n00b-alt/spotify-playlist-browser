@@ -87,6 +87,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [lastVisitTimestamp, setLastVisitTimestamp] = useState<number | null>(null)
   const [playlistHeaderName, setPlaylistHeaderName] = useState<string | null>(null)
+  const [followersLoaded, setFollowersLoaded] = useState(false)
   
   const STORAGE_KEY_LAST_VISIT = 'playlist_last_visit'
 
@@ -159,7 +160,7 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
   const handleRefresh = async () => {
     setIsRefreshing(true)
     try {
-      const response = await fetch('/api/playlists?refresh=true')
+      const response = await fetch(`/api/playlists?refresh=true&includeFollowers=${followersLoaded ? 'true' : 'false'}`)
       if (response.ok) {
         const refreshedPlaylists = await response.json()
         setPlaylists(refreshedPlaylists)
@@ -173,6 +174,30 @@ export default function PlaylistsTable({ playlists: initialPlaylists }: Playlist
       setIsRefreshing(false)
     }
   }
+
+  useEffect(() => {
+    if (sortField !== 'followers' || followersLoaded) {
+      return
+    }
+    const missingFollowers = playlists.some((playlist) => playlist.followers?.total == null)
+    if (!missingFollowers) {
+      setFollowersLoaded(true)
+      return
+    }
+    const loadFollowers = async () => {
+      try {
+        const response = await fetch('/api/playlists?includeFollowers=true')
+        if (response.ok) {
+          const updatedPlaylists = await response.json()
+          setPlaylists(updatedPlaylists)
+          setFollowersLoaded(true)
+        }
+      } catch {
+        // Ignore follower hydration errors.
+      }
+    }
+    void loadFollowers()
+  }, [sortField, followersLoaded, playlists])
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
