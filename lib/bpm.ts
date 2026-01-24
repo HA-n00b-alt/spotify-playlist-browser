@@ -468,7 +468,7 @@ async function resolvePreviewUrl(params: {
           const trackData = await response.json() as any
           if (trackData.id && trackData.preview) {
             urls.push({
-              url: deezerIsrcUrl,
+              url: trackData.preview,
               successful: true,
               isrc: trackData.isrc,
               title: trackData.title,
@@ -476,7 +476,7 @@ async function resolvePreviewUrl(params: {
               provider: 'deezer_isrc',
             })
             return { 
-              url: deezerIsrcUrl, 
+              url: trackData.preview, 
               source: 'deezer_isrc', 
               urls,
               isrcMismatch: false // ISRC lookup is always accurate
