@@ -28,6 +28,7 @@ export default function IsrcDebugClient() {
   const [loadingTracks, setLoadingTracks] = useState(false)
   const [musoLoading, setMusoLoading] = useState(false)
   const [musoLogs, setMusoLogs] = useState<any[]>([])
+  const [musoSummary, setMusoSummary] = useState<{ missingCount: number; updated: boolean } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -54,6 +55,7 @@ export default function IsrcDebugClient() {
     if (!selectedId) {
       setTracks([])
       setMusoLogs([])
+      setMusoSummary(null)
       return
     }
     const loadTracks = async () => {
@@ -79,6 +81,8 @@ export default function IsrcDebugClient() {
     if (!selectedId) return
     setMusoLoading(true)
     setError(null)
+    setMusoLogs([])
+    setMusoSummary(null)
     try {
       const res = await fetch('/api/admin/isrc-debug/muso-enrich', {
         method: 'POST',
@@ -90,6 +94,9 @@ export default function IsrcDebugClient() {
         throw new Error(data?.error || 'Failed to run Muso enrichment')
       }
       setMusoLogs(Array.isArray(data?.logs) ? data.logs : [])
+      if (typeof data?.missingCount === 'number') {
+        setMusoSummary({ missingCount: data.missingCount, updated: Boolean(data.updated) })
+      }
       const refreshed = await fetch(`/api/playlists/${encodeURIComponent(selectedId)}/tracks?includeMissingIsrc=true`)
       if (refreshed.ok) {
         const refreshedTracks = await refreshed.json()
@@ -221,10 +228,15 @@ export default function IsrcDebugClient() {
           </div>
           <div className="text-xs text-gray-500">
             {musoLogs.length} entries
+            {musoSummary ? ` • Missing: ${musoSummary.missingCount} • Updated: ${musoSummary.updated ? 'yes' : 'no'}` : ''}
           </div>
         </div>
         {musoLogs.length === 0 ? (
-          <div className="mt-4 text-sm text-gray-500">Run the Muso search to populate logs.</div>
+          <div className="mt-4 text-sm text-gray-500">
+            {musoSummary
+              ? 'No Muso logs returned. This can happen if there are no missing ISRC tracks or Muso returned no candidates.'
+              : 'Run the Muso search to populate logs.'}
+          </div>
         ) : (
           <div className="mt-4 space-y-3">
             {musoLogs.map((log, index) => (
