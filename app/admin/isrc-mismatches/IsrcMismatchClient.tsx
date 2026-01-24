@@ -460,10 +460,14 @@ export default function IsrcMismatchClient() {
     }
 
     const bpmManualRaw = manualBpm.trim()
-    const bpmManualValue = bpmManualRaw ? Number(bpmManualRaw) : undefined
-    if (bpmManualRaw && (!Number.isFinite(bpmManualValue) || bpmManualValue <= 0)) {
-      setSongSearchError('Manual BPM must be a positive number.')
-      return
+    let bpmManualValue: number | undefined
+    if (bpmManualRaw) {
+      const parsed = Number(bpmManualRaw)
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        setSongSearchError('Manual BPM must be a positive number.')
+        return
+      }
+      bpmManualValue = parsed
     }
 
     if ((manualKey.trim() && !manualScale.trim()) || (!manualKey.trim() && manualScale.trim())) {
