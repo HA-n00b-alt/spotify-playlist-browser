@@ -52,6 +52,7 @@ export const GET = withApiLogging(async (
     }
     
     const tracks = await getPlaylistTracks(params.id, !forceRefresh)
+    const missingIsrc = tracks.filter((track: any) => !track?.external_ids?.isrc).length
     const filteredTracks = tracks.filter((track: any) => track?.external_ids?.isrc)
     
     // Return with cache info in headers
@@ -63,6 +64,7 @@ export const GET = withApiLogging(async (
     } else {
       response.headers.set('X-Cached', 'false')
     }
+    response.headers.set('X-ISRC-Missing', String(missingIsrc))
     
     return response
   } catch (error) {

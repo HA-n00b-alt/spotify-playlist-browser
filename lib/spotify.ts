@@ -704,6 +704,18 @@ async function ensureTracksHaveIsrcs(playlistId: string, tracks: any[]): Promise
   const limitConcurrency = Number.isFinite(concurrency) && concurrency > 0 ? concurrency : 3
   let index = 0
   let updated = false
+  const debug = process.env.MUSO_ISRC_DEBUG === 'true'
+  const missingCount = missing.length
+
+  if (debug) {
+    logInfo('Muso ISRC enrichment starting', {
+      component: 'spotify.ensureTracksHaveIsrcs',
+      playlistId,
+      missingCount,
+      totalTracks: tracks.length,
+      concurrency: limitConcurrency,
+    })
+  }
 
   const worker = async () => {
     while (index < missing.length) {
@@ -739,6 +751,24 @@ async function ensureTracksHaveIsrcs(playlistId: string, tracks: any[]): Promise
         if (isrc) {
           track.external_ids = { ...(track.external_ids || {}), isrc }
           updated = true
+          if (debug) {
+            logInfo('Muso ISRC match found', {
+              component: 'spotify.ensureTracksHaveIsrcs',
+              playlistId,
+              trackName: title,
+              artist,
+              isrc,
+              matchType: match ? 'title_artist' : 'fallback',
+            })
+          }
+        } else if (debug) {
+          logInfo('Muso ISRC match not found', {
+            component: 'spotify.ensureTracksHaveIsrcs',
+            playlistId,
+            trackName: title,
+            artist,
+            candidates: candidates.length,
+          })
         }
       } catch {
         // Ignore Muso lookup failures for individual tracks.
@@ -750,6 +780,15 @@ async function ensureTracksHaveIsrcs(playlistId: string, tracks: any[]): Promise
 
   if (updated) {
     await updatePlaylistTracksCache(playlistId, tracks)
+  }
+
+  if (debug) {
+    logInfo('Muso ISRC enrichment completed', {
+      component: 'spotify.ensureTracksHaveIsrcs',
+      playlistId,
+      missingCount,
+      updated,
+    })
   }
 
   return tracks
