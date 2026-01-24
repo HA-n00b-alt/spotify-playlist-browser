@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef, useMemo } from 'react'
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import type { MouseEvent } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'

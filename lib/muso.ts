@@ -219,6 +219,43 @@ export async function searchProfilesByName(
   return { items, totalCount: items.length, raw: options?.debug ? payload : undefined }
 }
 
+export async function searchTracksByKeyword(
+  keyword: string,
+  options?: { limit?: number; offset?: number; debug?: boolean }
+): Promise<{ items: MusoTrackDetails[]; totalCount: number; raw?: unknown }> {
+  const payload = await musoFetch<
+    MusoResponse<{
+      tracks?: { total?: number; items?: MusoTrackDetails[] }
+      items?: MusoTrackDetails[]
+      results?: MusoTrackDetails[]
+    }> | MusoTrackDetails[]
+  >('/search', {
+    method: 'POST',
+    body: JSON.stringify({
+      keyword,
+      type: ['track'],
+      limit: typeof options?.limit === 'number' ? options.limit : 5,
+      offset: typeof options?.offset === 'number' ? options.offset : 0,
+    }),
+  })
+  if (Array.isArray(payload)) {
+    return { items: payload, totalCount: payload.length, raw: options?.debug ? payload : undefined }
+  }
+  const data = payload?.data
+  if (Array.isArray(data)) {
+    return { items: data, totalCount: data.length, raw: options?.debug ? payload : undefined }
+  }
+  if (Array.isArray(data?.tracks?.items)) {
+    return {
+      items: data.tracks.items,
+      totalCount: typeof data.tracks.total === 'number' ? data.tracks.total : data.tracks.items.length,
+      raw: options?.debug ? payload : undefined,
+    }
+  }
+  const items = (data?.items || data?.results || []) as MusoTrackDetails[]
+  return { items, totalCount: items.length, raw: options?.debug ? payload : undefined }
+}
+
 export async function listProfileCredits(params: {
   profileId: string
   credits?: string[]

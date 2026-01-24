@@ -52,9 +52,10 @@ export const GET = withApiLogging(async (
     }
     
     const tracks = await getPlaylistTracks(params.id, !forceRefresh)
+    const filteredTracks = tracks.filter((track: any) => track?.external_ids?.isrc)
     
     // Return with cache info in headers
-    const response = NextResponse.json(tracks)
+    const response = NextResponse.json(filteredTracks)
     if (isCached && cacheInfo) {
       response.headers.set('X-Cached', 'true')
       response.headers.set('X-Snapshot-Id', cacheInfo.snapshotId)

@@ -9,6 +9,7 @@ import {
 } from './errors'
 import { logError, logWarning, logInfo } from './logger'
 import { incrementExternalApiUsage } from './externalApiUsage'
+import { hasMusoApiKey, searchTracksByKeyword } from './muso'
 
 interface SpotifyError {
   error: {
@@ -613,6 +614,7 @@ async function refreshPlaylistCache(playlistId: string): Promise<PlaylistCacheEn
   const refreshPromise = (async () => {
     const playlist = await makeSpotifyRequest<any>(`/playlists/${playlistId}`)
     const tracks = await getPlaylistTracksInternal(playlistId)
+    await ensureTracksHaveIsrcs(playlistId, tracks)
     const snapshotId = playlist?.snapshot_id || ''
     if (snapshotId) {
       await cachePlaylist(playlistId, snapshotId, playlist, tracks)
@@ -665,6 +667,92 @@ async function cachePlaylist(
     })
     // Don't throw - caching is optional
   }
+}
+
+async function updatePlaylistTracksCache(playlistId: string, tracksData: any[]): Promise<void> {
+  try {
+    await query(
+      `UPDATE playlist_cache
+       SET tracks_data = $1::jsonb,
+           updated_at = NOW()
+       WHERE playlist_id = $2`,
+      [JSON.stringify(tracksData), playlistId]
+    )
+  } catch (error) {
+    logError(error, {
+      component: 'spotify.updatePlaylistTracksCache',
+      playlistId,
+    })
+  }
+}
+
+function normalizeMatchValue(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+}
+
+async function ensureTracksHaveIsrcs(playlistId: string, tracks: any[]): Promise<any[]> {
+  if (!hasMusoApiKey()) return tracks
+
+  const missing = tracks.filter((track) => {
+    if (!track || track.is_local) return false
+    const isrc = track.external_ids?.isrc
+    return !isrc
+  })
+  if (missing.length === 0) return tracks
+
+  const concurrency = Number.parseInt(process.env.MUSO_TRACK_SEARCH_CONCURRENCY || '3', 10)
+  const limitConcurrency = Number.isFinite(concurrency) && concurrency > 0 ? concurrency : 3
+  let index = 0
+  let updated = false
+
+  const worker = async () => {
+    while (index < missing.length) {
+      const track = missing[index]
+      index += 1
+      const title = typeof track?.name === 'string' ? track.name : ''
+      const artist = Array.isArray(track?.artists)
+        ? track.artists.map((artist: any) => artist?.name).filter(Boolean).join(', ')
+        : ''
+      if (!title || !artist) continue
+
+      try {
+        const keyword = `${title} ${artist}`.trim()
+        const results = await searchTracksByKeyword(keyword, { limit: 5 })
+        const candidates = results.items || []
+        const normalizedTitle = normalizeMatchValue(title)
+        const normalizedArtist = normalizeMatchValue(artist)
+        const match = candidates.find((candidate) => {
+          const candidateTitle = normalizeMatchValue(candidate?.title || '')
+          const candidateArtist = normalizeMatchValue(
+            Array.isArray(candidate?.artists)
+              ? candidate.artists.map((entry) => entry?.name).filter(Boolean).join(', ')
+              : ''
+          )
+          const hasIsrc = Array.isArray(candidate?.isrcs) && candidate.isrcs.length > 0
+          return hasIsrc && candidateTitle.includes(normalizedTitle) && candidateArtist.includes(normalizedArtist)
+        })
+        const fallback = candidates.find(
+          (candidate) => Array.isArray(candidate?.isrcs) && candidate.isrcs.length > 0
+        )
+        const selected = match || fallback
+        const isrc = selected?.isrcs?.[0]
+        if (isrc) {
+          track.external_ids = { ...(track.external_ids || {}), isrc }
+          updated = true
+        }
+      } catch {
+        // Ignore Muso lookup failures for individual tracks.
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(limitConcurrency, missing.length) }, worker))
+
+  if (updated) {
+    await updatePlaylistTracksCache(playlistId, tracks)
+  }
+
+  return tracks
 }
 
 export async function getPlaylist(playlistId: string, useCache = true): Promise<any> {
@@ -752,7 +840,7 @@ export async function getPlaylistTracks(playlistId: string, useCache = true): Pr
           cache: 'hit',
           reason: 'ttl_fresh',
         })
-        return cached.tracks
+        return await ensureTracksHaveIsrcs(playlistId, cached.tracks)
       }
 
       const currentSnapshot = await getPlaylistSnapshot(playlistId)
@@ -761,7 +849,7 @@ export async function getPlaylistTracks(playlistId: string, useCache = true): Pr
           component: 'spotify.getPlaylistTracks',
           playlistId,
         })
-        return cached.tracks
+        return await ensureTracksHaveIsrcs(playlistId, cached.tracks)
       }
 
       if (currentSnapshot === cached.snapshotId) {
@@ -770,7 +858,7 @@ export async function getPlaylistTracks(playlistId: string, useCache = true): Pr
           playlistId,
           cache: 'hit',
         })
-        return cached.tracks
+        return await ensureTracksHaveIsrcs(playlistId, cached.tracks)
       }
 
       logInfo(`Playlist ${playlistId} snapshot changed, refreshing cache`, {
