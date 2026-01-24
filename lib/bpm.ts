@@ -922,53 +922,122 @@ async function storeInCache(params: {
   // Convert urls array to JSON for storage
   const urlsJson = urls && urls.length > 0 ? JSON.stringify(urls) : null
 
-  // Insert or update the record
-  await query(
-    `INSERT INTO track_bpm_cache 
-     (spotify_track_id, isrc, artist, title, 
-      bpm_essentia, bpm_raw_essentia, bpm_confidence_essentia,
-      bpm_librosa, bpm_raw_librosa, bpm_confidence_librosa,
-      key_essentia, scale_essentia, keyscale_confidence_essentia,
-      key_librosa, scale_librosa, keyscale_confidence_librosa,
-      bpm_selected, bpm_manual, key_selected, key_manual, scale_manual,
-      source, error, urls, isrc_mismatch, 
-      debug_txt, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24::jsonb, $25, $26, NOW())
-     ON CONFLICT (spotify_track_id) DO UPDATE SET
-       isrc = COALESCE(EXCLUDED.isrc, track_bpm_cache.isrc),
-       artist = EXCLUDED.artist,
-       title = EXCLUDED.title,
-       bpm_essentia = COALESCE(EXCLUDED.bpm_essentia, track_bpm_cache.bpm_essentia),
-       bpm_raw_essentia = COALESCE(EXCLUDED.bpm_raw_essentia, track_bpm_cache.bpm_raw_essentia),
-       bpm_confidence_essentia = COALESCE(EXCLUDED.bpm_confidence_essentia, track_bpm_cache.bpm_confidence_essentia),
-       bpm_librosa = COALESCE(EXCLUDED.bpm_librosa, track_bpm_cache.bpm_librosa),
-       bpm_raw_librosa = COALESCE(EXCLUDED.bpm_raw_librosa, track_bpm_cache.bpm_raw_librosa),
-       bpm_confidence_librosa = COALESCE(EXCLUDED.bpm_confidence_librosa, track_bpm_cache.bpm_confidence_librosa),
-       key_essentia = COALESCE(EXCLUDED.key_essentia, track_bpm_cache.key_essentia),
-       scale_essentia = COALESCE(EXCLUDED.scale_essentia, track_bpm_cache.scale_essentia),
-       keyscale_confidence_essentia = COALESCE(EXCLUDED.keyscale_confidence_essentia, track_bpm_cache.keyscale_confidence_essentia),
-       key_librosa = COALESCE(EXCLUDED.key_librosa, track_bpm_cache.key_librosa),
-       scale_librosa = COALESCE(EXCLUDED.scale_librosa, track_bpm_cache.scale_librosa),
-       keyscale_confidence_librosa = COALESCE(EXCLUDED.keyscale_confidence_librosa, track_bpm_cache.keyscale_confidence_librosa),
-       bpm_selected = COALESCE(EXCLUDED.bpm_selected, track_bpm_cache.bpm_selected, 'essentia'),
-       key_selected = COALESCE(EXCLUDED.key_selected, track_bpm_cache.key_selected, 'essentia'),
-       source = EXCLUDED.source,
-       error = EXCLUDED.error,
-       urls = COALESCE(EXCLUDED.urls, track_bpm_cache.urls),
-       isrc_mismatch = EXCLUDED.isrc_mismatch,
-       debug_txt = COALESCE(EXCLUDED.debug_txt, track_bpm_cache.debug_txt),
-       updated_at = NOW()`,
-    [
-      spotifyTrackId, isrc, artist, title,
-      bpmEssentia, bpmRawEssentia, bpmConfidenceEssentia,
-      bpmLibrosa, bpmRawLibrosa, bpmConfidenceLibrosa,
-      keyEssentia, scaleEssentia, keyscaleConfidenceEssentia,
-      keyLibrosa, scaleLibrosa, keyscaleConfidenceLibrosa,
-      finalBpmSelected, bpmManual, finalKeySelected, keyManual, scaleManual,
-      source, error, urlsJson, isrcMismatch,
-      debugTxt
-    ]
-  )
+  const runInsert = async (isrcValue: string | null, errorValue: string | null, debugValue?: string | null) => {
+    await query(
+      `INSERT INTO track_bpm_cache 
+       (spotify_track_id, isrc, artist, title, 
+        bpm_essentia, bpm_raw_essentia, bpm_confidence_essentia,
+        bpm_librosa, bpm_raw_librosa, bpm_confidence_librosa,
+        key_essentia, scale_essentia, keyscale_confidence_essentia,
+        key_librosa, scale_librosa, keyscale_confidence_librosa,
+        bpm_selected, bpm_manual, key_selected, key_manual, scale_manual,
+        source, error, urls, isrc_mismatch, 
+        debug_txt, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24::jsonb, $25, $26, NOW())
+       ON CONFLICT (spotify_track_id) DO UPDATE SET
+         isrc = COALESCE(EXCLUDED.isrc, track_bpm_cache.isrc),
+         artist = EXCLUDED.artist,
+         title = EXCLUDED.title,
+         bpm_essentia = COALESCE(EXCLUDED.bpm_essentia, track_bpm_cache.bpm_essentia),
+         bpm_raw_essentia = COALESCE(EXCLUDED.bpm_raw_essentia, track_bpm_cache.bpm_raw_essentia),
+         bpm_confidence_essentia = COALESCE(EXCLUDED.bpm_confidence_essentia, track_bpm_cache.bpm_confidence_essentia),
+         bpm_librosa = COALESCE(EXCLUDED.bpm_librosa, track_bpm_cache.bpm_librosa),
+         bpm_raw_librosa = COALESCE(EXCLUDED.bpm_raw_librosa, track_bpm_cache.bpm_raw_librosa),
+         bpm_confidence_librosa = COALESCE(EXCLUDED.bpm_confidence_librosa, track_bpm_cache.bpm_confidence_librosa),
+         key_essentia = COALESCE(EXCLUDED.key_essentia, track_bpm_cache.key_essentia),
+         scale_essentia = COALESCE(EXCLUDED.scale_essentia, track_bpm_cache.scale_essentia),
+         keyscale_confidence_essentia = COALESCE(EXCLUDED.keyscale_confidence_essentia, track_bpm_cache.keyscale_confidence_essentia),
+         key_librosa = COALESCE(EXCLUDED.key_librosa, track_bpm_cache.key_librosa),
+         scale_librosa = COALESCE(EXCLUDED.scale_librosa, track_bpm_cache.scale_librosa),
+         keyscale_confidence_librosa = COALESCE(EXCLUDED.keyscale_confidence_librosa, track_bpm_cache.keyscale_confidence_librosa),
+         bpm_selected = COALESCE(EXCLUDED.bpm_selected, track_bpm_cache.bpm_selected, 'essentia'),
+         key_selected = COALESCE(EXCLUDED.key_selected, track_bpm_cache.key_selected, 'essentia'),
+         source = EXCLUDED.source,
+         error = EXCLUDED.error,
+         urls = COALESCE(EXCLUDED.urls, track_bpm_cache.urls),
+         isrc_mismatch = EXCLUDED.isrc_mismatch,
+         debug_txt = COALESCE(EXCLUDED.debug_txt, track_bpm_cache.debug_txt),
+         updated_at = NOW()`,
+      [
+        spotifyTrackId, isrcValue, artist, title,
+        bpmEssentia, bpmRawEssentia, bpmConfidenceEssentia,
+        bpmLibrosa, bpmRawLibrosa, bpmConfidenceLibrosa,
+        keyEssentia, scaleEssentia, keyscaleConfidenceEssentia,
+        keyLibrosa, scaleLibrosa, keyscaleConfidenceLibrosa,
+        finalBpmSelected, bpmManual, finalKeySelected, keyManual, scaleManual,
+        source, errorValue, urlsJson, isrcMismatch,
+        debugValue ?? debugTxt
+      ]
+    )
+  }
+
+  try {
+    await runInsert(isrc, error, debugTxt)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    if (message.includes('track_bpm_cache_isrc_key') && isrc) {
+      await query(
+        `UPDATE track_bpm_cache
+         SET spotify_track_id = $1,
+             artist = $2,
+             title = $3,
+             bpm_essentia = COALESCE($4, track_bpm_cache.bpm_essentia),
+             bpm_raw_essentia = COALESCE($5, track_bpm_cache.bpm_raw_essentia),
+             bpm_confidence_essentia = COALESCE($6, track_bpm_cache.bpm_confidence_essentia),
+             bpm_librosa = COALESCE($7, track_bpm_cache.bpm_librosa),
+             bpm_raw_librosa = COALESCE($8, track_bpm_cache.bpm_raw_librosa),
+             bpm_confidence_librosa = COALESCE($9, track_bpm_cache.bpm_confidence_librosa),
+             key_essentia = COALESCE($10, track_bpm_cache.key_essentia),
+             scale_essentia = COALESCE($11, track_bpm_cache.scale_essentia),
+             keyscale_confidence_essentia = COALESCE($12, track_bpm_cache.keyscale_confidence_essentia),
+             key_librosa = COALESCE($13, track_bpm_cache.key_librosa),
+             scale_librosa = COALESCE($14, track_bpm_cache.scale_librosa),
+             keyscale_confidence_librosa = COALESCE($15, track_bpm_cache.keyscale_confidence_librosa),
+             bpm_selected = COALESCE($16, track_bpm_cache.bpm_selected, 'essentia'),
+             bpm_manual = COALESCE($17, track_bpm_cache.bpm_manual),
+             key_selected = COALESCE($18, track_bpm_cache.key_selected, 'essentia'),
+             key_manual = COALESCE($19, track_bpm_cache.key_manual),
+             scale_manual = COALESCE($20, track_bpm_cache.scale_manual),
+             source = $21,
+             error = $22,
+             urls = COALESCE($23::jsonb, track_bpm_cache.urls),
+             isrc_mismatch = $24,
+             debug_txt = COALESCE($25, track_bpm_cache.debug_txt),
+             updated_at = NOW()
+         WHERE isrc = $26`,
+        [
+          spotifyTrackId,
+          artist,
+          title,
+          bpmEssentia,
+          bpmRawEssentia,
+          bpmConfidenceEssentia,
+          bpmLibrosa,
+          bpmRawLibrosa,
+          bpmConfidenceLibrosa,
+          keyEssentia,
+          scaleEssentia,
+          keyscaleConfidenceEssentia,
+          keyLibrosa,
+          scaleLibrosa,
+          keyscaleConfidenceLibrosa,
+          finalBpmSelected,
+          bpmManual,
+          finalKeySelected,
+          keyManual,
+          scaleManual,
+          source,
+          error,
+          urlsJson,
+          isrcMismatch,
+          debugTxt,
+          isrc,
+        ]
+      )
+    } else {
+      throw err
+    }
+  }
 }
 
 export async function prepareBpmStreamingBatch(params: {
