@@ -308,6 +308,8 @@ async function makeSpotifyRequest<T>(endpoint: string, options: RequestInit = {}
 - `GET /api/playlists` - List all playlists
 - `GET /api/playlists/[id]` - Get playlist details
 - `GET /api/playlists/[id]/tracks` - Get playlist tracks
+  - `?includeMissingIsrc=true` returns tracks missing ISRC for debug
+  - Default response filters out tracks without ISRC
 
 **BPM Routes:**
 - `GET /api/bpm?spotifyTrackId=...` - Get BPM for single track
@@ -320,6 +322,7 @@ async function makeSpotifyRequest<T>(endpoint: string, options: RequestInit = {}
 **Utility Routes:**
 - `GET /api/country` - Get country code from IP/locale
 - `GET /api/audio-proxy` - Proxy audio preview URLs
+ - `POST /api/admin/isrc-debug/muso-enrich` - Admin Muso ISRC debug lookup
 
 ### API Response Caching
 
@@ -332,8 +335,9 @@ async function makeSpotifyRequest<T>(endpoint: string, options: RequestInit = {}
 **Server-Side Caching** (Database):
 - Playlist data cached in `playlist_cache` table
 - BPM data cached in `track_bpm_cache` table
-- Cache invalidation via `snapshot_id` (playlists)
+- Cache invalidation via `snapshot_id` + TTL (playlists)
 - Cache TTL: 90 days (BPM)
+ - Playlist TTL is configurable via `PLAYLIST_CACHE_TTL_MS`
 
 ## Database Architecture
 
@@ -361,8 +365,7 @@ async function makeSpotifyRequest<T>(endpoint: string, options: RequestInit = {}
 ```typescript
 // lib/db.ts
 export async function query<T = any>(text: string, params?: any[]): Promise<T[]> {
-  const sqlClient = neon(DATABASE_URL)
-  return sqlClient(text, params || [])
+  return sql(text, params || [])
 }
 ```
 
@@ -380,6 +383,7 @@ Stores BPM, key, scale, and related metadata for tracks.
 - `source` - Data source (deezer_isrc, itunes_search, deezer_search, computed_failed)
 - `urls` - Preview URL tracking with success flag
 - `isrc_mismatch` - Flag for ISRC mismatches
+- `isrc_mismatch_review_status` - Admin review status for mismatches
 
 **Indexes:**
 - `idx_track_bpm_cache_spotify_id` - Primary lookup
@@ -397,8 +401,9 @@ Caches full playlist data to reduce Spotify API calls.
 - `tracks_data` (JSONB) - Full tracks array
 
 **Cache Invalidation:**
-- Compares `snapshot_id` with current playlist snapshot
+- TTL-based freshness with snapshot verification
 - Automatically refreshes if snapshot changed
+- Muso ISRC enrichment can update cached `tracks_data`
 
 ## Caching Strategy
 
@@ -423,7 +428,8 @@ Caches full playlist data to reduce Spotify API calls.
 **Playlist Cache:**
 - Invalidated when `snapshot_id` changes
 - Manual refresh via `?refresh=true` parameter
-- Automatic verification on cache hit
+- TTL-based freshness checks on cache hit
+- Muso ISRC enrichment runs on refresh and cached reads
 
 **BPM Cache:**
 - 90-day TTL
@@ -470,9 +476,10 @@ async function getIdentityToken(serviceUrl: string): Promise<string> {
 
 **Priority Order** (`lib/bpm.ts`):
 1. **Deezer ISRC Lookup** (`deezer_isrc`) - Direct ISRC lookup
-2. **iTunes Search** (`itunes_search`) - Search with ISRC matching
-3. **Deezer Search** (`deezer_search`) - Search fallback
-4. **Failed** (`computed_failed`) - No preview found
+2. **Muso ISRC Lookup** (`muso_spotify`) - Spotify preview URL
+3. **iTunes Search** (`itunes_search`) - Search with ISRC matching
+4. **Deezer Search** (`deezer_search`) - Search fallback
+5. **Failed** (`computed_failed`) - No preview found
 
 **ISRC Matching:**
 - Extracts ISRC from Spotify track data
@@ -491,8 +498,9 @@ async function getIdentityToken(serviceUrl: string): Promise<string> {
 2. Extract identifiers from Spotify
    ├─> ISRC, title, artists, preview URL
        │
-3. Resolve preview URL (Deezer/iTunes)
+3. Resolve preview URL (Deezer/Muso/iTunes)
    ├─> Try Deezer ISRC lookup
+   ├─> Try Muso ISRC lookup
    ├─> Try iTunes search + ISRC match
    └─> Try Deezer search
        │
@@ -895,5 +903,5 @@ lib/
 
 ---
 
-**Last Updated**: January 2025
+**Last Updated**: March 2025
 **Maintained By**: delman@delman.it

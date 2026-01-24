@@ -19,6 +19,7 @@ export default function DocumentationPage() {
               <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Overview</h2>
               <p>
                 Spotify Playlist Tools helps you browse playlists, inspect BPM/key, and view credits in a clean, modern interface.
+                Admin tools support resolving ISRC mismatches, verifying previews, and troubleshooting metadata.
               </p>
             </div>
 
@@ -30,6 +31,8 @@ export default function DocumentationPage() {
                 <li>View BPM/key details with sources.</li>
                 <li>Open tracks, artists, and playlists in Spotify.</li>
                 <li>Fetch song credits (producer, writer, mixer, mastering).</li>
+                <li>Admin review for ISRC mismatches, preview sources, and manual overrides.</li>
+                <li>ISRC enrichment via Muso when Spotify data is missing.</li>
               </ul>
             </div>
 
@@ -42,6 +45,14 @@ export default function DocumentationPage() {
                 <li>Click BPM or Key to open details.</li>
                 <li>Use the track menu for Spotify links or credits.</li>
               </ol>
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">ISRC handling</h3>
+              <p>
+                If Spotify does not provide an ISRC, the app attempts to enrich it via Muso. Tracks still missing ISRC
+                are hidden from the playlist tracklist until resolved.
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -61,7 +72,7 @@ export default function DocumentationPage() {
                 New playlists or newly added tracks may take a few minutes to fully populate while BPM/key calculations run in the background.
               </p>
               <p>
-                Credits are retrieved from MusicBrainz today, and may be incomplete or missing. Additional credit sources will be added in the future.
+                Credits are retrieved from MusicBrainz and Muso when available, and may be incomplete or missing. Additional credit sources will be added in the future.
               </p>
             </div>
           </div>

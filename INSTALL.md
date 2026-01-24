@@ -59,10 +59,21 @@ DATABASE_URL_UNPOOLED=postgresql://user:password@host/database?sslmode=require
 BPM_SERVICE_URL=https://bpm-service-340051416180.europe-west3.run.app
 GCP_SERVICE_ACCOUNT_KEY={"type":"service_account","project_id":"...","private_key_id":"...","private_key":"...","client_email":"...","client_id":"...","auth_uri":"...","token_uri":"...","auth_provider_x509_cert_url":"...","client_x509_cert_url":"..."}
 
+# Muso (Optional but Recommended for ISRC enrichment)
+MUSO_API_KEY=your_muso_api_key_here
+
 # Sentry (Optional but Recommended)
 NEXT_PUBLIC_SENTRY_DSN=https://your-sentry-dsn@sentry.io/project-id
 SENTRY_ORG=your-sentry-org
 SENTRY_PROJECT=spotify-playlist-browser
+
+# Optional Tuning
+PLAYLIST_CACHE_TTL_MS=300000
+SPOTIFY_FOLLOWERS_CONCURRENCY=5
+BPM_STREAM_BATCH_SIZE=5
+MUSO_TRACK_SEARCH_CONCURRENCY=3
+MUSO_RESOLVE_CONCURRENCY=3
+DB_LOG_LEVEL=info
 ```
 
 ### Getting Your Spotify Credentials
@@ -113,6 +124,12 @@ SENTRY_PROJECT=spotify-playlist-browser
 4. Note your organization slug (from the URL: `sentry.io/organizations/{slug}/`)
 5. Note your project slug (from project settings)
 6. Add all three values to your `.env.local` file
+
+### Setting Up Muso (Optional)
+
+1. Get a Muso API key from [muso.ai](https://muso.ai).
+2. Add it to `MUSO_API_KEY` in `.env.local`.
+3. This enables ISRC enrichment and admin ISRC debugging.
 
 ## Step 4: Set Up the Database
 
@@ -169,6 +186,12 @@ The application should now be running at [http://localhost:3000](http://localhos
 - Ensure the BPM service URL is correct
 - Check Google Cloud Console for service account permissions
 
+### Muso Issues
+
+- Verify `MUSO_API_KEY` is set and valid
+- Reduce `MUSO_TRACK_SEARCH_CONCURRENCY` if you hit rate limits
+- Use the admin ISRC debug page to inspect request/response payloads
+
 ### Sentry Issues
 
 - Verify your DSN is correct (must start with `https://`)
@@ -181,4 +204,3 @@ The application should now be running at [http://localhost:3000](http://localhos
 - Read the [README.md](README.md) for more information about features and usage
 - See [DEPLOYMENT.md](DEPLOYMENT.md) for production deployment instructions (if applicable)
 - Configure admin users in your database for analytics access
-
