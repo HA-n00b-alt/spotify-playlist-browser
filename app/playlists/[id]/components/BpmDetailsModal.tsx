@@ -154,7 +154,7 @@ export default function BpmDetailsModal({
   const ghostFieldClass =
     'w-full bg-transparent border-b border-white/5 py-1 text-sm text-white/90 placeholder:text-white/10 outline-none appearance-none [-moz-appearance:_textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
   const manualSelectClass =
-    'bg-transparent border-b border-white/5 px-0 py-1 text-sm text-white/90 outline-none appearance-none'
+    'bg-transparent border-b border-white/5 px-0 py-1 text-sm outline-none appearance-none'
   const recalcScopeForMode = (mode: BpmFallbackOverride): 'bpm' | 'key' | 'both' => {
     if (mode === 'bpm_only' || mode === 'fallback_only_bpm') return 'bpm'
     if (mode === 'key_only' || mode === 'fallback_only_key') return 'key'

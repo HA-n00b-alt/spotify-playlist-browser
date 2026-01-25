@@ -1090,9 +1090,11 @@ export function useBpmAnalysis(tracks: Track[]) {
   useEffect(() => {
     if (showBpmModal && selectedBpmTrack) {
       const fullData = bpmFullData[selectedBpmTrack.id]
-      setState('manualBpm', fullData?.bpmManual ? String(fullData.bpmManual) : '')
-      setState('manualKey', fullData?.keyManual || '')
-      setState('manualScale', fullData?.scaleManual || '')
+      setState('manualBpm', fullData?.bpmSelected === 'manual' && fullData.bpmManual != null
+        ? String(fullData.bpmManual)
+        : '')
+      setState('manualKey', fullData?.keySelected === 'manual' ? (fullData.keyManual || '') : '')
+      setState('manualScale', fullData?.keySelected === 'manual' ? (fullData.scaleManual || '') : '')
     } else {
       setState('manualBpm', '')
       setState('manualKey', '')
