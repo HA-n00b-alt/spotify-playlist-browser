@@ -367,9 +367,9 @@ export function useBpmAnalysis(tracks: Track[]) {
         )
         const keySelected = selectBestKey(
           data.key_essentia,
-          data.key_confidence_essentia,
+          data.keyscale_confidence_essentia,
           data.key_librosa,
-          data.key_confidence_librosa
+          data.keyscale_confidence_librosa
         )
 
         setState('bpmFullData', (prev) => ({
@@ -383,10 +383,10 @@ export function useBpmAnalysis(tracks: Track[]) {
             bpmConfidenceLibrosa: data.bpm_confidence_librosa,
             keyEssentia: data.key_essentia,
             scaleEssentia: data.scale_essentia,
-            keyscaleConfidenceEssentia: data.key_confidence_essentia,
+            keyscaleConfidenceEssentia: data.keyscale_confidence_essentia,
             keyLibrosa: data.key_librosa,
             scaleLibrosa: data.scale_librosa,
-            keyscaleConfidenceLibrosa: data.key_confidence_librosa,
+            keyscaleConfidenceLibrosa: data.keyscale_confidence_librosa,
             bpmSelected,
             keySelected,
             debugTxt: data.debug_txt,
