@@ -132,7 +132,7 @@ const createInitialBpmState = (): BpmState => ({
   recalcStatus: null,
   manualBpm: '',
   manualKey: '',
-  manualScale: 'major',
+  manualScale: '',
   isUpdatingSelection: false,
   showBpmMoreInfo: false,
   countryCode: 'us',
@@ -1090,19 +1090,13 @@ export function useBpmAnalysis(tracks: Track[]) {
   useEffect(() => {
     if (showBpmModal && selectedBpmTrack) {
       const fullData = bpmFullData[selectedBpmTrack.id]
-      if (fullData?.bpmManual) {
-        setState('manualBpm', String(fullData.bpmManual))
-      }
-      if (fullData?.keyManual) {
-        setState('manualKey', fullData.keyManual || '')
-      }
-      if (fullData?.scaleManual) {
-        setState('manualScale', fullData.scaleManual || 'major')
-      }
+      setState('manualBpm', fullData?.bpmManual ? String(fullData.bpmManual) : '')
+      setState('manualKey', fullData?.keyManual || '')
+      setState('manualScale', fullData?.scaleManual || '')
     } else {
       setState('manualBpm', '')
       setState('manualKey', '')
-      setState('manualScale', 'major')
+      setState('manualScale', '')
     }
   }, [showBpmModal, selectedBpmTrack, bpmFullData, setState])
 

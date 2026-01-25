@@ -568,7 +568,7 @@ export default function BpmDetailsModal({
                     <div className="absolute bottom-0 left-0 h-[1px] w-0 bg-emerald-500/50 transition-all duration-500 group-focus-within/select:w-full" />
                   </div>
                   {(manualKey && manualKey !== (bpmModalData.fullData?.keyManual || ''))
-                    || (manualScale && manualScale !== (bpmModalData.fullData?.scaleManual || 'major')) ? (
+                    || (manualScale && manualScale !== (bpmModalData.fullData?.scaleManual || '')) ? (
                     <button
                       onClick={async () => {
                         const key = manualKey || bpmModalData.fullData?.keyManual
