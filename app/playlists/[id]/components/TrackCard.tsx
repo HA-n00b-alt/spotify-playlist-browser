@@ -24,9 +24,12 @@ type TrackCardProps = {
   getPreviewTooltip: (trackId: string) => string
   formatDuration: (durationMs: number) => string
   getYearString: (value: string) => string
-  onTrackClick: (track: Track, event?: MouseEvent) => void | Promise<void>
+  onTrackClick: (
+    track: Track,
+    event?: MouseEvent<Element>,
+    options?: { preventDefault?: boolean; stopPropagation?: boolean; allowInteractiveTarget?: boolean }
+  ) => void | Promise<void>
   onTrackContextMenu: (event: MouseEvent, track: Track) => void
-  onTrackTitleClick: (event: MouseEvent<Element>, track: Track) => void | Promise<void>
   onArtistClick: (event: MouseEvent<HTMLAnchorElement>, artist: Track['artists'][number]) => void
   onArtistContextMenu: (event: MouseEvent, artist: Track['artists'][number]) => void
   onAlbumClick: (event: MouseEvent<HTMLAnchorElement>, album: Track['album']) => void
@@ -54,7 +57,6 @@ export default function TrackCard({
   getYearString,
   onTrackClick,
   onTrackContextMenu,
-  onTrackTitleClick,
   onArtistClick,
   onArtistContextMenu,
   onAlbumClick,
@@ -111,7 +113,7 @@ export default function TrackCard({
             <a
               href="#"
               className="block truncate text-sm font-semibold text-slate-900 dark:text-slate-100 hover:text-emerald-600 hover:underline"
-              onClick={(e) => onTrackTitleClick(e, track)}
+              onClick={(e) => onTrackClick(track, e, { preventDefault: true, stopPropagation: true, allowInteractiveTarget: true })}
               onContextMenu={(e) => onTrackContextMenu(e, track)}
               title={getPreviewTooltip(track.id)}
             >

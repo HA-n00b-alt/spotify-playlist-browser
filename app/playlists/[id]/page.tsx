@@ -328,7 +328,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const {
     playingTrackId,
     handleTrackClick,
-    handleTrackTitleClick,
     getPreviewTooltip,
   } = useAudioPlayer({
     previewUrls,
@@ -1603,7 +1602,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           getYearString={getYearString}
           onTrackClick={handleTrackClick}
           onTrackContextMenu={handleTrackContextMenu}
-          onTrackTitleClick={handleTrackTitleClick}
           onArtistClick={handleArtistClick}
           onArtistContextMenu={handleArtistContextMenu}
           onAlbumClick={handleAlbumClick}
@@ -1641,7 +1639,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           onSort={handleSort}
           onTrackClick={handleTrackClick}
           onTrackContextMenu={handleTrackContextMenu}
-          onTrackTitleClick={handleTrackTitleClick}
           onArtistClick={handleArtistClick}
           onArtistContextMenu={handleArtistContextMenu}
           onAlbumClick={handleAlbumClick}

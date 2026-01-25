@@ -33,9 +33,12 @@ type TrackTableProps = {
   formatDate: (value: string) => string
   getYearString: (value: string) => string
   onSort: (field: SortField) => void
-  onTrackClick: (track: Track, event?: MouseEvent) => void | Promise<void>
+  onTrackClick: (
+    track: Track,
+    event?: MouseEvent<Element>,
+    options?: { preventDefault?: boolean; stopPropagation?: boolean; allowInteractiveTarget?: boolean }
+  ) => void | Promise<void>
   onTrackContextMenu: (event: MouseEvent, track: Track) => void
-  onTrackTitleClick: (event: MouseEvent<Element>, track: Track) => void | Promise<void>
   onArtistClick: (event: MouseEvent<HTMLAnchorElement>, artist: Track['artists'][number]) => void
   onArtistContextMenu: (event: MouseEvent, artist: Track['artists'][number]) => void
   onAlbumClick: (event: MouseEvent<HTMLAnchorElement>, album: Track['album']) => void
@@ -87,7 +90,6 @@ export default function TrackTable({
   onSort,
   onTrackClick,
   onTrackContextMenu,
-  onTrackTitleClick,
   onArtistClick,
   onArtistContextMenu,
   onAlbumClick,
@@ -219,7 +221,6 @@ export default function TrackTable({
                   getYearString={getYearString}
                   onTrackClick={onTrackClick}
                   onTrackContextMenu={onTrackContextMenu}
-                  onTrackTitleClick={onTrackTitleClick}
                   onArtistClick={onArtistClick}
                   onArtistContextMenu={onArtistContextMenu}
                   onAlbumClick={onAlbumClick}

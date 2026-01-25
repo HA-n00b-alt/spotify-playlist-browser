@@ -457,6 +457,14 @@ export function useBpmAnalysis(tracks: Track[]) {
           }
         }
       }
+      if (buffer.trim()) {
+        try {
+          const data = JSON.parse(buffer)
+          await handleStreamResult(data)
+        } catch (err) {
+          console.error('[BPM Client] Error parsing final stream data:', err)
+        }
+      }
     } catch (error) {
       console.error('[BPM Client] Stream error:', error)
       indexToTrackId.forEach((trackId) => {

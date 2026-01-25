@@ -23,9 +23,12 @@ type TrackCardListProps = {
   getPreviewTooltip: (trackId: string) => string
   formatDuration: (durationMs: number) => string
   getYearString: (value: string) => string
-  onTrackClick: (track: Track, event?: MouseEvent) => void | Promise<void>
+  onTrackClick: (
+    track: Track,
+    event?: MouseEvent<Element>,
+    options?: { preventDefault?: boolean; stopPropagation?: boolean; allowInteractiveTarget?: boolean }
+  ) => void | Promise<void>
   onTrackContextMenu: (event: MouseEvent, track: Track) => void
-  onTrackTitleClick: (event: MouseEvent<Element>, track: Track) => void | Promise<void>
   onArtistClick: (event: MouseEvent<HTMLAnchorElement>, artist: Track['artists'][number]) => void
   onArtistContextMenu: (event: MouseEvent, artist: Track['artists'][number]) => void
   onAlbumClick: (event: MouseEvent<HTMLAnchorElement>, album: Track['album']) => void
@@ -52,7 +55,6 @@ export default function TrackCardList({
   getYearString,
   onTrackClick,
   onTrackContextMenu,
-  onTrackTitleClick,
   onArtistClick,
   onArtistContextMenu,
   onAlbumClick,
@@ -83,7 +85,6 @@ export default function TrackCardList({
           getYearString={getYearString}
           onTrackClick={onTrackClick}
           onTrackContextMenu={onTrackContextMenu}
-          onTrackTitleClick={onTrackTitleClick}
           onArtistClick={onArtistClick}
           onArtistContextMenu={onArtistContextMenu}
           onAlbumClick={onAlbumClick}

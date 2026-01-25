@@ -59,38 +59,13 @@ export const GET = withApiLogging(async (
       )
     }
 
-    // Create a new ReadableStream that pipes the Cloud Run response
-    const stream = new ReadableStream({
-      async start(controller) {
-        const reader = streamResponse.body!.getReader()
-        const decoder = new TextDecoder()
-
-        try {
-          while (true) {
-            const { done, value } = await reader.read()
-            
-            if (done) {
-              controller.close()
-              break
-            }
-
-            // Enqueue the chunk to the client
-            controller.enqueue(value)
-          }
-        } catch (error) {
-          controller.error(error)
-        } finally {
-          reader.releaseLock()
-        }
-      },
-    })
-
-    // Return the stream with appropriate headers
-    return new Response(stream, {
+    // Return the stream with headers that encourage incremental delivery.
+    return new Response(streamResponse.body, {
       headers: {
-        'Content-Type': 'application/x-ndjson',
-        'Cache-Control': 'no-cache',
+        'Content-Type': 'application/x-ndjson; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
         'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
       },
     })
   } catch (error) {
