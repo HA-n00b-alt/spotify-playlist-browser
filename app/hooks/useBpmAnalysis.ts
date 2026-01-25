@@ -424,7 +424,24 @@ export function useBpmAnalysis(tracks: Track[]) {
         setState('bpmStreamStatus', (prev) => ({ ...prev, [trackId]: isFinal ? 'final' : 'partial' }))
 
         if (isFinal) {
-          finalizedTracks.add(trackId)
+          if (!finalizedTracks.has(trackId)) {
+            finalizedTracks.add(trackId)
+            if (meta?.source) {
+              try {
+                await fetch('/api/bpm/ingest', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    trackId,
+                    result: data,
+                    previewMeta: meta,
+                  }),
+                })
+              } catch (error) {
+                console.warn('[BPM Client] Failed to ingest BPM result:', error)
+              }
+            }
+          }
           setState('loadingBpmFields', (prev) => {
             const next = new Set(prev)
             next.delete(trackId)
