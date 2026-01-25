@@ -45,7 +45,7 @@ type BpmModalSummary = {
   bpmCandidates: Array<{
     id: 'essentia' | 'librosa'
     label: string
-    value: number
+    value: number | null
     confidence?: number | null
     raw?: number | null
   }>
@@ -381,8 +381,8 @@ export default function BpmDetailsModal({
                           {candidate.label}
                         </div>
                         <div className={`text-[12px] ${isSelected ? 'text-white/60' : 'text-white/50 group-hover:text-white/70'}`}>
-                          {Math.round(candidate.value)} ·{' '}
-                          {candidate.confidence != null
+                          {candidate.value != null ? Math.round(candidate.value) : 'N/A'} ·{' '}
+                          {candidate.value != null && candidate.confidence != null
                             ? `${Math.round(candidate.confidence * 100)}%`
                             : 'n/a'}
                         </div>
@@ -504,8 +504,8 @@ export default function BpmDetailsModal({
                         {candidate.label}
                       </div>
                       <div className={`text-[12px] ${isSelected ? 'text-white/60' : 'text-white/50 group-hover:text-white/70'}`}>
-                        {candidate.key || '—'} ·{' '}
-                        {candidate.confidence != null
+                        {candidate.key ?? 'N/A'} ·{' '}
+                        {candidate.key != null && candidate.confidence != null
                           ? `${Math.round(candidate.confidence * 100)}%`
                           : 'n/a'}
                       </div>

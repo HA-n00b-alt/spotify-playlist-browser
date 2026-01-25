@@ -1103,30 +1103,28 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     const bpmCandidates: Array<{
       id: 'essentia' | 'librosa'
       label: string
-      value: number
+      value: number | null
       confidence?: number | null
       raw?: number | null
     }> = []
     const essentiaValue = toNumber(fullData.bpmEssentia)
-    if (essentiaValue != null) {
-      bpmCandidates.push({
+    const librosaValue = toNumber(fullData.bpmLibrosa)
+    bpmCandidates.push(
+      {
         id: 'essentia',
         label: 'Essentia',
         value: essentiaValue,
         confidence: toNumber(fullData.bpmConfidenceEssentia),
         raw: toNumber(fullData.bpmRawEssentia),
-      })
-    }
-    const librosaValue = toNumber(fullData.bpmLibrosa)
-    if (librosaValue != null) {
-      bpmCandidates.push({
+      },
+      {
         id: 'librosa',
         label: 'Librosa',
         value: librosaValue,
         confidence: toNumber(fullData.bpmConfidenceLibrosa),
         raw: toNumber(fullData.bpmRawLibrosa),
-      })
-    }
+      }
+    )
 
     const keyCandidates: Array<{
       id: 'essentia' | 'librosa'
@@ -1135,24 +1133,22 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       scale: string | null
       confidence?: number | null
     }> = []
-    if (fullData.keyEssentia || fullData.scaleEssentia) {
-      keyCandidates.push({
+    keyCandidates.push(
+      {
         id: 'essentia',
         label: 'Essentia',
         key: fullData.keyEssentia ?? null,
         scale: fullData.scaleEssentia ?? null,
         confidence: fullData.keyscaleConfidenceEssentia ?? null,
-      })
-    }
-    if (fullData.keyLibrosa || fullData.scaleLibrosa) {
-      keyCandidates.push({
+      },
+      {
         id: 'librosa',
         label: 'Librosa',
         key: fullData.keyLibrosa ?? null,
         scale: fullData.scaleLibrosa ?? null,
         confidence: fullData.keyscaleConfidenceLibrosa ?? null,
-      })
-    }
+      }
+    )
 
     const bpmSelectedLabel =
       bpmSelected === 'manual' ? 'Manual' : bpmSelected === 'librosa' ? 'Librosa' : 'Essentia'
@@ -1183,7 +1179,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         ? (toNumber(currentBpm) as number)
         : bpmSelected === 'manual' && toNumber(fullData.bpmManual) != null
           ? (toNumber(fullData.bpmManual) as number)
-          : selectedCandidate?.value ?? bpmCandidates[0]?.value ?? null
+          : selectedCandidate?.value ?? bpmCandidates.find((candidate) => candidate.value != null)?.value ?? null
 
     return {
       bpmCandidates,
