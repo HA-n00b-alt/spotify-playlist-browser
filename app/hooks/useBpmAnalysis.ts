@@ -214,11 +214,35 @@ export function useBpmAnalysis(tracks: Track[]) {
 
   const getPreviewUrlFromMeta = (meta: { urls?: PreviewUrlEntry[] }): string | null => {
     if (!meta.urls || meta.urls.length === 0) return null
-    const successful = meta.urls?.find((entry) => entry.successful)
-    return successful?.url || null
+    const isDeezerApi = (url: string) => url.includes('api.deezer.com')
+    const isDeezerTimed = (url: string) =>
+      url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('e-cdn-preview')
+    const toDeezerApi = (entry: PreviewUrlEntry) => {
+      const isrc = (entry as { isrc?: string | null }).isrc
+      if (isrc && isDeezerTimed(entry.url)) {
+        return `https://api.deezer.com/track/isrc:${encodeURIComponent(isrc)}`
+      }
+      return entry.url
+    }
+
+    const pickBest = (entries: PreviewUrlEntry[]) => {
+      const deezerApi = entries.find((entry) => isDeezerApi(entry.url))
+      if (deezerApi) return deezerApi
+      const stable = entries.find((entry) => !isDeezerTimed(entry.url))
+      if (stable) return stable
+      return entries[0] || null
+    }
+
+    const successful = meta.urls.filter((entry) => entry.successful)
+    if (successful.length > 0) {
+      const entry = pickBest(successful)
+      return entry ? toDeezerApi(entry) : null
+    }
+    const entry = pickBest(meta.urls)
+    return entry ? toDeezerApi(entry) : null
   }
 
-  const selectBestBpm = (
+  const selectBestBpm = useCallback((
     bpmEssentia: number | null | undefined,
     bpmConfidenceEssentia: number | null | undefined,
     bpmLibrosa: number | null | undefined,
@@ -229,9 +253,9 @@ export function useBpmAnalysis(tracks: Track[]) {
     const essentiaConf = bpmConfidenceEssentia ?? 0
     const librosaConf = bpmConfidenceLibrosa ?? 0
     return librosaConf > essentiaConf ? 'librosa' : 'essentia'
-  }
+  }, [])
 
-  const selectBestKey = (
+  const selectBestKey = useCallback((
     keyEssentia: string | null | undefined,
     keyscaleConfidenceEssentia: number | null | undefined,
     keyLibrosa: string | null | undefined,
@@ -242,7 +266,7 @@ export function useBpmAnalysis(tracks: Track[]) {
     const essentiaConf = keyscaleConfidenceEssentia ?? 0
     const librosaConf = keyscaleConfidenceLibrosa ?? 0
     return librosaConf > essentiaConf ? 'librosa' : 'essentia'
-  }
+  }, [])
 
   const loadingTrackIds = useMemo(() => {
     const ids = new Set<string>()
@@ -267,7 +291,7 @@ export function useBpmAnalysis(tracks: Track[]) {
 
   const isTrackLoading = (trackId: string) => loadingTrackIds.has(trackId)
 
-  const fetchTracksInDbForIds = async (trackIds: string[]) => {
+  const fetchTracksInDbForIds = useCallback(async (trackIds: string[]) => {
     if (trackIds.length === 0) {
       return new Set<string>()
     }
@@ -293,9 +317,9 @@ export function useBpmAnalysis(tracks: Track[]) {
       console.error('[BPM Client] Error checking tracks in DB:', error)
       return new Set<string>()
     }
-  }
+  }, [])
 
-  const streamBatchResults = async (
+  const streamBatchResults = useCallback(async (
     batchId: string,
     indexToTrackId: Map<number, string>,
     previewMeta: Record<string, any>
@@ -450,9 +474,9 @@ export function useBpmAnalysis(tracks: Track[]) {
         }
       })
     }
-  }
+  }, [getPreviewUrlFromMeta, selectBestBpm, selectBestKey, setState])
 
-  const streamBpmsForTracks = async (
+  const streamBpmsForTracks = useCallback(async (
     tracksToFetch: Track[],
     needsBpm?: Set<string>,
     needsKey?: Set<string>,
@@ -604,9 +628,9 @@ export function useBpmAnalysis(tracks: Track[]) {
         await new Promise(resolve => setTimeout(resolve, 200))
       }
     }
-  }
+  }, [bpmRequestSettings, countryCode, fetchBpmsForTracks, getPreviewUrlFromMeta, retryTrackId, setState, streamBatchResults])
 
-  const fetchBpmsForTracks = async (tracksToFetch: Track[]) => {
+  const fetchBpmsForTracks = useCallback(async (tracksToFetch: Track[]) => {
     if (tracksToFetch.length === 0) return
 
     const batchSize = 50
@@ -633,24 +657,24 @@ export function useBpmAnalysis(tracks: Track[]) {
     }
 
     applyBatchResults(results)
-  }
+  }, [applyBatchResults, countryCode])
 
-  const applyBatchResults = (results: Record<string, any>) => {
+  const applyBatchResults = useCallback((results: Record<string, any>) => {
     const newBpms: Record<string, number | null> = {}
     const newKeys: Record<string, string | null> = {}
     const newScales: Record<string, string | null> = {}
     const newDetails: Record<string, { source?: string; error?: string }> = {}
     const newDebug: Record<string, any> = {}
     const newFullData: Record<string, BpmFullDataEntry> = {}
-    const newTracksInDb = new Set(tracksInDb)
 
+    const tracksToAdd = new Set<string>()
     for (const [trackId, result] of Object.entries(results)) {
       const r = result as any
       newDetails[trackId] = { source: r.source, error: r.error }
       newDebug[trackId] = r
 
       if (r.source || r.error || r.bpmRaw !== undefined || r.cached === true) {
-        newTracksInDb.add(trackId)
+        tracksToAdd.add(trackId)
       }
 
       if (r.bpm != null) {
@@ -701,10 +725,16 @@ export function useBpmAnalysis(tracks: Track[]) {
     setState('bpmDetails', (prev) => ({ ...prev, ...newDetails }))
     setState('bpmDebugInfo', (prev) => ({ ...prev, ...newDebug }))
     setState('bpmFullData', (prev) => ({ ...prev, ...newFullData }))
-    setState('tracksInDb', newTracksInDb)
-  }
+    if (tracksToAdd.size > 0) {
+      setState('tracksInDb', (prev) => {
+        const next = new Set(prev)
+        tracksToAdd.forEach((trackId) => next.add(trackId))
+        return next
+      })
+    }
+  }, [setState])
 
-  const fetchBpmsBatch = async () => {
+  const fetchBpmsBatch = useCallback(async () => {
     const trackIds = tracks.map(t => t.id)
     if (trackIds.length === 0) return
 
@@ -741,7 +771,7 @@ export function useBpmAnalysis(tracks: Track[]) {
       console.error('[BPM Client] Batch fetch error:', error)
       streamBpmsForTracks(tracks)
     }
-  }
+  }, [tracks, countryCode, fetchTracksInDbForIds, streamBpmsForTracks, applyBatchResults, setState])
 
   const updateBpmSelection = async (payload: {
     spotifyTrackId: string

@@ -319,9 +319,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const setMusoPreviewStatus = (value: BpmState['musoPreviewStatus'] | ((prev: BpmState['musoPreviewStatus']) => BpmState['musoPreviewStatus'])) => {
     setBpmState('musoPreviewStatus', value)
   }
-  const setMismatchPreviewUrls = (value: BpmState['mismatchPreviewUrls'] | ((prev: BpmState['mismatchPreviewUrls']) => BpmState['mismatchPreviewUrls'])) => {
+  const setMismatchPreviewUrls = useCallback((value: BpmState['mismatchPreviewUrls'] | ((prev: BpmState['mismatchPreviewUrls']) => BpmState['mismatchPreviewUrls'])) => {
     setBpmState('mismatchPreviewUrls', value)
-  }
+  }, [setBpmState])
   const setPreviewUrls = (value: BpmState['previewUrls'] | ((prev: BpmState['previewUrls']) => BpmState['previewUrls'])) => {
     setBpmState('previewUrls', value)
   }
@@ -390,9 +390,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const setShowBpmMoreInfo = (value: BpmState['showBpmMoreInfo'] | ((prev: BpmState['showBpmMoreInfo']) => BpmState['showBpmMoreInfo'])) => {
     setBpmState('showBpmMoreInfo', value)
   }
-  const setCountryCode = (value: BpmState['countryCode'] | ((prev: BpmState['countryCode']) => BpmState['countryCode'])) => {
+  const setCountryCode = useCallback((value: BpmState['countryCode'] | ((prev: BpmState['countryCode']) => BpmState['countryCode'])) => {
     setBpmState('countryCode', value)
-  }
+  }, [setBpmState])
   const setTracksInDb = (value: BpmState['tracksInDb'] | ((prev: BpmState['tracksInDb']) => BpmState['tracksInDb'])) => {
     setBpmState('tracksInDb', value)
   }

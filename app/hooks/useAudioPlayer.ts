@@ -36,7 +36,25 @@ export function useAudioPlayer({
     }
 
     try {
-      const isDeezer = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview')
+      const originalUrl = url
+      const isDeezerApi = url.includes('api.deezer.com')
+      if (isDeezerApi) {
+        const apiUrl = `/api/deezer-preview?url=${encodeURIComponent(url)}`
+        console.log('[Preview Debug] Resolving Deezer API preview:', apiUrl)
+        const response = await fetch(apiUrl)
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error('[Preview Debug] Deezer preview resolve failed:', response.status, errorText)
+          throw new Error(`Deezer preview resolve failed: ${response.status}`)
+        }
+        const data = await response.json()
+        if (!data?.previewUrl) {
+          throw new Error('Deezer preview URL missing')
+        }
+        url = data.previewUrl
+      }
+
+      const isDeezer = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('e-cdn-preview')
 
       if (isDeezer) {
         const proxyUrl = `/api/audio-proxy?url=${encodeURIComponent(url)}`
@@ -45,13 +63,14 @@ export function useAudioPlayer({
         if (!response.ok) {
           const errorText = await response.text()
           console.error('[Preview Debug] Proxy fetch failed:', response.status, errorText)
-          console.log('[Preview Debug] Proxy failed, trying direct URL as last resort...')
-          audioCache.current.set(url, url)
-          return url
+          throw new Error(`Proxy fetch failed: ${response.status}`)
         }
         const blob = await response.blob()
         const blobUrl = URL.createObjectURL(blob)
         audioCache.current.set(url, blobUrl)
+        if (isDeezerApi) {
+          audioCache.current.set(originalUrl, blobUrl)
+        }
         return blobUrl
       }
 
@@ -66,15 +85,24 @@ export function useAudioPlayer({
       const blob = await response.blob()
       const blobUrl = URL.createObjectURL(blob)
       audioCache.current.set(url, blobUrl)
+      if (isDeezerApi) {
+        audioCache.current.set(originalUrl, blobUrl)
+      }
       return blobUrl
     } catch (error) {
       console.error('[Preview Debug] Error loading audio:', error)
-      if (!url.includes('deezer.com')) {
-        audioCache.current.set(url, url)
-        return url
+      const isDeezerLike = url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('e-cdn-preview')
+      if (isDeezerLike) {
+        audioCache.current.delete(url)
+        setPreviewUrls((prev) => {
+          const next = { ...prev }
+          delete next[trackId]
+          return next
+        })
+        throw error
       }
-      audioCache.current.delete(url)
-      throw error
+      audioCache.current.set(url, url)
+      return url
     }
   }
 
