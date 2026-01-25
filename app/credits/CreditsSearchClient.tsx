@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import { useSearchParams } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { formatDuration } from '@/lib/musicbrainz'
 
@@ -83,6 +84,8 @@ export default function CreditsSearchClient() {
   const [bpmBulkLoading, setBpmBulkLoading] = useState(false)
   const bpmFetchedIsrcsRef = useRef<Set<string>>(new Set())
   const bpmFetchTimeoutRef = useRef<number | null>(null)
+  const searchParams = useSearchParams()
+  const autoSearchRef = useRef(false)
 
   const limit = Math.min(pageSize, 50)
   const historyKey = 'creditsSearchHistory'
@@ -107,6 +110,7 @@ export default function CreditsSearchClient() {
       // Ignore invalid localStorage
     }
   }, [])
+
 
   useEffect(() => {
     resultsRef.current = results
@@ -397,6 +401,19 @@ export default function CreditsSearchClient() {
       streamRef.current = null
     }
   }
+
+  useEffect(() => {
+    if (autoSearchRef.current) return
+    const rawName = searchParams?.get('name') || ''
+    const rawRole = searchParams?.get('role') || ''
+    const trimmed = rawName.trim()
+    if (!trimmed) return
+    const normalizedRole = ROLE_OPTIONS.find((option) => option.value === rawRole)?.value || 'producer'
+    autoSearchRef.current = true
+    setName(trimmed)
+    setRole(normalizedRole)
+    fetchResultsStream(trimmed, 0, false, true)
+  }, [searchParams, fetchResultsStream])
 
   const fetchResultsDebug = async (searchName: string) => {
     const trimmed = searchName.trim()

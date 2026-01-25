@@ -161,6 +161,19 @@ COMMENT ON COLUMN credits_cache.profile IS 'Cached Muso profile summary for the 
 COMMENT ON COLUMN credits_cache.total_count IS 'Total credit count returned by Muso for the search.';
 
 -- ============================================================================
+-- Track Credits Cache
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS track_credits_cache (
+  isrc TEXT PRIMARY KEY,
+  credits JSONB NOT NULL,
+  source TEXT NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+COMMENT ON TABLE track_credits_cache IS 'Cached per-track credits for playlist view (Muso first, MusicBrainz fallback).';
+
+-- ============================================================================
 -- Muso Cache Tables
 -- ============================================================================
 

@@ -119,6 +119,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         mixedBy: string[]
         masteredBy: string[]
         releaseId?: string | null
+        retrievedAt?: string | null
       }
     >
   >({})
@@ -377,6 +378,39 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       setIsRefreshing(false)
       setRefreshDone(true)
     }
+  }
+
+  const creditsRoleMap = {
+    performedBy: 'artist',
+    writtenBy: 'songwriter',
+    producedBy: 'producer',
+    mixedBy: 'mixer',
+    masteredBy: 'engineer',
+  } as const
+
+  const creditsSearchHref = (name: string, role: string) => ({
+    pathname: '/credits',
+    query: { name, role },
+  })
+
+  const renderCreditLinks = (names: string[], role: string) =>
+    names.map((person, index) => (
+      <span key={`${role}-${person}-${index}`}>
+        <Link
+          href={creditsSearchHref(person, role)}
+          className="text-green-600 hover:text-green-700 hover:underline"
+        >
+          {person}
+        </Link>
+        {index < names.length - 1 ? ', ' : ''}
+      </span>
+    ))
+
+  const formatRetrievedMonthYear = (value?: string | null) => {
+    if (!value) return 'Unknown'
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return 'Unknown'
+    return `${String(date.getMonth() + 1).padStart(2, '0')}-${date.getFullYear()}`
   }
 
   const closeBpmModal = useCallback(() => {
@@ -1660,6 +1694,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     if (creditsByTrackId[track.id]) {
       return
     }
+    await loadCreditsForTrack(track, false)
+  }
+
+  const loadCreditsForTrack = async (track: Track, refresh: boolean) => {
     const isrc = track.external_ids?.isrc
     if (!isrc) {
       setCreditsErrorByTrackId(prev => ({
@@ -1670,7 +1708,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     }
     setCreditsLoadingIds(prev => new Set(prev).add(track.id))
     try {
-      const res = await fetch(`/api/musicbrainz/credits?isrc=${encodeURIComponent(isrc)}`)
+      const refreshParam = refresh ? '&refresh=true' : ''
+      const res = await fetch(`/api/musicbrainz/credits?isrc=${encodeURIComponent(isrc)}${refreshParam}`)
       if (!res.ok) {
         let message = 'Unable to fetch credits'
         try {
@@ -1695,6 +1734,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           mixedBy: data.mixedBy || [],
           masteredBy: data.masteredBy || [],
           releaseId: typeof data.releaseId === 'string' ? data.releaseId : null,
+          retrievedAt: typeof data.retrievedAt === 'string' ? data.retrievedAt : null,
         },
       }))
       setCreditsErrorByTrackId(prev => {
@@ -4073,7 +4113,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     <div className="flex flex-wrap gap-2 text-xs">
                       <button
                         onClick={async () => {
-                          const bpmValue = Number((bpmModalSummary.currentBpm / 2).toFixed(1))
+                          const currentBpm = bpmModalSummary.currentBpm
+                          if (typeof currentBpm !== 'number') return
+                          const bpmValue = Number((currentBpm / 2).toFixed(1))
                           await updateBpmSelection({
                             spotifyTrackId: bpmModalData.trackId,
                             bpmSelected: 'manual',
@@ -4087,7 +4129,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       </button>
                       <button
                         onClick={async () => {
-                          const bpmValue = Number((bpmModalSummary.currentBpm * 2).toFixed(1))
+                          const currentBpm = bpmModalSummary.currentBpm
+                          if (typeof currentBpm !== 'number') return
+                          const bpmValue = Number((currentBpm * 2).toFixed(1))
                           await updateBpmSelection({
                             spotifyTrackId: bpmModalData.trackId,
                             bpmSelected: 'manual',
@@ -4573,6 +4617,19 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               <p className="text-sm text-gray-600 dark:text-slate-300">
                 {selectedCreditsTrack.artists.map(a => a.name).join(', ')}
               </p>
+              <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-500 dark:text-slate-400">
+                <span>
+                  Retrieved on {formatRetrievedMonthYear(creditsByTrackId[selectedCreditsTrack.id]?.retrievedAt)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => loadCreditsForTrack(selectedCreditsTrack, true)}
+                  disabled={creditsLoadingIds.has(selectedCreditsTrack.id)}
+                  className="rounded-full border border-gray-200 px-3 py-1 font-semibold text-gray-600 hover:border-gray-300 hover:text-gray-800 disabled:text-gray-400 dark:border-slate-700 dark:text-slate-300"
+                >
+                  {creditsLoadingIds.has(selectedCreditsTrack.id) ? 'Refreshing...' : 'Refresh credits'}
+                </button>
+              </div>
               {creditsByTrackId[selectedCreditsTrack.id]?.releaseId && (
                 <a
                   href={`https://musicbrainz.org/release/${encodeURIComponent(creditsByTrackId[selectedCreditsTrack.id].releaseId as string)}`}
@@ -4593,7 +4650,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 <div>
                   <div className="font-semibold text-gray-900 dark:text-slate-100">Performed by</div>
                   {creditsByTrackId[selectedCreditsTrack.id]?.performedBy?.length ? (
-                    <div>{creditsByTrackId[selectedCreditsTrack.id].performedBy.join(', ')}</div>
+                    <div>{renderCreditLinks(creditsByTrackId[selectedCreditsTrack.id].performedBy, creditsRoleMap.performedBy)}</div>
                   ) : (
                     <div className="text-gray-400 dark:text-slate-500">Not available</div>
                   )}
@@ -4601,7 +4658,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 <div>
                   <div className="font-semibold text-gray-900 dark:text-slate-100">Written by</div>
                   {creditsByTrackId[selectedCreditsTrack.id]?.writtenBy?.length ? (
-                    <div>{creditsByTrackId[selectedCreditsTrack.id].writtenBy.join(', ')}</div>
+                    <div>{renderCreditLinks(creditsByTrackId[selectedCreditsTrack.id].writtenBy, creditsRoleMap.writtenBy)}</div>
                   ) : (
                     <div className="text-gray-400 dark:text-slate-500">Not available</div>
                   )}
@@ -4609,7 +4666,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 <div>
                   <div className="font-semibold text-gray-900 dark:text-slate-100">Produced by</div>
                   {creditsByTrackId[selectedCreditsTrack.id]?.producedBy?.length ? (
-                    <div>{creditsByTrackId[selectedCreditsTrack.id].producedBy.join(', ')}</div>
+                    <div>{renderCreditLinks(creditsByTrackId[selectedCreditsTrack.id].producedBy, creditsRoleMap.producedBy)}</div>
                   ) : (
                     <div className="text-gray-400 dark:text-slate-500">Not available</div>
                   )}
@@ -4617,7 +4674,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 <div>
                   <div className="font-semibold text-gray-900 dark:text-slate-100">Mixed by</div>
                   {creditsByTrackId[selectedCreditsTrack.id]?.mixedBy?.length ? (
-                    <div>{creditsByTrackId[selectedCreditsTrack.id].mixedBy.join(', ')}</div>
+                    <div>{renderCreditLinks(creditsByTrackId[selectedCreditsTrack.id].mixedBy, creditsRoleMap.mixedBy)}</div>
                   ) : (
                     <div className="text-gray-400 dark:text-slate-500">Not available</div>
                   )}
@@ -4625,7 +4682,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 <div>
                   <div className="font-semibold text-gray-900 dark:text-slate-100">Mastered by</div>
                   {creditsByTrackId[selectedCreditsTrack.id]?.masteredBy?.length ? (
-                    <div>{creditsByTrackId[selectedCreditsTrack.id].masteredBy.join(', ')}</div>
+                    <div>{renderCreditLinks(creditsByTrackId[selectedCreditsTrack.id].masteredBy, creditsRoleMap.masteredBy)}</div>
                   ) : (
                     <div className="text-gray-400 dark:text-slate-500">Not available</div>
                   )}

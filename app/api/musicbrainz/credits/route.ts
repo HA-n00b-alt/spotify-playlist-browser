@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { query } from '@/lib/db'
 import { fetchMusicBrainzJson } from '@/lib/musicbrainz/client'
 import { getTrackDetailsByIsrc, hasMusoApiKey, type MusoTrackDetails } from '@/lib/muso'
 import { withApiLogging } from '@/lib/logger'
@@ -7,6 +8,61 @@ const normalizeRole = (value?: string | null) => (value || '').toLowerCase()
 
 const uniqueNames = (names: Array<string | null | undefined>) =>
   Array.from(new Set(names.filter((name): name is string => Boolean(name && name.trim()))))
+
+type CreditsPayload = {
+  performedBy: string[]
+  producedBy: string[]
+  mixedBy: string[]
+  masteredBy: string[]
+  writtenBy: string[]
+  releaseId: string | null
+}
+
+const loadCachedCredits = async (
+  isrc: string
+): Promise<{ credits: CreditsPayload; retrievedAt: string } | null> => {
+  try {
+    const rows = await query<{ credits: any; updated_at: Date }>(
+      'SELECT credits, updated_at FROM track_credits_cache WHERE isrc = $1 LIMIT 1',
+      [isrc]
+    )
+    if (!rows.length) return null
+    const updatedAt = rows[0]?.updated_at ? new Date(rows[0].updated_at) : null
+    if (!updatedAt) return null
+    const rawCredits = rows[0]?.credits
+    if (!rawCredits) return null
+    if (typeof rawCredits === 'string') {
+      try {
+        return { credits: JSON.parse(rawCredits) as CreditsPayload, retrievedAt: updatedAt.toISOString() }
+      } catch {
+        return null
+      }
+    }
+    return { credits: rawCredits as CreditsPayload, retrievedAt: updatedAt.toISOString() }
+  } catch {
+    return null
+  }
+}
+
+const saveCachedCredits = async (
+  isrc: string,
+  credits: CreditsPayload,
+  source: 'muso' | 'musicbrainz'
+) => {
+  try {
+    await query(
+      `
+      INSERT INTO track_credits_cache (isrc, credits, source, updated_at)
+      VALUES ($1, $2, $3, NOW())
+      ON CONFLICT (isrc)
+      DO UPDATE SET credits = EXCLUDED.credits, source = EXCLUDED.source, updated_at = NOW()
+      `,
+      [isrc, JSON.stringify(credits), source]
+    )
+  } catch {
+    // ignore cache failures
+  }
+}
 
 const collectMusoCredits = (track: MusoTrackDetails) => {
   const performedBy = uniqueNames(track.artists?.map((artist) => artist.name) || [])
@@ -60,6 +116,7 @@ const collectMusoCredits = (track: MusoTrackDetails) => {
 export const GET = withApiLogging(async (request: Request) => {
   const { searchParams } = new URL(request.url)
   const isrc = searchParams.get('isrc')
+  const forceRefresh = searchParams.get('refresh') === 'true'
 
   if (!isrc) {
     return NextResponse.json(
@@ -69,11 +126,25 @@ export const GET = withApiLogging(async (request: Request) => {
   }
 
   try {
+    if (!forceRefresh) {
+      const cached = await loadCachedCredits(isrc)
+      if (cached) {
+        return NextResponse.json({
+          ...cached.credits,
+          retrievedAt: cached.retrievedAt,
+        })
+      }
+    }
     if (hasMusoApiKey()) {
       try {
         const track = await getTrackDetailsByIsrc(isrc)
         if (track) {
-          return NextResponse.json(collectMusoCredits(track))
+          const credits = collectMusoCredits(track)
+          await saveCachedCredits(isrc, credits, 'muso')
+          return NextResponse.json({
+            ...credits,
+            retrievedAt: new Date().toISOString(),
+          })
         }
       } catch {
         // Fall back to MusicBrainz if Muso is unavailable or rate-limited.
@@ -208,13 +279,18 @@ export const GET = withApiLogging(async (request: Request) => {
 
     const uniqueComposition = Array.from(compositionSet)
 
-    return NextResponse.json({
+    const credits = {
       performedBy: performers,
       producedBy: Array.from(new Set([...producedBy, ...releaseProducedBy])),
       mixedBy: Array.from(new Set([...mixedBy, ...releaseMixedBy])),
       masteredBy: Array.from(new Set([...masteredBy, ...releaseMasteredBy])),
       writtenBy: uniqueComposition,
       releaseId,
+    }
+    await saveCachedCredits(isrc, credits, 'musicbrainz')
+    return NextResponse.json({
+      ...credits,
+      retrievedAt: new Date().toISOString(),
     })
   } catch (error) {
     return NextResponse.json(
