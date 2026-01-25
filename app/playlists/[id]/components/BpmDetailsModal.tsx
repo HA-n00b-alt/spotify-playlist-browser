@@ -689,24 +689,24 @@ export default function BpmDetailsModal({
               </button>
 
               {showBpmModalDebug && (
-                <div className="mt-4 rounded-[12px] bg-black/50 p-4 text-[10px] text-white/70 shadow-inner">
+                <div className="mt-4 rounded-[12px] border border-slate-200 bg-white p-4 text-[10px] text-slate-600 shadow-sm dark:border-white/10 dark:bg-black/50 dark:text-white/70 dark:shadow-inner">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1">
-                      <label className="block text-[10px] font-medium uppercase tracking-[0.15em] text-white/40" htmlFor="modal-bpm-debug-level">
+                      <label className="block text-[10px] font-medium uppercase tracking-[0.15em] text-slate-400 dark:text-white/40" htmlFor="modal-bpm-debug-level">
                         Log level
                       </label>
                       <select
                         id="modal-bpm-debug-level"
                         value={bpmDebugLevel}
                         onChange={(e) => onSetBpmDebugLevel(e.target.value)}
-                        className="w-full rounded-[10px] border border-white/10 bg-black/40 px-3 py-2 text-[10px] text-white/80 focus:outline-none focus:ring-1 focus:ring-emerald-500/60"
+                        className="w-full border-b border-slate-300/60 bg-transparent px-0 py-2 text-[11px] text-slate-700 outline-none appearance-none no-chevron focus:border-emerald-500/40 dark:border-white/10 dark:text-white/80"
                       >
                         <option value="minimal">Minimal</option>
                         <option value="normal">Normal</option>
                       </select>
                     </div>
                     <div className="space-y-1">
-                      <label className="block text-[10px] font-medium uppercase tracking-[0.15em] text-white/40" htmlFor="modal-bpm-confidence-threshold">
+                      <label className="block text-[10px] font-medium uppercase tracking-[0.15em] text-slate-400 dark:text-white/40" htmlFor="modal-bpm-confidence-threshold">
                         Confidence threshold
                       </label>
                       <input
@@ -717,23 +717,23 @@ export default function BpmDetailsModal({
                         step="0.01"
                         value={bpmConfidenceThreshold}
                         onChange={(e) => onSetBpmConfidenceThreshold(e.target.value)}
-                        className="w-full rounded-[10px] border border-white/10 bg-black/40 px-3 py-2 text-[10px] text-white/80 focus:outline-none focus:ring-1 focus:ring-emerald-500/60"
+                        className="w-full border-b border-slate-300/60 bg-transparent px-0 py-2 text-[11px] text-slate-700 outline-none appearance-none no-spin focus:border-emerald-500/40 dark:border-white/10 dark:text-white/80"
                       />
                     </div>
                   </div>
                   <div className="mt-4">
-                    <div className="text-[10px] uppercase tracking-[0.2em] text-white/40">
+                    <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400 dark:text-white/40">
                       Live logs
                     </div>
-                    <pre className="mt-2 max-h-40 overflow-auto rounded-[10px] bg-black/60 p-3 font-mono text-[10px] text-white/70">
+                    <pre className="mt-2 max-h-40 overflow-auto rounded-[12px] border border-slate-200 bg-gray-100 p-3 font-mono text-[10px] text-slate-600 shadow-sm dark:border-white/10 dark:bg-black/60 dark:text-white/70 dark:shadow-inner">
                       {bpmModalData.fullData?.debugTxt || 'No live logs yet.'}
                     </pre>
                   </div>
                   <div className="mt-4">
-                    <div className="text-[10px] uppercase tracking-[0.2em] text-white/40">
+                    <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400 dark:text-white/40">
                       Last payload
                     </div>
-                    <pre className="mt-2 max-h-40 overflow-auto rounded-[10px] bg-black/60 p-3 font-mono text-[10px] text-white/70">
+                    <pre className="mt-2 max-h-40 overflow-auto rounded-[12px] border border-slate-200 bg-gray-100 p-3 font-mono text-[10px] text-slate-600 shadow-sm dark:border-white/10 dark:bg-black/60 dark:text-white/70 dark:shadow-inner">
                       {bpmDebugInfo[bpmModalData.trackId]
                         ? JSON.stringify(bpmDebugInfo[bpmModalData.trackId], null, 2)
                         : 'No previous payloads yet.'}
