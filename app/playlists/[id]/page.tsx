@@ -100,6 +100,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     debugTxt?: string | null
   }>>({})
   const [showBpmModal, setShowBpmModal] = useState(false)
+  const [showBpmModalDebug, setShowBpmModalDebug] = useState(false)
   const [selectedBpmTrack, setSelectedBpmTrack] = useState<Track | null>(null)
   const [bpmProcessingStartTime, setBpmProcessingStartTime] = useState<number | null>(null)
   const [bpmProcessingEndTime, setBpmProcessingEndTime] = useState<number | null>(null)
@@ -290,7 +291,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           return
         }
         if (!data?.authenticated) {
-          window.location.href = '/'
+          window.location.href = '/api/auth/login'
         }
       })
       .catch(() => {})
@@ -338,7 +339,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       queryClient.clear()
       // Redirect to login
       setTimeout(() => {
-        window.location.href = '/'
+        window.location.href = '/api/auth/login'
       }, 1000)
     }
   }, [error, queryClient])
@@ -377,6 +378,85 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       setRefreshDone(true)
     }
   }
+
+  const closeBpmModal = useCallback(() => {
+    setShowBpmModal(false)
+    setRetryStatus(null)
+    setRetryAttempted(false)
+    setRetryTrackId(null)
+    setManualBpm('')
+    setManualKey('')
+    setManualScale('major')
+    setMusoPreviewStatus(null)
+    setMismatchPreviewUrls({})
+    setShowBpmModalDebug(false)
+  }, [])
+
+  const closeCreditsModal = useCallback(() => {
+    setShowCreditsModal(false)
+  }, [])
+
+  const updateBpmSelection = async (payload: {
+    spotifyTrackId: string
+    bpmSelected?: 'essentia' | 'librosa' | 'manual'
+    keySelected?: 'essentia' | 'librosa' | 'manual'
+    bpmManual?: number
+    keyManual?: string
+    scaleManual?: string
+  }) => {
+    setIsUpdatingSelection(true)
+    try {
+      const res = await fetch('/api/bpm/update-selection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (res.ok) {
+        await fetchBpmsBatch()
+      }
+    } finally {
+      setIsUpdatingSelection(false)
+    }
+  }
+
+  const recalcTrackWithOptions = async (
+    track: Track,
+    options?: { fallbackOverride?: BpmFallbackOverride }
+  ) => {
+    setRecalcStatus({ loading: true })
+    try {
+      await fetch('/api/bpm/recalculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trackIds: [track.id] }),
+      })
+      const targetIds = new Set([track.id])
+      streamBpmsForTracks([track], targetIds, targetIds, options)
+      setRecalcStatus({ loading: false, success: true })
+    } catch (error) {
+      setRecalcStatus({
+        loading: false,
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to recalculate BPM/key',
+      })
+    }
+  }
+
+  useEffect(() => {
+    if (!showBpmModal && !showCreditsModal) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (showBpmModal) {
+          closeBpmModal()
+        }
+        if (showCreditsModal) {
+          closeCreditsModal()
+        }
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [showBpmModal, showCreditsModal, closeBpmModal, closeCreditsModal])
 
   const fetchTracksInDbForIds = async (trackIds: string[]) => {
     if (trackIds.length === 0) {
@@ -757,7 +837,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const streamBpmsForTracks = async (
     tracksToFetch: Track[],
     needsBpm?: Set<string>,
-    needsKey?: Set<string>
+    needsKey?: Set<string>,
+    options?: { fallbackOverride?: BpmFallbackOverride }
   ) => {
     if (tracksToFetch.length === 0) return
 
@@ -805,14 +886,18 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       })
 
       try {
+        const overrideFallback = options?.fallbackOverride
+        const effectiveFallbackOverride = overrideFallback && overrideFallback !== 'default'
+          ? overrideFallback
+          : bpmRequestSettings.fallbackOverride
         const requestBody: Record<string, unknown> = {
           trackIds,
           country: countryCode,
           debug_level: bpmRequestSettings.debugLevel,
           max_confidence: bpmRequestSettings.maxConfidence,
         }
-        if (bpmRequestSettings.fallbackOverride) {
-          requestBody.fallback_override = bpmRequestSettings.fallbackOverride
+        if (effectiveFallbackOverride) {
+          requestBody.fallback_override = effectiveFallbackOverride
         }
 
         const res = await fetch('/api/bpm/stream-batch', {
@@ -2351,6 +2436,91 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       hasLibrosaKey,
     }
   }, [showBpmModal, selectedBpmTrack, bpmFullData, trackBpms, trackKeys, trackScales])
+  const bpmModalSummary = useMemo(() => {
+    if (!bpmModalData) return null
+    const { fullData, bpmSelected, keySelected, currentBpm, currentKey, currentScale } = bpmModalData
+    const bpmCandidates: Array<{
+      id: 'essentia' | 'librosa'
+      label: string
+      value: number
+      confidence?: number | null
+      raw?: number | null
+    }> = []
+    if (fullData.bpmEssentia != null) {
+      bpmCandidates.push({
+        id: 'essentia',
+        label: 'Essentia',
+        value: fullData.bpmEssentia,
+        confidence: fullData.bpmConfidenceEssentia ?? null,
+        raw: fullData.bpmRawEssentia ?? null,
+      })
+    }
+    if (fullData.bpmLibrosa != null) {
+      bpmCandidates.push({
+        id: 'librosa',
+        label: 'Librosa',
+        value: fullData.bpmLibrosa,
+        confidence: fullData.bpmConfidenceLibrosa ?? null,
+        raw: fullData.bpmRawLibrosa ?? null,
+      })
+    }
+
+    const keyCandidates: Array<{
+      id: 'essentia' | 'librosa'
+      label: string
+      key: string | null
+      scale: string | null
+      confidence?: number | null
+    }> = []
+    if (fullData.keyEssentia || fullData.scaleEssentia) {
+      keyCandidates.push({
+        id: 'essentia',
+        label: 'Essentia',
+        key: fullData.keyEssentia ?? null,
+        scale: fullData.scaleEssentia ?? null,
+        confidence: fullData.keyscaleConfidenceEssentia ?? null,
+      })
+    }
+    if (fullData.keyLibrosa || fullData.scaleLibrosa) {
+      keyCandidates.push({
+        id: 'librosa',
+        label: 'Librosa',
+        key: fullData.keyLibrosa ?? null,
+        scale: fullData.scaleLibrosa ?? null,
+        confidence: fullData.keyscaleConfidenceLibrosa ?? null,
+      })
+    }
+
+    const bpmSelectedLabel =
+      bpmSelected === 'manual' ? 'Manual' : bpmSelected === 'librosa' ? 'Librosa' : 'Essentia'
+    const keySelectedLabel =
+      keySelected === 'manual' ? 'Manual' : keySelected === 'librosa' ? 'Librosa' : 'Essentia'
+
+    const bpmSelectedConfidence =
+      bpmSelected === 'librosa'
+        ? fullData.bpmConfidenceLibrosa ?? null
+        : bpmSelected === 'manual'
+          ? null
+          : fullData.bpmConfidenceEssentia ?? null
+    const keySelectedConfidence =
+      keySelected === 'librosa'
+        ? fullData.keyscaleConfidenceLibrosa ?? null
+        : keySelected === 'manual'
+          ? null
+          : fullData.keyscaleConfidenceEssentia ?? null
+
+    return {
+      bpmCandidates,
+      keyCandidates,
+      bpmSelectedLabel,
+      keySelectedLabel,
+      bpmSelectedConfidence,
+      keySelectedConfidence,
+      currentBpm,
+      currentKey,
+      currentScale,
+    }
+  }, [bpmModalData])
   const isrcMismatchDetails = useMemo(() => {
     if (!selectedBpmTrack) return null
     const error = bpmDetails[selectedBpmTrack.id]?.error || ''
@@ -3847,639 +4017,560 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           )}
 
       {/* BPM Details Modal */}
-      {isAdmin && bpmModalData && selectedBpmTrack && (
-          <div 
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-            onClick={() => {
-              setShowBpmModal(false)
-              setRetryStatus(null)
-              setRetryAttempted(false)
-              setRetryTrackId(null)
-              setManualBpm('')
-              setManualKey('')
-              setManualScale('major')
-              setMusoPreviewStatus(null)
-              setMismatchPreviewUrls({})
-            }}
+      {isAdmin && bpmModalData && bpmModalSummary && selectedBpmTrack && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={closeBpmModal}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto dark:bg-slate-900 dark:text-slate-100"
+            onClick={(e) => e.stopPropagation()}
           >
-            <div 
-              className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto dark:bg-slate-900 dark:text-slate-100"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100">BPM & Key Information</h2>
-                <button
-                  onClick={() => {
-                    setShowBpmModal(false)
-                    setRetryStatus(null)
-                    setRetryAttempted(false)
-                    setRetryTrackId(null)
-                    setManualBpm('')
-                    setManualKey('')
-                    setManualScale('major')
-                    setMusoPreviewStatus(null)
-                    setMismatchPreviewUrls({})
-                  }}
-                  className="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 text-2xl"
-                >
-                  ×
-                </button>
-              </div>
-              
-              <div className="mb-4">
-                <h3 className="font-semibold text-gray-900 dark:text-slate-100 mb-2">{selectedBpmTrack.name}</h3>
-                <p className="text-sm text-gray-600 dark:text-slate-300">
-                  {selectedBpmTrack.artists.map(a => a.name).join(', ')}
+            <div className="flex items-start justify-between border-b border-gray-200 pb-4 dark:border-slate-800">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">
+                  BPM and Key information
+                </h2>
+                <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">
+                  {selectedBpmTrack.name} · {selectedBpmTrack.artists.map(a => a.name).join(', ')}
                 </p>
                 {bpmStreamStatus[bpmModalData.trackId] === 'partial' && (
-                  <div className="mt-2 inline-flex items-center text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 px-2 py-1 rounded dark:bg-yellow-500/10 dark:border-yellow-500/30 dark:text-yellow-200">
+                  <div className="mt-2 inline-flex items-center text-[11px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-200">
                     Partial results streaming...
                   </div>
                 )}
-                <div className="mt-2">
-                  <button
-                    onClick={async () => {
-                      if (!selectedBpmTrack) return
-                      setRecalcStatus({ loading: true })
-                      try {
-                        await fetch('/api/bpm/recalculate', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ trackIds: [bpmModalData.trackId] }),
-                        })
-                        const targetIds = new Set([bpmModalData.trackId])
-                        streamBpmsForTracks([selectedBpmTrack], targetIds, targetIds)
-                        setRecalcStatus({ loading: false, success: true })
-                      } catch (error) {
-                        setRecalcStatus({
-                          loading: false,
-                          success: false,
-                          error: error instanceof Error ? error.message : 'Failed to recalculate BPM/key',
-                        })
-                      }
-                    }}
-                    disabled={recalcStatus?.loading}
-                    className="bg-gray-200 hover:bg-gray-300 disabled:bg-gray-200 disabled:text-gray-400 text-gray-800 text-xs font-semibold py-1.5 px-3 rounded dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
-                  >
-                    {recalcStatus?.loading ? 'Recalculating...' : 'Recalculate BPM/Key'}
-                  </button>
-                  {recalcStatus?.error && (
-                    <div className="mt-1 text-xs text-red-600">{recalcStatus.error}</div>
-                  )}
-                </div>
-                <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
-                  <h4 className="text-sm font-semibold text-gray-800 dark:text-slate-100">BPM service overrides</h4>
-                  <div className="mt-2 grid gap-3 sm:grid-cols-3">
-                    <div className="space-y-1 text-xs text-gray-700 dark:text-slate-300">
-                      <label className="block text-[11px] font-medium text-gray-500 dark:text-slate-400" htmlFor="modal-bpm-debug-level">
-                        Debug level
-                      </label>
-                      <select
-                        id="modal-bpm-debug-level"
-                        value={bpmDebugLevel}
-                        onChange={(e) => setBpmDebugLevel(e.target.value)}
-                        className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                      >
-                        <option value="minimal">Minimal</option>
-                        <option value="normal">Normal</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1 text-xs text-gray-700 dark:text-slate-300">
-                      <label className="block text-[11px] font-medium text-gray-500 dark:text-slate-400" htmlFor="modal-bpm-fallback-override">
-                        Fallback override
-                      </label>
-                      <select
-                        id="modal-bpm-fallback-override"
-                        value={bpmFallbackOverride}
-                        onChange={(e) => setBpmFallbackOverride(e.target.value as BpmFallbackOverride)}
-                        className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                      >
-                        <option value="never">Never</option>
-                        <option value="always">Always</option>
-                        <option value="bpm_only">BPM only</option>
-                        <option value="key_only">Key only</option>
-                        <option value="default">Confidence-based</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1 text-xs text-gray-700 dark:text-slate-300">
-                      <label className="block text-[11px] font-medium text-gray-500 dark:text-slate-400" htmlFor="modal-bpm-confidence-threshold">
-                        Confidence threshold
-                      </label>
-                      <input
-                        id="modal-bpm-confidence-threshold"
-                        type="number"
-                        min="0"
-                        max="1"
-                        step="0.01"
-                        value={bpmConfidenceThreshold}
-                        onChange={(e) => setBpmConfidenceThreshold(e.target.value)}
-                        className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                      />
-                    </div>
-                  </div>
-                  <p className="mt-2 text-[11px] text-gray-500 dark:text-slate-400">
-                    Applies to new calculations (retry or recalc).
-                  </p>
-                </div>
               </div>
+              <button
+                onClick={closeBpmModal}
+                className="text-gray-500 hover:text-gray-700 dark:text-slate-200 dark:hover:text-white text-2xl"
+              >
+                ×
+              </button>
+            </div>
 
-              {!bpmModalData.hasEssentiaBpm && !bpmModalData.hasLibrosaBpm && bpmModalData.currentBpm == null ? (
-                // No BPM data available
-                <div className="space-y-3">
+            <div className="mt-5 space-y-6">
+              <section className="rounded-lg border border-gray-200 p-4 dark:border-slate-800">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <span className="font-semibold text-gray-700 dark:text-slate-200">BPM: </span>
-                    <span className="text-gray-600 dark:text-slate-300">Not available</span>
+                    <div className="text-[11px] uppercase tracking-[0.2em] text-gray-400 dark:text-slate-500">
+                      BPM
+                    </div>
+                    <div className="mt-2 text-3xl font-semibold text-gray-900 dark:text-slate-100">
+                      {typeof bpmModalSummary.currentBpm === 'number'
+                        ? Math.round(bpmModalSummary.currentBpm)
+                        : '—'}
+                    </div>
+                    <div className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                      Algo: {bpmModalSummary.bpmSelectedLabel}
+                      {' · '}
+                      Confidence:{' '}
+                      {bpmModalSummary.bpmSelectedConfidence != null
+                        ? `${Math.round(bpmModalSummary.bpmSelectedConfidence * 100)}%`
+                        : 'n/a'}
+                    </div>
                   </div>
-                  {bpmDetails[bpmModalData.trackId]?.error ? (
-                    <div>
-                      <span className="font-semibold text-gray-700 dark:text-slate-200">Reason: </span>
-                      <span className="text-gray-600 dark:text-slate-300">{bpmDetails[bpmModalData.trackId].error}</span>
-                    </div>
-                  ) : (
-                    <div>
-                      <span className="text-gray-600 text-sm dark:text-slate-300">
-                        BPM data is being calculated or no preview audio is available for this track.
-                      </span>
+                  {isAdmin && typeof bpmModalSummary.currentBpm === 'number' && (
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      <button
+                        onClick={async () => {
+                          const bpmValue = Number((bpmModalSummary.currentBpm / 2).toFixed(1))
+                          await updateBpmSelection({
+                            spotifyTrackId: bpmModalData.trackId,
+                            bpmSelected: 'manual',
+                            bpmManual: bpmValue,
+                          })
+                        }}
+                        disabled={isUpdatingSelection}
+                        className="rounded-full border border-gray-200 px-3 py-1 text-gray-600 hover:border-gray-300 hover:text-gray-800 disabled:text-gray-400 dark:border-slate-700 dark:text-slate-300"
+                      >
+                        Store Half
+                      </button>
+                      <button
+                        onClick={async () => {
+                          const bpmValue = Number((bpmModalSummary.currentBpm * 2).toFixed(1))
+                          await updateBpmSelection({
+                            spotifyTrackId: bpmModalData.trackId,
+                            bpmSelected: 'manual',
+                            bpmManual: bpmValue,
+                          })
+                        }}
+                        disabled={isUpdatingSelection}
+                        className="rounded-full border border-gray-200 px-3 py-1 text-gray-600 hover:border-gray-300 hover:text-gray-800 disabled:text-gray-400 dark:border-slate-700 dark:text-slate-300"
+                      >
+                        Store Double
+                      </button>
                     </div>
                   )}
-                  {isrcMismatchDetails && (
-                    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
-                      <div className="font-semibold">ISRC mismatch details</div>
-                      <div>Spotify ISRC: {isrcMismatchDetails.spotifyIsrc || 'Unknown'}</div>
-                      <div>iTunes ISRC: {isrcMismatchDetails.previewIsrc || 'Unknown'}</div>
-                    </div>
-                  )}
-                  {isrcMismatchDetails && (
-                    <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
-                      <div className="font-semibold text-gray-800 dark:text-slate-100">Compare audio previews</div>
-                      <div className="mt-2 space-y-2">
-                        <div>
-                          <div className="text-[11px] uppercase tracking-[0.08em] text-gray-500 dark:text-slate-400">iTunes preview</div>
-                          {mismatchPreviewUrls.itunes ? (
-                            <audio controls src={mismatchPreviewUrls.itunes} className="mt-1 w-full" />
-                          ) : (
-                            <div className="text-xs text-gray-500 dark:text-slate-400">No iTunes preview URL available.</div>
-                          )}
+                </div>
+
+                {!bpmModalData.hasEssentiaBpm && !bpmModalData.hasLibrosaBpm && bpmModalData.currentBpm == null ? (
+                  <div className="mt-4 space-y-3 text-sm text-gray-600 dark:text-slate-300">
+                    <p>BPM data is not available yet.</p>
+                    {bpmDetails[bpmModalData.trackId]?.error ? (
+                      <div className="text-xs text-gray-500 dark:text-slate-400">
+                        Reason: {bpmDetails[bpmModalData.trackId].error}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-500 dark:text-slate-400">
+                        It may still be processing or no preview audio is available.
+                      </div>
+                    )}
+                    {isrcMismatchDetails && (
+                      <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+                        <div className="font-semibold">ISRC mismatch details</div>
+                        <div>Spotify ISRC: {isrcMismatchDetails.spotifyIsrc || 'Unknown'}</div>
+                        <div>iTunes ISRC: {isrcMismatchDetails.previewIsrc || 'Unknown'}</div>
+                      </div>
+                    )}
+                    {isrcMismatchDetails && (
+                      <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+                        <div className="font-semibold text-gray-800 dark:text-slate-100">Compare audio previews</div>
+                        <div className="mt-2 space-y-2">
+                          <div>
+                            <div className="text-[11px] uppercase tracking-[0.08em] text-gray-500 dark:text-slate-400">iTunes preview</div>
+                            {mismatchPreviewUrls.itunes ? (
+                              <audio controls src={mismatchPreviewUrls.itunes} className="mt-1 w-full" />
+                            ) : (
+                              <div className="text-xs text-gray-500 dark:text-slate-400">No iTunes preview URL available.</div>
+                            )}
+                          </div>
+                          <div>
+                            <div className="text-[11px] uppercase tracking-[0.08em] text-gray-500 dark:text-slate-400">Spotify preview</div>
+                            {mismatchPreviewUrls.loading ? (
+                              <div className="text-xs text-gray-500 dark:text-slate-400">Loading Spotify preview…</div>
+                            ) : mismatchPreviewUrls.spotify ? (
+                              <audio controls src={mismatchPreviewUrls.spotify} className="mt-1 w-full" />
+                            ) : (
+                              <div className="text-xs text-gray-500 dark:text-slate-400">No Spotify preview URL available.</div>
+                            )}
+                          </div>
                         </div>
-                        <div>
-                          <div className="text-[11px] uppercase tracking-[0.08em] text-gray-500 dark:text-slate-400">Spotify preview</div>
-                          {mismatchPreviewUrls.loading ? (
-                            <div className="text-xs text-gray-500 dark:text-slate-400">Loading Spotify preview…</div>
-                          ) : mismatchPreviewUrls.spotify ? (
-                            <audio controls src={mismatchPreviewUrls.spotify} className="mt-1 w-full" />
-                          ) : (
-                            <div className="text-xs text-gray-500 dark:text-slate-400">No Spotify preview URL available.</div>
+                      </div>
+                    )}
+                    {isrcMismatchDetails && (
+                      <div>
+                        <button
+                          onClick={() => handleMusoPreviewBpm(bpmModalData.trackId)}
+                          disabled={musoPreviewStatus?.loading}
+                          className="rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:text-amber-400 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200"
+                        >
+                          {musoPreviewStatus?.loading ? 'Fetching Muso preview...' : 'Use Muso Spotify preview'}
+                        </button>
+                        {musoPreviewStatus?.error && (
+                          <div className="mt-1 text-xs text-red-600">{musoPreviewStatus.error}</div>
+                        )}
+                        {musoPreviewStatus?.success && (
+                          <div className="mt-1 text-xs text-green-600">BPM calculated from Muso preview.</div>
+                        )}
+                      </div>
+                    )}
+                    {loadingBpmFields.has(bpmModalData.trackId) && trackBpms[bpmModalData.trackId] == null && (
+                      <div className="text-xs text-gray-500 dark:text-slate-400">
+                        Waiting for first partial result...
+                      </div>
+                    )}
+                    {trackBpms[bpmModalData.trackId] == null && !retryAttempted && (
+                      <button
+                        onClick={() => {
+                          if (!selectedBpmTrack) return
+                          setRetryStatus({ loading: true })
+                          setRetryAttempted(true)
+                          setRetryTrackId(bpmModalData.trackId)
+                          const targetIds = new Set([bpmModalData.trackId])
+                          streamBpmsForTracks([selectedBpmTrack], targetIds, targetIds)
+                        }}
+                        disabled={retryStatus?.loading}
+                        className="rounded-full border border-blue-200 px-4 py-2 text-xs font-semibold text-blue-700 hover:border-blue-300 disabled:text-blue-300 dark:border-emerald-500/40 dark:text-emerald-200"
+                      >
+                        {retryStatus?.loading ? 'Retrying...' : 'Retry'}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div className="mt-4 space-y-2">
+                      {bpmModalSummary.bpmCandidates.map((candidate) => {
+                        const isSelected = bpmModalData.bpmSelected === candidate.id
+                        return (
+                          <div
+                            key={candidate.id}
+                            className="flex items-center justify-between rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700 dark:border-slate-800 dark:text-slate-300"
+                          >
+                            <div>
+                              <div className="text-[11px] uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">
+                                {candidate.label}
+                              </div>
+                              <div className="text-sm text-gray-900 dark:text-slate-100">
+                                {Math.round(candidate.value)} BPM
+                                {candidate.raw != null && candidate.raw !== candidate.value ? (
+                                  <span className="ml-2 text-xs text-gray-400">raw {candidate.raw.toFixed(1)}</span>
+                                ) : null}
+                              </div>
+                              <div className="text-[11px] text-gray-500 dark:text-slate-400">
+                                Confidence:{' '}
+                                {candidate.confidence != null
+                                  ? `${Math.round(candidate.confidence * 100)}%`
+                                  : 'n/a'}
+                              </div>
+                            </div>
+                            {isSelected ? (
+                              <span className="text-[11px] uppercase tracking-[0.2em] text-green-600 dark:text-emerald-300">
+                                Selected
+                              </span>
+                            ) : isAdmin ? (
+                              <button
+                                onClick={() =>
+                                  updateBpmSelection({
+                                    spotifyTrackId: bpmModalData.trackId,
+                                    bpmSelected: candidate.id,
+                                  })
+                                }
+                                disabled={isUpdatingSelection}
+                                className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-600 hover:border-gray-300 hover:text-gray-800 disabled:text-gray-400 dark:border-slate-700 dark:text-slate-300"
+                              >
+                                Use this
+                              </button>
+                            ) : null}
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {isAdmin && (
+                      <div className="mt-4 rounded-md border border-dashed border-gray-200 px-3 py-3 dark:border-slate-800">
+                        <div className="text-[11px] uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">
+                          Manual override
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <input
+                            type="number"
+                            value={manualBpm || bpmModalData.fullData?.bpmManual || ''}
+                            onChange={(e) => setManualBpm(e.target.value)}
+                            placeholder="Enter BPM"
+                            className="w-28 rounded border border-gray-200 px-2 py-1 text-sm text-gray-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                            min="1"
+                            max="300"
+                          />
+                          <button
+                            onClick={async () => {
+                              const bpmValue = parseFloat(manualBpm || String(bpmModalData.fullData?.bpmManual || ''))
+                              if (isNaN(bpmValue) || bpmValue < 1 || bpmValue > 300) {
+                                alert('Please enter a valid BPM between 1 and 300')
+                                return
+                              }
+                              await updateBpmSelection({
+                                spotifyTrackId: bpmModalData.trackId,
+                                bpmSelected: 'manual',
+                                bpmManual: bpmValue,
+                              })
+                              setManualBpm('')
+                            }}
+                            disabled={isUpdatingSelection || (!manualBpm && !bpmModalData.fullData?.bpmManual)}
+                            className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-600 hover:border-gray-300 hover:text-gray-800 disabled:text-gray-400 dark:border-slate-700 dark:text-slate-300"
+                          >
+                            Save manual
+                          </button>
+                          {bpmModalData.bpmSelected === 'manual' && bpmModalData.fullData?.bpmManual != null && (
+                            <span className="text-[11px] text-gray-500 dark:text-slate-400">
+                              Selected: {Math.round(bpmModalData.fullData.bpmManual)}
+                            </span>
                           )}
                         </div>
                       </div>
-                    </div>
-                  )}
-                  {isrcMismatchDetails && (
-                    <div>
-                      <button
-                        onClick={() => handleMusoPreviewBpm(bpmModalData.trackId)}
-                        disabled={musoPreviewStatus?.loading}
-                        className="bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 text-white text-xs font-semibold py-2 px-4 rounded transition-colors"
-                      >
-                        {musoPreviewStatus?.loading ? 'Fetching Muso preview...' : 'Use Muso Spotify preview'}
-                      </button>
-                      {musoPreviewStatus?.error && (
-                        <div className="mt-1 text-xs text-red-600">{musoPreviewStatus.error}</div>
-                      )}
-                      {musoPreviewStatus?.success && (
-                        <div className="mt-1 text-xs text-green-600">BPM calculated from Muso preview.</div>
-                      )}
-                    </div>
-                  )}
-                  {loadingBpmFields.has(bpmModalData.trackId) && trackBpms[bpmModalData.trackId] == null && (
-                    <div className="text-xs text-gray-500 dark:text-slate-400">
-                      Waiting for first partial result...
-                    </div>
-                  )}
-                  {trackBpms[bpmModalData.trackId] == null && !retryAttempted && (
-                  <button
-                    onClick={() => {
-                      if (!selectedBpmTrack) return
-                      setRetryStatus({ loading: true })
-                        setRetryAttempted(true)
-                        setRetryTrackId(bpmModalData.trackId)
-                        const targetIds = new Set([bpmModalData.trackId])
-                        streamBpmsForTracks([selectedBpmTrack], targetIds, targetIds)
-                      }}
-                      disabled={retryStatus?.loading}
-                    className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded transition-colors dark:bg-emerald-500 dark:hover:bg-emerald-400"
-                  >
-                    {retryStatus?.loading ? 'Retrying...' : 'Retry'}
-                  </button>
-                  )}
+                    )}
+                  </>
+                )}
+              </section>
+
+              <section className="rounded-lg border border-gray-200 p-4 dark:border-slate-800">
+                <div className="text-[11px] uppercase tracking-[0.2em] text-gray-400 dark:text-slate-500">
+                  Key & Scale
                 </div>
-              ) : (
-                // Show BPM and Key data with switching and manual override
-                <div className="space-y-6">
-                  {/* BPM Section */}
-                  <div>
-                    <h4 className="font-semibold text-gray-900 dark:text-slate-100 mb-3">BPM</h4>
-                    <div className="space-y-3">
-                      {/* Essentia BPM */}
-                      {bpmModalData.hasEssentiaBpm && (
-                        <div className={`p-3 rounded border-2 ${bpmModalData.bpmSelected === 'essentia' ? 'border-green-500 bg-green-50 dark:bg-emerald-500/10' : 'border-gray-200 bg-gray-50 dark:border-slate-700 dark:bg-slate-800/60'}`}>
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-gray-700 dark:text-slate-200">Essentia:</span>
-                                <span className="text-gray-900 dark:text-slate-100">{bpmModalData.fullData?.bpmEssentia != null ? Math.round(bpmModalData.fullData.bpmEssentia) : 'N/A'}</span>
-                                {bpmModalData.fullData?.bpmConfidenceEssentia != null && (
-                                  <span className="text-xs text-gray-500 dark:text-slate-400">
-                                    (confidence: {(bpmModalData.fullData.bpmConfidenceEssentia * 100).toFixed(0)}%)
-                                  </span>
-                                )}
-                              </div>
-                              {typeof bpmModalData.fullData?.bpmRawEssentia === 'number' && bpmModalData.fullData.bpmRawEssentia !== bpmModalData.fullData.bpmEssentia && (
-                                <div className="text-xs text-gray-500 dark:text-slate-400 mt-1">
-                                  Raw: {bpmModalData.fullData.bpmRawEssentia.toFixed(1)}
-                                </div>
-                              )}
+                <div className="mt-2 text-xl font-semibold text-gray-900 dark:text-slate-100">
+                  {bpmModalSummary.currentKey || bpmModalSummary.currentScale
+                    ? `${bpmModalSummary.currentKey || ''} ${bpmModalSummary.currentScale || ''}`.trim()
+                    : '—'}
+                </div>
+                <div className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                  Algo: {bpmModalSummary.keySelectedLabel}
+                  {' · '}
+                  Confidence:{' '}
+                  {bpmModalSummary.keySelectedConfidence != null
+                    ? `${Math.round(bpmModalSummary.keySelectedConfidence * 100)}%`
+                    : 'n/a'}
+                </div>
+
+                {bpmModalSummary.keyCandidates.length > 0 ? (
+                  <div className="mt-4 space-y-2">
+                    {bpmModalSummary.keyCandidates.map((candidate) => {
+                      const isSelected = bpmModalData.keySelected === candidate.id
+                      return (
+                        <div
+                          key={candidate.id}
+                          className="flex items-center justify-between rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700 dark:border-slate-800 dark:text-slate-300"
+                        >
+                          <div>
+                            <div className="text-[11px] uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">
+                              {candidate.label}
                             </div>
-                            {bpmModalData.bpmSelected === 'essentia' && (
-                              <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">Selected</span>
-                            )}
-                            {bpmModalData.bpmSelected !== 'essentia' && bpmModalData.hasLibrosaBpm && (
-                              <button
-                                onClick={async () => {
-                                  setIsUpdatingSelection(true)
-                                  try {
-                                    const res = await fetch('/api/bpm/update-selection', {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({
-                                        spotifyTrackId: bpmModalData.trackId,
-                                        bpmSelected: 'essentia',
-                                      }),
-                                    })
-                                    if (res.ok) {
-                                      // Refresh BPM data
-                                      await fetchBpmsBatch()
-                                    }
-                                  } finally {
-                                    setIsUpdatingSelection(false)
-                                  }
-                                }}
-                                disabled={isUpdatingSelection}
-                                className="text-xs bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white px-2 py-1 rounded transition-colors dark:bg-emerald-500 dark:hover:bg-emerald-400"
-                              >
-                                Use This
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Librosa BPM */}
-                      {bpmModalData.hasLibrosaBpm && (
-                        <div className={`p-3 rounded border-2 ${bpmModalData.bpmSelected === 'librosa' ? 'border-green-500 bg-green-50 dark:bg-emerald-500/10' : 'border-gray-200 bg-gray-50 dark:border-slate-700 dark:bg-slate-800/60'}`}>
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-gray-700 dark:text-slate-200">Librosa:</span>
-                                <span className="text-gray-900 dark:text-slate-100">{bpmModalData.fullData?.bpmLibrosa != null ? Math.round(bpmModalData.fullData.bpmLibrosa) : 'N/A'}</span>
-                                {bpmModalData.fullData?.bpmConfidenceLibrosa != null && (
-                                  <span className="text-xs text-gray-500 dark:text-slate-400">
-                                    (confidence: {(bpmModalData.fullData.bpmConfidenceLibrosa * 100).toFixed(0)}%)
-                                  </span>
-                                )}
-                              </div>
-                              {typeof bpmModalData.fullData?.bpmRawLibrosa === 'number' && bpmModalData.fullData.bpmRawLibrosa !== bpmModalData.fullData.bpmLibrosa && (
-                                <div className="text-xs text-gray-500 dark:text-slate-400 mt-1">
-                                  Raw: {bpmModalData.fullData.bpmRawLibrosa.toFixed(1)}
-                                </div>
-                              )}
+                            <div className="text-sm text-gray-900 dark:text-slate-100">
+                              {candidate.key || '—'} {candidate.scale || ''}
                             </div>
-                            {bpmModalData.bpmSelected === 'librosa' && (
-                              <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">Selected</span>
-                            )}
-                            {bpmModalData.bpmSelected !== 'librosa' && (
-                              <button
-                                onClick={async () => {
-                                  setIsUpdatingSelection(true)
-                                  try {
-                                    const res = await fetch('/api/bpm/update-selection', {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({
-                                        spotifyTrackId: bpmModalData.trackId,
-                                        bpmSelected: 'librosa',
-                                      }),
-                                    })
-                                    if (res.ok) {
-                                      await fetchBpmsBatch()
-                                    }
-                                  } finally {
-                                    setIsUpdatingSelection(false)
-                                  }
-                                }}
-                                disabled={isUpdatingSelection}
-                                className="text-xs bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white px-2 py-1 rounded transition-colors dark:bg-emerald-500 dark:hover:bg-emerald-400"
-                              >
-                                Use This
-                              </button>
-                            )}
+                            <div className="text-[11px] text-gray-500 dark:text-slate-400">
+                              Confidence:{' '}
+                              {candidate.confidence != null
+                                ? `${Math.round(candidate.confidence * 100)}%`
+                                : 'n/a'}
+                            </div>
                           </div>
-                        </div>
-                      )}
-                      
-                      {isAdmin && (
-                        <div className={`p-3 rounded border-2 ${bpmModalData.bpmSelected === 'manual' ? 'border-green-500 bg-green-50 dark:bg-emerald-500/10' : 'border-gray-200 bg-gray-50 dark:border-slate-700 dark:bg-slate-800/60'}`}>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="font-semibold text-gray-700 dark:text-slate-200">Manual Override:</span>
-                            {bpmModalData.bpmSelected === 'manual' && bpmModalData.fullData?.bpmManual != null && (
-                              <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">Selected: {Math.round(bpmModalData.fullData.bpmManual)}</span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              value={manualBpm || bpmModalData.fullData?.bpmManual || ''}
-                              onChange={(e) => setManualBpm(e.target.value)}
-                              placeholder="Enter BPM"
-                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                              min="1"
-                              max="300"
-                            />
+                          {isSelected ? (
+                            <span className="text-[11px] uppercase tracking-[0.2em] text-green-600 dark:text-emerald-300">
+                              Selected
+                            </span>
+                          ) : isAdmin ? (
                             <button
-                              onClick={async () => {
-                                const bpmValue = parseFloat(manualBpm || String(bpmModalData.fullData?.bpmManual || ''))
-                                if (isNaN(bpmValue) || bpmValue < 1 || bpmValue > 300) {
-                                  alert('Please enter a valid BPM between 1 and 300')
-                                  return
-                                }
-                                setIsUpdatingSelection(true)
-                                try {
-                                  const res = await fetch('/api/bpm/update-selection', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                      spotifyTrackId: bpmModalData.trackId,
-                                      bpmSelected: 'manual',
-                                      bpmManual: bpmValue,
-                                    }),
-                                  })
-                                  if (res.ok) {
-                                    await fetchBpmsBatch()
-                                    setManualBpm('')
-                                  }
-                                } finally {
-                                  setIsUpdatingSelection(false)
-                                }
-                              }}
-                              disabled={isUpdatingSelection || (!manualBpm && !bpmModalData.fullData?.bpmManual)}
-                              className="text-xs bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white px-3 py-1 rounded transition-colors dark:bg-purple-500/70 dark:hover:bg-purple-500"
+                              onClick={() =>
+                                updateBpmSelection({
+                                  spotifyTrackId: bpmModalData.trackId,
+                                  keySelected: candidate.id,
+                                })
+                              }
+                              disabled={isUpdatingSelection}
+                              className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-600 hover:border-gray-300 hover:text-gray-800 disabled:text-gray-400 dark:border-slate-700 dark:text-slate-300"
                             >
-                              {isUpdatingSelection ? 'Saving...' : 'Save Manual'}
+                              Use this
                             </button>
-                          </div>
+                          ) : null}
                         </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="mt-3 text-sm text-gray-500 dark:text-slate-400">
+                    Key data is not available yet.
+                  </div>
+                )}
+
+                {isAdmin && (
+                  <div className="mt-4 rounded-md border border-dashed border-gray-200 px-3 py-3 dark:border-slate-800">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">
+                      Manual override
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <select
+                        value={manualKey || bpmModalData.fullData?.keyManual || ''}
+                        onChange={(e) => setManualKey(e.target.value)}
+                        className="rounded border border-gray-200 px-2 py-1 text-sm text-gray-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                      >
+                        <option value="">Select Key</option>
+                        {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].map(k => (
+                          <option key={k} value={k}>{k}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={manualScale || bpmModalData.fullData?.scaleManual || 'major'}
+                        onChange={(e) => setManualScale(e.target.value)}
+                        className="rounded border border-gray-200 px-2 py-1 text-sm text-gray-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                      >
+                        <option value="major">Major</option>
+                        <option value="minor">Minor</option>
+                      </select>
+                      <button
+                        onClick={async () => {
+                          const key = manualKey || bpmModalData.fullData?.keyManual
+                          const scale = manualScale || bpmModalData.fullData?.scaleManual || 'major'
+                          if (!key) {
+                            alert('Please select a key')
+                            return
+                          }
+                          await updateBpmSelection({
+                            spotifyTrackId: bpmModalData.trackId,
+                            keySelected: 'manual',
+                            keyManual: key,
+                            scaleManual: scale,
+                          })
+                          setManualKey('')
+                          setManualScale('major')
+                        }}
+                        disabled={isUpdatingSelection || (!manualKey && !bpmModalData.fullData?.keyManual)}
+                        className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-600 hover:border-gray-300 hover:text-gray-800 disabled:text-gray-400 dark:border-slate-700 dark:text-slate-300"
+                      >
+                        Save manual
+                      </button>
+                      {bpmModalData.keySelected === 'manual' && bpmModalData.fullData?.keyManual && (
+                        <span className="text-[11px] text-gray-500 dark:text-slate-400">
+                          Selected: {bpmModalData.fullData.keyManual} {bpmModalData.fullData.scaleManual}
+                        </span>
                       )}
                     </div>
                   </div>
+                )}
+              </section>
 
-                  {/* Key/Scale Section */}
-                  <div>
-                    <h4 className="font-semibold text-gray-900 dark:text-slate-100 mb-3">Key & Scale</h4>
-                    <div className="space-y-3">
-                      {/* Essentia Key */}
-                      {bpmModalData.hasEssentiaKey && (
-                        <div className={`p-3 rounded border-2 ${bpmModalData.keySelected === 'essentia' ? 'border-green-500 bg-green-50 dark:bg-emerald-500/10' : 'border-gray-200 bg-gray-50 dark:border-slate-700 dark:bg-slate-800/60'}`}>
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-gray-700 dark:text-slate-200">Essentia:</span>
-                                <span className="text-gray-900 dark:text-slate-100">
-                                  {bpmModalData.fullData?.keyEssentia || 'N/A'} {bpmModalData.fullData?.scaleEssentia || ''}
-                                </span>
-                                {bpmModalData.fullData?.keyscaleConfidenceEssentia != null && (
-                                  <span className="text-xs text-gray-500 dark:text-slate-400">
-                                    (confidence: {(bpmModalData.fullData.keyscaleConfidenceEssentia * 100).toFixed(0)}%)
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            {bpmModalData.keySelected === 'essentia' && (
-                              <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">Selected</span>
-                            )}
-                            {bpmModalData.keySelected !== 'essentia' && bpmModalData.hasLibrosaKey && (
-                              <button
-                                onClick={async () => {
-                                  setIsUpdatingSelection(true)
-                                  try {
-                                    const res = await fetch('/api/bpm/update-selection', {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({
-                                        spotifyTrackId: bpmModalData.trackId,
-                                        keySelected: 'essentia',
-                                      }),
-                                    })
-                                    if (res.ok) {
-                                      await fetchBpmsBatch()
-                                    }
-                                  } finally {
-                                    setIsUpdatingSelection(false)
-                                  }
-                                }}
-                                disabled={isUpdatingSelection}
-                                className="text-xs bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white px-2 py-1 rounded transition-colors dark:bg-emerald-500 dark:hover:bg-emerald-400"
-                              >
-                                Use This
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Librosa Key */}
-                      {bpmModalData.hasLibrosaKey && (
-                        <div className={`p-3 rounded border-2 ${bpmModalData.keySelected === 'librosa' ? 'border-green-500 bg-green-50 dark:bg-emerald-500/10' : 'border-gray-200 bg-gray-50 dark:border-slate-700 dark:bg-slate-800/60'}`}>
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-gray-700 dark:text-slate-200">Librosa:</span>
-                                <span className="text-gray-900 dark:text-slate-100">
-                                  {bpmModalData.fullData?.keyLibrosa || 'N/A'} {bpmModalData.fullData?.scaleLibrosa || ''}
-                                </span>
-                                {bpmModalData.fullData?.keyscaleConfidenceLibrosa != null && (
-                                  <span className="text-xs text-gray-500 dark:text-slate-400">
-                                    (confidence: {(bpmModalData.fullData.keyscaleConfidenceLibrosa * 100).toFixed(0)}%)
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            {bpmModalData.keySelected === 'librosa' && (
-                              <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">Selected</span>
-                            )}
-                            {bpmModalData.keySelected !== 'librosa' && (
-                              <button
-                                onClick={async () => {
-                                  setIsUpdatingSelection(true)
-                                  try {
-                                    const res = await fetch('/api/bpm/update-selection', {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({
-                                        spotifyTrackId: bpmModalData.trackId,
-                                        keySelected: 'librosa',
-                                      }),
-                                    })
-                                    if (res.ok) {
-                                      await fetchBpmsBatch()
-                                    }
-                                  } finally {
-                                    setIsUpdatingSelection(false)
-                                  }
-                                }}
-                                disabled={isUpdatingSelection}
-                                className="text-xs bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white px-2 py-1 rounded transition-colors dark:bg-emerald-500 dark:hover:bg-emerald-400"
-                              >
-                                Use This
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {isAdmin && (
-                        <div className={`p-3 rounded border-2 ${bpmModalData.keySelected === 'manual' ? 'border-green-500 bg-green-50 dark:bg-emerald-500/10' : 'border-gray-200 bg-gray-50 dark:border-slate-700 dark:bg-slate-800/60'}`}>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="font-semibold text-gray-700 dark:text-slate-200">Manual Override:</span>
-                            {bpmModalData.keySelected === 'manual' && bpmModalData.fullData?.keyManual && (
-                              <span className="text-xs bg-green-500 text-white px-2 py-1 rounded font-semibold">
-                                Selected: {bpmModalData.fullData.keyManual} {bpmModalData.fullData.scaleManual}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <select
-                              value={manualKey || bpmModalData.fullData?.keyManual || ''}
-                              onChange={(e) => setManualKey(e.target.value)}
-                              className="px-2 py-1 border border-gray-300 rounded text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                            >
-                              <option value="">Select Key</option>
-                              {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].map(k => (
-                                <option key={k} value={k}>{k}</option>
-                              ))}
-                            </select>
-                            <select
-                              value={manualScale || bpmModalData.fullData?.scaleManual || 'major'}
-                              onChange={(e) => setManualScale(e.target.value)}
-                              className="px-2 py-1 border border-gray-300 rounded text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                            >
-                              <option value="major">Major</option>
-                              <option value="minor">Minor</option>
-                            </select>
-                            <button
-                              onClick={async () => {
-                                const key = manualKey || bpmModalData.fullData?.keyManual
-                                const scale = manualScale || bpmModalData.fullData?.scaleManual || 'major'
-                                if (!key) {
-                                  alert('Please select a key')
-                                  return
-                                }
-                                setIsUpdatingSelection(true)
-                                try {
-                                  const res = await fetch('/api/bpm/update-selection', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                      spotifyTrackId: bpmModalData.trackId,
-                                      keySelected: 'manual',
-                                      keyManual: key,
-                                      scaleManual: scale,
-                                    }),
-                                  })
-                                  if (res.ok) {
-                                    await fetchBpmsBatch()
-                                    setManualKey('')
-                                    setManualScale('major')
-                                  }
-                                } finally {
-                                  setIsUpdatingSelection(false)
-                                }
-                              }}
-                              disabled={isUpdatingSelection || (!manualKey && !bpmModalData.fullData?.keyManual)}
-                              className="text-xs bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white px-3 py-1 rounded transition-colors dark:bg-purple-500/70 dark:hover:bg-purple-500"
-                            >
-                              {isUpdatingSelection ? 'Saving...' : 'Save Manual'}
-                            </button>
-                          </div>
-                        </div>
-                      )}
+              <section className="rounded-lg border border-gray-200 p-4 dark:border-slate-800">
+                <div className="text-[11px] uppercase tracking-[0.2em] text-gray-400 dark:text-slate-500">
+                  Recalculate
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  <button
+                    onClick={() => recalcTrackWithOptions(selectedBpmTrack)}
+                    disabled={recalcStatus?.loading}
+                    className="rounded-full border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:border-gray-300 disabled:text-gray-400 dark:border-slate-700 dark:text-slate-200"
+                  >
+                    {recalcStatus?.loading ? 'Recalculating...' : 'Standard'}
+                  </button>
+                  <button
+                    onClick={() => recalcTrackWithOptions(selectedBpmTrack, { fallbackOverride: 'always' })}
+                    disabled={recalcStatus?.loading}
+                    className="rounded-full border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:border-gray-300 disabled:text-gray-400 dark:border-slate-700 dark:text-slate-200"
+                  >
+                    Force fallback
+                  </button>
+                  <button
+                    onClick={() => recalcTrackWithOptions(selectedBpmTrack, { fallbackOverride: 'always' })}
+                    disabled={recalcStatus?.loading}
+                    className="rounded-full border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:border-gray-300 disabled:text-gray-400 dark:border-slate-700 dark:text-slate-200"
+                  >
+                    Fallback only
+                  </button>
+                </div>
+                {recalcStatus?.error && (
+                  <div className="mt-2 text-xs text-red-600">{recalcStatus.error}</div>
+                )}
+              </section>
+
+              {isAdmin && (
+                <section className="rounded-lg border border-gray-200 p-4 dark:border-slate-800">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-[11px] uppercase tracking-[0.2em] text-gray-400 dark:text-slate-500">
+                        Debug
+                      </div>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                        Live logs appear as calculations stream.
+                      </p>
                     </div>
+                    <button
+                      onClick={() => setShowBpmModalDebug(prev => !prev)}
+                      className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-600 hover:border-gray-300 dark:border-slate-700 dark:text-slate-300"
+                    >
+                      {showBpmModalDebug ? 'Hide' : 'Show'}
+                    </button>
                   </div>
 
-                  {/* Status Messages */}
-                  {retryStatus && (
-                    <div className={`p-3 rounded text-sm ${
-                      retryStatus.loading 
-                        ? 'bg-blue-50 text-blue-700' 
-                        : retryStatus.success 
-                          ? 'bg-green-50 text-green-700' 
-                          : 'bg-red-50 text-red-700'
-                    }`}>
-                      {retryStatus.loading && 'Retrying...'}
-                      {!retryStatus.loading && retryStatus.success && 'BPM successfully calculated!'}
-                      {!retryStatus.loading && !retryStatus.success && retryStatus.error && `Error: ${retryStatus.error}`}
+                  {showBpmModalDebug && (
+                    <div className="mt-4 space-y-4 text-xs text-gray-600 dark:text-slate-300">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-medium text-gray-500 dark:text-slate-400" htmlFor="modal-bpm-debug-level">
+                            Log level
+                          </label>
+                          <select
+                            id="modal-bpm-debug-level"
+                            value={bpmDebugLevel}
+                            onChange={(e) => setBpmDebugLevel(e.target.value)}
+                            className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                          >
+                            <option value="minimal">Minimal</option>
+                            <option value="normal">Normal</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-medium text-gray-500 dark:text-slate-400" htmlFor="modal-bpm-confidence-threshold">
+                            Confidence threshold
+                          </label>
+                          <input
+                            id="modal-bpm-confidence-threshold"
+                            type="number"
+                            min="0"
+                            max="1"
+                            step="0.01"
+                            value={bpmConfidenceThreshold}
+                            onChange={(e) => setBpmConfidenceThreshold(e.target.value)}
+                            className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[11px] uppercase tracking-[0.2em] text-gray-400 dark:text-slate-500">
+                          Live logs
+                        </div>
+                        <pre className="mt-2 max-h-40 overflow-auto rounded-md border border-gray-200 bg-gray-50 p-3 text-[11px] text-gray-700 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-200">
+                          {bpmModalData.fullData?.debugTxt || 'No live logs yet.'}
+                        </pre>
+                      </div>
+                      <div>
+                        <div className="text-[11px] uppercase tracking-[0.2em] text-gray-400 dark:text-slate-500">
+                          Last payload
+                        </div>
+                        <pre className="mt-2 max-h-40 overflow-auto rounded-md border border-gray-200 bg-gray-50 p-3 text-[11px] text-gray-700 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-200">
+                          {bpmDebugInfo[bpmModalData.trackId]
+                            ? JSON.stringify(bpmDebugInfo[bpmModalData.trackId], null, 2)
+                            : 'No previous payloads yet.'}
+                        </pre>
+                      </div>
                     </div>
                   )}
-                  
-                  {isUpdatingSelection && (
-                    <div className="p-3 rounded text-sm bg-blue-50 text-blue-700">
-                      Updating selection...
-                    </div>
-                  )}
+                </section>
+              )}
+
+              {retryStatus && (
+                <div
+                  className={`rounded-md border px-3 py-2 text-xs ${
+                    retryStatus.loading
+                      ? 'border-blue-100 bg-blue-50 text-blue-700'
+                      : retryStatus.success
+                        ? 'border-green-100 bg-green-50 text-green-700'
+                        : 'border-red-100 bg-red-50 text-red-700'
+                  }`}
+                >
+                  {retryStatus.loading && 'Retrying...'}
+                  {!retryStatus.loading && retryStatus.success && 'BPM successfully calculated!'}
+                  {!retryStatus.loading && !retryStatus.success && retryStatus.error && `Error: ${retryStatus.error}`}
                 </div>
               )}
 
-              <div className="mt-6 flex justify-end">
-                <button
-                  onClick={() => {
-                    setShowBpmModal(false)
-                    setRetryStatus(null)
-                    setRetryAttempted(false)
-                    setRetryTrackId(null)
-                    setManualBpm('')
-                    setManualKey('')
-                    setManualScale('major')
-                  }}
-                  className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded transition-colors"
-                >
-                  Close
-                </button>
-              </div>
+              {isUpdatingSelection && (
+                <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                  Updating selection...
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={closeBpmModal}
+                className="rounded-full border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-700 hover:border-gray-300 dark:border-slate-700 dark:text-slate-200"
+              >
+                Close
+              </button>
             </div>
           </div>
+        </div>
       )}
 
       {/* Credits Modal */}
       {showCreditsModal && selectedCreditsTrack && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-          onClick={() => setShowCreditsModal(false)}
+          onClick={closeCreditsModal}
         >
           <div
-            className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto"
+            className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto dark:bg-slate-900 dark:text-slate-100"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-900">Song Credits</h2>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100">Song Credits</h2>
               <button
-                onClick={() => setShowCreditsModal(false)}
-                className="text-gray-400 dark:text-slate-500 hover:text-gray-600 text-2xl"
+                onClick={closeCreditsModal}
+                className="text-gray-500 hover:text-gray-700 dark:text-slate-200 dark:hover:text-white text-2xl"
               >
                 ×
               </button>
             </div>
             <div className="mb-4">
-              <h3 className="font-semibold text-gray-900">{selectedCreditsTrack.name}</h3>
-              <p className="text-sm text-gray-600">
+              <h3 className="font-semibold text-gray-900 dark:text-slate-100">{selectedCreditsTrack.name}</h3>
+              <p className="text-sm text-gray-600 dark:text-slate-300">
                 {selectedCreditsTrack.artists.map(a => a.name).join(', ')}
               </p>
               {creditsByTrackId[selectedCreditsTrack.id]?.releaseId && (
@@ -4494,13 +4585,13 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               )}
             </div>
             {creditsLoadingIds.has(selectedCreditsTrack.id) ? (
-              <div className="text-sm text-gray-600">Loading credits...</div>
+              <div className="text-sm text-gray-600 dark:text-slate-300">Loading credits...</div>
             ) : creditsErrorByTrackId[selectedCreditsTrack.id] ? (
               <div className="text-sm text-red-600">{creditsErrorByTrackId[selectedCreditsTrack.id]}</div>
             ) : (
-              <div className="space-y-4 text-sm text-gray-700">
+              <div className="space-y-4 text-sm text-gray-700 dark:text-slate-300">
                 <div>
-                  <div className="font-semibold text-gray-900">Performed by</div>
+                  <div className="font-semibold text-gray-900 dark:text-slate-100">Performed by</div>
                   {creditsByTrackId[selectedCreditsTrack.id]?.performedBy?.length ? (
                     <div>{creditsByTrackId[selectedCreditsTrack.id].performedBy.join(', ')}</div>
                   ) : (
@@ -4508,7 +4599,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   )}
                 </div>
                 <div>
-                  <div className="font-semibold text-gray-900">Written by</div>
+                  <div className="font-semibold text-gray-900 dark:text-slate-100">Written by</div>
                   {creditsByTrackId[selectedCreditsTrack.id]?.writtenBy?.length ? (
                     <div>{creditsByTrackId[selectedCreditsTrack.id].writtenBy.join(', ')}</div>
                   ) : (
@@ -4516,7 +4607,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   )}
                 </div>
                 <div>
-                  <div className="font-semibold text-gray-900">Produced by</div>
+                  <div className="font-semibold text-gray-900 dark:text-slate-100">Produced by</div>
                   {creditsByTrackId[selectedCreditsTrack.id]?.producedBy?.length ? (
                     <div>{creditsByTrackId[selectedCreditsTrack.id].producedBy.join(', ')}</div>
                   ) : (
@@ -4524,7 +4615,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   )}
                 </div>
                 <div>
-                  <div className="font-semibold text-gray-900">Mixed by</div>
+                  <div className="font-semibold text-gray-900 dark:text-slate-100">Mixed by</div>
                   {creditsByTrackId[selectedCreditsTrack.id]?.mixedBy?.length ? (
                     <div>{creditsByTrackId[selectedCreditsTrack.id].mixedBy.join(', ')}</div>
                   ) : (
@@ -4532,7 +4623,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   )}
                 </div>
                 <div>
-                  <div className="font-semibold text-gray-900">Mastered by</div>
+                  <div className="font-semibold text-gray-900 dark:text-slate-100">Mastered by</div>
                   {creditsByTrackId[selectedCreditsTrack.id]?.masteredBy?.length ? (
                     <div>{creditsByTrackId[selectedCreditsTrack.id].masteredBy.join(', ')}</div>
                   ) : (
@@ -4543,8 +4634,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             )}
             <div className="mt-6 flex justify-end">
               <button
-                onClick={() => setShowCreditsModal(false)}
-                className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded transition-colors"
+                onClick={closeCreditsModal}
+                className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded transition-colors dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
               >
                 Close
               </button>

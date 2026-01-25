@@ -42,9 +42,9 @@ interface Playlist {
 
 export default async function PlaylistsPage() {
   const cookieStore = await cookies()
-  const isAuthenticated = Boolean(
-    cookieStore.get('access_token')?.value || cookieStore.get('refresh_token')?.value
-  )
+  const hasAccessToken = Boolean(cookieStore.get('access_token')?.value)
+  const hasRefreshToken = Boolean(cookieStore.get('refresh_token')?.value)
+  const isAuthenticated = hasAccessToken || hasRefreshToken
 
   if (!isAuthenticated) {
     redirect('/')
@@ -100,16 +100,20 @@ export default async function PlaylistsPage() {
   }
 
   if (error === 'Unauthorized') {
-    redirect('/')
+    redirect('/api/auth/login')
   }
 
   if (error) {
+    const errorLower = error.toLowerCase()
+    const isAuthError = errorLower.includes('no access token') || 
+                       errorLower.includes('unauthorized') || 
+                       errorLower.includes('please log in')
+    const isAccessBlocked = errorLower.includes('access blocked')
+    if (isAuthError || (isAccessBlocked && hasRefreshToken)) {
+      redirect('/api/auth/login')
+    }
     // Check if error is a 403/Forbidden error (case insensitive)
-    const isForbidden = error.toLowerCase().includes('forbidden') || error.includes('403')
-    // Check if error is an authentication error
-    const isAuthError = error.toLowerCase().includes('no access token') || 
-                       error.toLowerCase().includes('unauthorized') || 
-                       error.toLowerCase().includes('please log in')
+    const isForbidden = errorLower.includes('forbidden') || error.includes('403')
     
     logInfo('Playlists error page rendering', { error, isForbidden, isAuthError })
     
