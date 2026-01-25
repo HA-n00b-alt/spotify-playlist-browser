@@ -424,22 +424,25 @@ export function useBpmAnalysis(tracks: Track[]) {
               : selectBestKey(keyEssentia, keyscaleConfidenceEssentia, keyLibrosa, keyscaleConfidenceLibrosa)
 
           return {
-            ...previous,
-            bpmEssentia,
-            bpmRawEssentia,
-            bpmConfidenceEssentia,
-            bpmLibrosa,
-            bpmRawLibrosa,
-            bpmConfidenceLibrosa,
-            keyEssentia,
-            scaleEssentia,
-            keyscaleConfidenceEssentia,
-            keyLibrosa,
-            scaleLibrosa,
-            keyscaleConfidenceLibrosa,
-            bpmSelected: resolvedBpmSelected,
-            keySelected: resolvedKeySelected,
-            debugTxt: data.debug_txt ?? previous.debugTxt,
+            ...prev,
+            [trackId]: {
+              ...previous,
+              bpmEssentia,
+              bpmRawEssentia,
+              bpmConfidenceEssentia,
+              bpmLibrosa,
+              bpmRawLibrosa,
+              bpmConfidenceLibrosa,
+              keyEssentia,
+              scaleEssentia,
+              keyscaleConfidenceEssentia,
+              keyLibrosa,
+              scaleLibrosa,
+              keyscaleConfidenceLibrosa,
+              bpmSelected: resolvedBpmSelected,
+              keySelected: resolvedKeySelected,
+              debugTxt: data.debug_txt ?? previous.debugTxt,
+            },
           }
         })
 
