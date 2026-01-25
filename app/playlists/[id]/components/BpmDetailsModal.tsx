@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import type { SpotifyTrack } from '@/lib/types'
 import type { BpmFallbackOverride } from '../../../hooks/useBpmAnalysis'
 
@@ -154,19 +155,37 @@ export default function BpmDetailsModal({
     return null
   }
   const ghostFieldClass =
-    'h-10 w-full bg-transparent px-0 py-2 text-sm text-white/90 focus:outline-none border-b border-white/15 focus:border-emerald-400'
+    'h-10 w-full bg-transparent px-0 py-2 text-sm text-white/90 focus:outline-none border-b border-white/20 focus:border-emerald-400'
   const manualSelectClass =
-    'h-10 bg-transparent px-0 py-2 text-sm text-white/90 focus:outline-none border-b border-white/15 focus:border-emerald-400'
-  const recalcOptions: Array<{ value: BpmFallbackOverride; label: string }> = [
-    { value: 'never', label: 'Essentia' },
-    { value: 'default', label: 'Auto' },
-    { value: 'always', label: 'Always' },
-    { value: 'bpm_only', label: 'BPM' },
-    { value: 'key_only', label: 'Key' },
-    { value: 'fallback_only', label: 'Fallback' },
-    { value: 'fallback_only_bpm', label: 'FB BPM' },
-    { value: 'fallback_only_key', label: 'FB Key' },
-  ]
+    'h-10 bg-transparent px-0 py-2 text-sm text-white/90 focus:outline-none border-b border-white/20 focus:border-emerald-400'
+  const recalcScopeForMode = (mode: BpmFallbackOverride): 'bpm' | 'key' | 'both' => {
+    if (mode === 'bpm_only' || mode === 'fallback_only_bpm') return 'bpm'
+    if (mode === 'key_only' || mode === 'fallback_only_key') return 'key'
+    return 'both'
+  }
+  const recalcStrategyForMode = (mode: BpmFallbackOverride): 'standard' | 'force' | 'fallback' => {
+    if (mode.startsWith('fallback_only')) return 'fallback'
+    if (mode === 'always' || mode === 'bpm_only' || mode === 'key_only') return 'force'
+    return 'standard'
+  }
+  const toMode = (scope: 'bpm' | 'key' | 'both', strategy: 'standard' | 'force' | 'fallback'): BpmFallbackOverride => {
+    if (strategy === 'standard') return 'never'
+    if (strategy === 'force') {
+      if (scope === 'bpm') return 'bpm_only'
+      if (scope === 'key') return 'key_only'
+      return 'always'
+    }
+    if (scope === 'bpm') return 'fallback_only_bpm'
+    if (scope === 'key') return 'fallback_only_key'
+    return 'fallback_only'
+  }
+  const [recalcScope, setRecalcScope] = useState<'bpm' | 'key' | 'both'>(() => recalcScopeForMode(recalcMode))
+  const [recalcStrategy, setRecalcStrategy] = useState<'standard' | 'force' | 'fallback'>(() => recalcStrategyForMode(recalcMode))
+
+  useEffect(() => {
+    setRecalcScope(recalcScopeForMode(recalcMode))
+    setRecalcStrategy(recalcStrategyForMode(recalcMode))
+  }, [recalcMode])
 
   return (
     <div
@@ -206,7 +225,7 @@ export default function BpmDetailsModal({
                 ? `${Math.round(bpmModalSummary.currentBpm)} BPM`
                 : '—'}
               {isAdmin && typeof bpmModalSummary.currentBpm === 'number' && (
-                <div className="inline-flex items-center rounded-full border border-white/20 text-[11px] font-semibold text-white/80">
+                <div className="inline-flex h-[22px] items-center rounded-[4px] border border-white/20 text-[10px] font-semibold text-white/80">
                   <button
                     onClick={async () => {
                       const currentBpm = bpmModalSummary.currentBpm
@@ -219,12 +238,12 @@ export default function BpmDetailsModal({
                       })
                     }}
                     disabled={isUpdatingSelection}
-                    className="px-2 py-1 hover:text-white disabled:text-white/40"
+                    className="px-2 hover:text-white disabled:text-white/40"
                     aria-label="Store half BPM"
                   >
                     ½
                   </button>
-                  <span className="h-4 w-px bg-white/15" />
+                  <span className="h-3 w-px bg-white/20" />
                   <button
                     onClick={async () => {
                       const currentBpm = bpmModalSummary.currentBpm
@@ -237,7 +256,7 @@ export default function BpmDetailsModal({
                       })
                     }}
                     disabled={isUpdatingSelection}
-                    className="px-2 py-1 hover:text-white disabled:text-white/40"
+                    className="px-2 hover:text-white disabled:text-white/40"
                     aria-label="Store double BPM"
                   >
                     2x
@@ -348,9 +367,9 @@ export default function BpmDetailsModal({
                           })
                         }}
                         disabled={isUpdatingSelection || (isSelected && !isAdmin)}
-                        className={`group -ml-5 flex w-full items-center justify-between rounded-[10px] px-3 py-2 pl-5 text-left text-sm transition ${
+                        className={`group -ml-5 flex w-full items-center justify-between px-3 py-2 pl-5 text-left text-sm transition ${
                           isSelected
-                            ? 'border-l-2 border-emerald-400 bg-white/5 text-white'
+                            ? 'border-l-2 border-emerald-400 bg-white/[0.04] text-white'
                             : 'border-l-2 border-transparent text-white/60 hover:text-white'
                         }`}
                       >
@@ -358,7 +377,7 @@ export default function BpmDetailsModal({
                           {candidate.label}
                         </div>
                         <div className="text-[12px] text-white/70 group-hover:text-white">
-                          {Math.round(candidate.value)} BPM ·{' '}
+                          {Math.round(candidate.value)} ·{' '}
                           {candidate.confidence != null
                             ? `${Math.round(candidate.confidence * 100)}%`
                             : 'n/a'}
@@ -465,9 +484,9 @@ export default function BpmDetailsModal({
                         })
                       }}
                       disabled={isUpdatingSelection || (isSelected && !isAdmin)}
-                      className={`group -ml-5 flex w-full items-center justify-between rounded-[10px] px-3 py-2 pl-5 text-left text-sm transition ${
+                      className={`group -ml-5 flex w-full items-center justify-between px-3 py-2 pl-5 text-left text-sm transition ${
                         isSelected
-                          ? 'border-l-2 border-emerald-400 bg-white/5 text-white'
+                          ? 'border-l-2 border-emerald-400 bg-white/[0.04] text-white'
                           : 'border-l-2 border-transparent text-white/60 hover:text-white'
                       }`}
                     >
@@ -475,8 +494,7 @@ export default function BpmDetailsModal({
                         {candidate.label}
                       </div>
                       <div className="text-[12px] text-white/70 group-hover:text-white">
-                        {(candidate.key || '—') + (candidate.scale ? ` ${candidate.scale}` : '')}{' '}
-                        ·{' '}
+                        {candidate.key || '—'} ·{' '}
                         {candidate.confidence != null
                           ? `${Math.round(candidate.confidence * 100)}%`
                           : 'n/a'}
@@ -564,31 +582,61 @@ export default function BpmDetailsModal({
           </section>
           </div>
 
-          <section>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="inline-flex flex-wrap items-center rounded-full border border-white/10 bg-white/5 p-1">
-                {recalcOptions.map((option) => (
+          <section className="pl-5">
+            <div className="grid items-center gap-3 md:grid-cols-3">
+              <div className="inline-flex items-center rounded-full border border-white/10 bg-white/5 p-1">
+                {(['bpm', 'key', 'both'] as const).map((scope) => (
                   <button
-                    key={option.value}
-                    onClick={() => onSetRecalcMode(option.value)}
+                    key={scope}
+                    onClick={() => {
+                      setRecalcScope(scope)
+                      onSetRecalcMode(toMode(scope, recalcStrategy))
+                    }}
                     disabled={recalcStatus?.loading}
                     className={`rounded-full px-3 py-1 text-[11px] font-semibold transition ${
-                      recalcMode === option.value
+                      recalcScope === scope
                         ? 'bg-emerald-500/20 text-emerald-200'
                         : 'text-white/60 hover:text-white'
                     }`}
                   >
-                    {option.label}
+                    {scope === 'bpm' ? 'BPM' : scope === 'key' ? 'Key' : 'Both'}
                   </button>
                 ))}
               </div>
-              <button
-                onClick={() => onRecalcTrack(recalcMode)}
-                disabled={recalcStatus?.loading}
-                className="h-10 rounded-full bg-emerald-500 px-4 text-[11px] font-semibold text-white shadow-sm transition hover:bg-emerald-400 disabled:opacity-60"
-              >
-                {recalcStatus?.loading ? 'Recalculating...' : 'Recalculate'}
-              </button>
+              <div className="flex justify-start md:justify-center">
+                <div className="inline-flex items-center rounded-full border border-white/10 bg-white/5 p-1">
+                  {(['standard', 'force', 'fallback'] as const).map((strategy) => (
+                    <button
+                      key={strategy}
+                      onClick={() => {
+                        setRecalcStrategy(strategy)
+                        onSetRecalcMode(toMode(recalcScope, strategy))
+                      }}
+                      disabled={recalcStatus?.loading}
+                      className={`rounded-full px-3 py-1 text-[11px] font-semibold transition ${
+                        recalcStrategy === strategy
+                          ? 'bg-emerald-500/20 text-emerald-200'
+                          : 'text-white/60 hover:text-white'
+                      }`}
+                    >
+                      {strategy === 'standard' ? 'Standard' : strategy === 'force' ? 'Force' : 'Fallback'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex justify-start md:justify-end">
+                <button
+                  onClick={() => onRecalcTrack(toMode(recalcScope, recalcStrategy))}
+                  disabled={recalcStatus?.loading}
+                  className={`h-10 rounded-[12px] px-4 text-[11px] font-semibold text-white shadow-sm transition ${
+                    recalcStatus?.loading
+                      ? 'bg-emerald-500/50'
+                      : 'bg-emerald-500/80 hover:bg-emerald-400/90'
+                  }`}
+                >
+                  {recalcStatus?.loading ? 'Recalculating...' : 'Recalculate'}
+                </button>
+              </div>
             </div>
             {recalcStatus?.error && (
               <div className="mt-2 text-xs text-red-600">{recalcStatus.error}</div>

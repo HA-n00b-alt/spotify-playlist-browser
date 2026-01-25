@@ -998,7 +998,6 @@ export function useBpmAnalysis(tracks: Track[]) {
       })
       const targetIds = new Set([track.id])
       streamBpmsForTracks([track], targetIds, targetIds, options)
-      setState('recalcStatus', { loading: false, success: true })
     } catch (error) {
       setState('recalcStatus', {
         loading: false,
@@ -1007,6 +1006,25 @@ export function useBpmAnalysis(tracks: Track[]) {
       })
     }
   }
+
+  useEffect(() => {
+    if (!recalcStatus?.loading || !selectedBpmTrack) return
+    const status = bpmStreamStatus[selectedBpmTrack.id]
+    if (!status) return
+    if (status === 'final') {
+      setState('recalcStatus', { loading: false, success: true })
+      return
+    }
+    if (status === 'error') {
+      const errorMessage =
+        bpmDetails[selectedBpmTrack.id]?.error || 'Failed to recalculate BPM/key'
+      setState('recalcStatus', {
+        loading: false,
+        success: false,
+        error: errorMessage,
+      })
+    }
+  }, [recalcStatus?.loading, selectedBpmTrack, bpmStreamStatus, bpmDetails, setState])
 
   const handleMusoPreviewBpm = async (trackId: string) => {
     setState('musoPreviewStatus', { loading: true })
