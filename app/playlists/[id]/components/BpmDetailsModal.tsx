@@ -152,9 +152,9 @@ export default function BpmDetailsModal({
   onRecalcTrack,
 }: BpmDetailsModalProps) {
   const ghostFieldClass =
-    'w-full bg-transparent border-b border-white/10 py-1 text-sm text-white/90 placeholder:text-white/20 focus:outline-none focus:border-emerald-500 transition-colors duration-200'
+    'w-full bg-transparent border-b border-white/10 py-1 text-sm text-white/90 placeholder:text-white/10 focus:outline-none focus:border-emerald-500/30 transition-colors duration-300'
   const manualSelectClass =
-    'h-10 bg-transparent px-0 py-2 text-sm text-white/90 focus:outline-none'
+    'bg-transparent border-b border-white/10 px-0 py-1 text-sm text-white/90 focus:outline-none focus:border-emerald-500/30 transition-colors duration-300'
   const recalcScopeForMode = (mode: BpmFallbackOverride): 'bpm' | 'key' | 'both' => {
     if (mode === 'bpm_only' || mode === 'fallback_only_bpm') return 'bpm'
     if (mode === 'key_only' || mode === 'fallback_only_key') return 'key'
@@ -392,11 +392,11 @@ export default function BpmDetailsModal({
                 </div>
 
                 {isAdmin && (
-                  <div className="mt-6">
-                    <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.05em] text-gray-600 dark:text-white/50">
-                      Manual override
+                  <div className="mt-6 flex flex-col gap-2 group/input">
+                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-white/40 transition-colors group-focus-within/input:text-emerald-400">
+                      <span>Manual override</span>
                       <svg
-                        className="h-2.5 w-2.5 text-white/50"
+                        className="h-2.5 w-2.5 text-white/40"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
@@ -409,8 +409,8 @@ export default function BpmDetailsModal({
                         <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
                       </svg>
                     </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <div className="relative group w-28">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="relative w-28">
                         <input
                           type="number"
                           value={manualBpm || bpmModalData.fullData?.bpmManual || ''}
@@ -420,7 +420,7 @@ export default function BpmDetailsModal({
                           min="1"
                           max="300"
                         />
-                        <div className="absolute bottom-0 left-0 h-[1px] w-0 bg-emerald-500 transition-all duration-300 group-focus-within:w-full" />
+                        <div className="absolute bottom-0 left-0 h-[1px] w-0 bg-emerald-500 transition-all duration-500 group-focus-within/input:w-full" />
                       </div>
                       {manualBpm && manualBpm !== String(bpmModalData.fullData?.bpmManual || '') ? (
                         <button
@@ -520,14 +520,14 @@ export default function BpmDetailsModal({
             )}
 
             {isAdmin && (
-              <div className="mt-6">
-                    <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.05em] text-gray-600 dark:text-white/50">
-                      Manual override
-                      <svg
-                        className="h-2.5 w-2.5 text-white/50"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
+              <div className="mt-6 flex flex-col gap-2 group/input">
+                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-white/40 transition-colors group-focus-within/input:text-emerald-400">
+                  <span>Manual override</span>
+                  <svg
+                    className="h-2.5 w-2.5 text-white/40"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -537,8 +537,8 @@ export default function BpmDetailsModal({
                     <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
                   </svg>
                 </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <div className="relative group min-w-[120px]">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative group/select min-w-[120px]">
                     <select
                       value={manualKey || bpmModalData.fullData?.keyManual || ''}
                       onChange={(e) => onSetManualKey(e.target.value)}
@@ -549,9 +549,9 @@ export default function BpmDetailsModal({
                         <option key={k} value={k}>{k}</option>
                       ))}
                     </select>
-                    <div className="absolute bottom-0 left-0 h-px w-full bg-white/10 transition-colors group-focus-within:bg-emerald-500" />
+                    <div className="absolute bottom-0 left-0 h-[1px] w-0 bg-emerald-500 transition-all duration-500 group-focus-within/select:w-full" />
                   </div>
-                  <div className="relative group min-w-[120px]">
+                  <div className="relative group/select min-w-[120px]">
                     <select
                       value={manualScale || bpmModalData.fullData?.scaleManual || 'major'}
                       onChange={(e) => onSetManualScale(e.target.value)}
@@ -560,7 +560,7 @@ export default function BpmDetailsModal({
                       <option value="major">Major</option>
                       <option value="minor">Minor</option>
                     </select>
-                    <div className="absolute bottom-0 left-0 h-px w-full bg-white/10 transition-colors group-focus-within:bg-emerald-500" />
+                    <div className="absolute bottom-0 left-0 h-[1px] w-0 bg-emerald-500 transition-all duration-500 group-focus-within/select:w-full" />
                   </div>
                   {(manualKey && manualKey !== (bpmModalData.fullData?.keyManual || ''))
                     || (manualScale && manualScale !== (bpmModalData.fullData?.scaleManual || 'major')) ? (
