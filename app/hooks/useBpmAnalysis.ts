@@ -212,7 +212,7 @@ export function useBpmAnalysis(tracks: Track[]) {
     }
   }, [])
 
-  const getPreviewUrlFromMeta = (meta: { urls?: PreviewUrlEntry[] }): string | null => {
+  const getPreviewUrlFromMeta = useCallback((meta: { urls?: PreviewUrlEntry[] }): string | null => {
     if (!meta.urls || meta.urls.length === 0) return null
     const isDeezerApi = (url: string) => url.includes('api.deezer.com')
     const isDeezerTimed = (url: string) =>
@@ -240,7 +240,7 @@ export function useBpmAnalysis(tracks: Track[]) {
     }
     const entry = pickBest(meta.urls)
     return entry ? toDeezerApi(entry) : null
-  }
+  }, [])
 
   const selectBestBpm = useCallback((
     bpmEssentia: number | null | undefined,
@@ -476,6 +476,35 @@ export function useBpmAnalysis(tracks: Track[]) {
     }
   }, [getPreviewUrlFromMeta, selectBestBpm, selectBestKey, setState])
 
+  const fetchBpmsForTracks = useCallback(async (tracksToFetch: Track[]) => {
+    if (tracksToFetch.length === 0) return
+
+    const batchSize = 50
+    const results: Record<string, any> = {}
+
+    for (let i = 0; i < tracksToFetch.length; i += batchSize) {
+      const batch = tracksToFetch.slice(i, i + batchSize)
+      const trackIds = batch.map(track => track.id)
+      try {
+        const res = await fetch('/api/bpm/batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trackIds, country: countryCode }),
+        })
+        if (!res.ok) {
+          console.error(`[BPM Client] Batch fetch failed:`, res.status)
+          continue
+        }
+        const data = await res.json()
+        Object.assign(results, data.results || {})
+      } catch (error) {
+        console.error(`[BPM Client] Batch fetch error:`, error)
+      }
+    }
+
+    applyBatchResults(results)
+  }, [applyBatchResults, countryCode])
+
   const streamBpmsForTracks = useCallback(async (
     tracksToFetch: Track[],
     needsBpm?: Set<string>,
@@ -629,35 +658,6 @@ export function useBpmAnalysis(tracks: Track[]) {
       }
     }
   }, [bpmRequestSettings, countryCode, fetchBpmsForTracks, getPreviewUrlFromMeta, retryTrackId, setState, streamBatchResults])
-
-  const fetchBpmsForTracks = useCallback(async (tracksToFetch: Track[]) => {
-    if (tracksToFetch.length === 0) return
-
-    const batchSize = 50
-    const results: Record<string, any> = {}
-
-    for (let i = 0; i < tracksToFetch.length; i += batchSize) {
-      const batch = tracksToFetch.slice(i, i + batchSize)
-      const trackIds = batch.map(track => track.id)
-      try {
-        const res = await fetch('/api/bpm/batch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ trackIds, country: countryCode }),
-        })
-        if (!res.ok) {
-          console.error(`[BPM Client] Batch fetch failed:`, res.status)
-          continue
-        }
-        const data = await res.json()
-        Object.assign(results, data.results || {})
-      } catch (error) {
-        console.error(`[BPM Client] Batch fetch error:`, error)
-      }
-    }
-
-    applyBatchResults(results)
-  }, [applyBatchResults, countryCode])
 
   const applyBatchResults = useCallback((results: Record<string, any>) => {
     const newBpms: Record<string, number | null> = {}

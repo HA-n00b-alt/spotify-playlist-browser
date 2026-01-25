@@ -468,7 +468,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [setCountryCode])
+  }, [])
 
   useEffect(() => {
     fetch('/api/auth/status')
@@ -681,7 +681,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       }
     }
     fetchCountry()
-  }, [])
+  }, [setCountryCode])
 
   // Function to recalculate all BPM/key/scale for tracks in the playlist
   const triggerRecalculateTracks = async (trackIds: string[]) => {
