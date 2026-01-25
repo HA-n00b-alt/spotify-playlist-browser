@@ -152,32 +152,32 @@ export default function BpmDetailsModal({
   onRecalcTrack,
 }: BpmDetailsModalProps) {
   const ghostFieldClass =
-    'h-10 w-full bg-transparent px-0 py-2 text-sm text-white/90 focus:outline-none border-b border-white/20 focus:border-emerald-400'
+    'h-10 w-full bg-transparent px-0 py-2 text-sm text-white/90 placeholder:text-white/20 focus:outline-none'
   const manualSelectClass =
-    'h-10 bg-transparent px-0 py-2 text-sm text-white/90 focus:outline-none border-b border-white/20 focus:border-emerald-400'
+    'h-10 bg-transparent px-0 py-2 text-sm text-white/90 focus:outline-none'
   const recalcScopeForMode = (mode: BpmFallbackOverride): 'bpm' | 'key' | 'both' => {
     if (mode === 'bpm_only' || mode === 'fallback_only_bpm') return 'bpm'
     if (mode === 'key_only' || mode === 'fallback_only_key') return 'key'
     return 'both'
   }
-  const recalcStrategyForMode = (mode: BpmFallbackOverride): 'standard' | 'force' | 'fallback' => {
+  const recalcStrategyForMode = (mode: BpmFallbackOverride): 'standard' | 'fallback' | 'both' => {
     if (mode.startsWith('fallback_only')) return 'fallback'
-    if (mode === 'always' || mode === 'bpm_only' || mode === 'key_only') return 'force'
+    if (mode === 'always' || mode === 'bpm_only' || mode === 'key_only') return 'both'
     return 'standard'
   }
-  const toMode = (scope: 'bpm' | 'key' | 'both', strategy: 'standard' | 'force' | 'fallback'): BpmFallbackOverride => {
+  const toMode = (scope: 'bpm' | 'key' | 'both', strategy: 'standard' | 'fallback' | 'both'): BpmFallbackOverride => {
     if (strategy === 'standard') return 'never'
-    if (strategy === 'force') {
-      if (scope === 'bpm') return 'bpm_only'
-      if (scope === 'key') return 'key_only'
-      return 'always'
+    if (strategy === 'fallback') {
+      if (scope === 'bpm') return 'fallback_only_bpm'
+      if (scope === 'key') return 'fallback_only_key'
+      return 'fallback_only'
     }
-    if (scope === 'bpm') return 'fallback_only_bpm'
-    if (scope === 'key') return 'fallback_only_key'
-    return 'fallback_only'
+    if (scope === 'bpm') return 'bpm_only'
+    if (scope === 'key') return 'key_only'
+    return 'always'
   }
   const [recalcScope, setRecalcScope] = useState<'bpm' | 'key' | 'both'>(() => recalcScopeForMode(recalcMode))
-  const [recalcStrategy, setRecalcStrategy] = useState<'standard' | 'force' | 'fallback'>(() => recalcStrategyForMode(recalcMode))
+  const [recalcStrategy, setRecalcStrategy] = useState<'standard' | 'fallback' | 'both'>(() => recalcStrategyForMode(recalcMode))
 
   useEffect(() => {
     setRecalcScope(recalcScopeForMode(recalcMode))
@@ -407,15 +407,18 @@ export default function BpmDetailsModal({
                       </svg>
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <input
-                        type="number"
-                        value={manualBpm || bpmModalData.fullData?.bpmManual || ''}
-                        onChange={(e) => onSetManualBpm(e.target.value)}
-                        placeholder="Enter BPM"
-                        className={`${ghostFieldClass} w-28`}
-                        min="1"
-                        max="300"
-                      />
+                      <div className="relative group w-28">
+                        <input
+                          type="number"
+                          value={manualBpm || bpmModalData.fullData?.bpmManual || ''}
+                          onChange={(e) => onSetManualBpm(e.target.value)}
+                          placeholder="Enter BPM"
+                          className={ghostFieldClass}
+                          min="1"
+                          max="300"
+                        />
+                        <div className="absolute bottom-0 left-0 h-px w-full bg-white/10 transition-colors group-focus-within:bg-emerald-500" />
+                      </div>
                       {manualBpm && manualBpm !== String(bpmModalData.fullData?.bpmManual || '') ? (
                         <button
                           onClick={async () => {
@@ -529,24 +532,30 @@ export default function BpmDetailsModal({
                   </svg>
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <select
-                    value={manualKey || bpmModalData.fullData?.keyManual || ''}
-                    onChange={(e) => onSetManualKey(e.target.value)}
-                    className={`${manualSelectClass} min-w-[120px]`}
-                  >
-                    <option value="">Select Key</option>
-                    {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].map(k => (
-                      <option key={k} value={k}>{k}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={manualScale || bpmModalData.fullData?.scaleManual || 'major'}
-                    onChange={(e) => onSetManualScale(e.target.value)}
-                    className={`${manualSelectClass} min-w-[120px]`}
-                  >
-                    <option value="major">Major</option>
-                    <option value="minor">Minor</option>
-                  </select>
+                  <div className="relative group min-w-[120px]">
+                    <select
+                      value={manualKey || bpmModalData.fullData?.keyManual || ''}
+                      onChange={(e) => onSetManualKey(e.target.value)}
+                      className={`${manualSelectClass} min-w-[120px]`}
+                    >
+                      <option value="">Select Key</option>
+                      {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].map(k => (
+                        <option key={k} value={k}>{k}</option>
+                      ))}
+                    </select>
+                    <div className="absolute bottom-0 left-0 h-px w-full bg-white/10 transition-colors group-focus-within:bg-emerald-500" />
+                  </div>
+                  <div className="relative group min-w-[120px]">
+                    <select
+                      value={manualScale || bpmModalData.fullData?.scaleManual || 'major'}
+                      onChange={(e) => onSetManualScale(e.target.value)}
+                      className={`${manualSelectClass} min-w-[120px]`}
+                    >
+                      <option value="major">Major</option>
+                      <option value="minor">Minor</option>
+                    </select>
+                    <div className="absolute bottom-0 left-0 h-px w-full bg-white/10 transition-colors group-focus-within:bg-emerald-500" />
+                  </div>
                   {(manualKey && manualKey !== (bpmModalData.fullData?.keyManual || ''))
                     || (manualScale && manualScale !== (bpmModalData.fullData?.scaleManual || 'major')) ? (
                     <button
@@ -584,8 +593,8 @@ export default function BpmDetailsModal({
           </div>
 
           <section className="pl-5">
-            <div className="grid items-center gap-3 md:grid-cols-3">
-              <div className="inline-flex items-center rounded-full border border-white/10 bg-white/5 p-1">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-1 py-1">
                 {(['bpm', 'key', 'both'] as const).map((scope) => (
                   <button
                     key={scope}
@@ -596,48 +605,45 @@ export default function BpmDetailsModal({
                     disabled={recalcStatus?.loading}
                     className={`rounded-full px-3 py-1 text-[11px] font-semibold transition ${
                       recalcScope === scope
-                        ? 'bg-emerald-500/20 text-emerald-200'
+                        ? 'bg-white/10 text-white'
                         : 'text-white/60 hover:text-white'
                     }`}
                   >
                     {scope === 'bpm' ? 'BPM' : scope === 'key' ? 'Key' : 'Both'}
                   </button>
                 ))}
+                <span className="mx-1 h-4 w-px bg-white/10" />
+                {(['standard', 'fallback', 'both'] as const).map((strategy) => (
+                  <button
+                    key={strategy}
+                    onClick={() => {
+                      setRecalcStrategy(strategy)
+                      onSetRecalcMode(toMode(recalcScope, strategy))
+                    }}
+                    disabled={recalcStatus?.loading}
+                    className={`rounded-full px-3 py-1 text-[11px] font-semibold transition ${
+                      recalcStrategy === strategy
+                        ? 'bg-white/10 text-white'
+                        : 'text-white/60 hover:text-white'
+                    }`}
+                  >
+                    {strategy === 'standard' ? 'Standard' : strategy === 'fallback' ? 'Fallback' : 'Both'}
+                  </button>
+                ))}
               </div>
-              <div className="flex justify-start md:justify-center">
-                <div className="inline-flex items-center rounded-full border border-white/10 bg-white/5 p-1">
-                  {(['standard', 'force', 'fallback'] as const).map((strategy) => (
-                    <button
-                      key={strategy}
-                      onClick={() => {
-                        setRecalcStrategy(strategy)
-                        onSetRecalcMode(toMode(recalcScope, strategy))
-                      }}
-                      disabled={recalcStatus?.loading}
-                      className={`rounded-full px-3 py-1 text-[11px] font-semibold transition ${
-                        recalcStrategy === strategy
-                          ? 'bg-emerald-500/20 text-emerald-200'
-                          : 'text-white/60 hover:text-white'
-                      }`}
-                    >
-                      {strategy === 'standard' ? 'Standard' : strategy === 'force' ? 'Force' : 'Fallback'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="flex justify-start md:justify-end">
-                <button
-                  onClick={() => onRecalcTrack(toMode(recalcScope, recalcStrategy))}
-                  disabled={recalcStatus?.loading}
-                  className={`h-10 rounded-[12px] px-4 text-[11px] font-semibold text-white shadow-sm transition ${
-                    recalcStatus?.loading
-                      ? 'bg-emerald-500/50'
-                      : 'bg-emerald-500/80 hover:bg-emerald-400/90'
-                  }`}
-                >
-                  {recalcStatus?.loading ? 'Recalculating...' : 'Recalculate'}
-                </button>
-              </div>
+              <button
+                onClick={() => {
+                  const mode = toMode(recalcScope, recalcStrategy)
+                  onSetRecalcMode(mode)
+                  onRecalcTrack(mode)
+                }}
+                disabled={recalcStatus?.loading}
+                className={`h-10 rounded-[12px] px-4 text-[11px] font-semibold text-white shadow-sm transition ${
+                  recalcStatus?.loading ? 'bg-[#15803d]/60' : 'bg-[#15803d] hover:bg-[#166534]'
+                }`}
+              >
+                {recalcStatus?.loading ? 'Recalculating...' : 'Recalculate'}
+              </button>
             </div>
             {recalcStatus?.error && (
               <div className="mt-2 text-xs text-red-600">{recalcStatus.error}</div>
@@ -645,33 +651,33 @@ export default function BpmDetailsModal({
           </section>
 
           {isAdmin && (
-            <section>
+            <section className="pl-5">
               <button
                 onClick={() => onSetShowBpmModalDebug(!showBpmModalDebug)}
-                className="mx-auto block text-center text-[10px] font-semibold text-gray-400/80 hover:text-gray-600 dark:text-white/40 dark:hover:text-white/70"
+                className="mx-auto block text-center text-[10px] font-semibold text-white/40 hover:text-white/70"
               >
                 {showBpmModalDebug ? 'Hide Debug Logs' : 'View Debug Logs'}
               </button>
 
               {showBpmModalDebug && (
-                <div className="mt-4 space-y-4 text-xs text-gray-600 dark:text-slate-300">
+                <div className="mt-4 rounded-[12px] bg-black/50 p-4 text-[10px] text-white/70 shadow-inner">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1">
-                      <label className="block text-[11px] font-medium text-gray-500 dark:text-slate-400" htmlFor="modal-bpm-debug-level">
+                      <label className="block text-[10px] font-medium uppercase tracking-[0.15em] text-white/40" htmlFor="modal-bpm-debug-level">
                         Log level
                       </label>
                       <select
                         id="modal-bpm-debug-level"
                         value={bpmDebugLevel}
                         onChange={(e) => onSetBpmDebugLevel(e.target.value)}
-                        className="w-full rounded-[12px] border border-transparent bg-black/5 px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 dark:bg-white/5 dark:text-slate-100"
+                        className="w-full rounded-[10px] border border-white/10 bg-black/40 px-3 py-2 text-[10px] text-white/80 focus:outline-none focus:ring-1 focus:ring-emerald-500/60"
                       >
                         <option value="minimal">Minimal</option>
                         <option value="normal">Normal</option>
                       </select>
                     </div>
                     <div className="space-y-1">
-                      <label className="block text-[11px] font-medium text-gray-500 dark:text-slate-400" htmlFor="modal-bpm-confidence-threshold">
+                      <label className="block text-[10px] font-medium uppercase tracking-[0.15em] text-white/40" htmlFor="modal-bpm-confidence-threshold">
                         Confidence threshold
                       </label>
                       <input
@@ -682,23 +688,23 @@ export default function BpmDetailsModal({
                         step="0.01"
                         value={bpmConfidenceThreshold}
                         onChange={(e) => onSetBpmConfidenceThreshold(e.target.value)}
-                        className="w-full rounded-[12px] border border-transparent bg-black/5 px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 dark:bg-white/5 dark:text-slate-100"
+                        className="w-full rounded-[10px] border border-white/10 bg-black/40 px-3 py-2 text-[10px] text-white/80 focus:outline-none focus:ring-1 focus:ring-emerald-500/60"
                       />
                     </div>
                   </div>
-                  <div>
-                    <div className="text-[11px] uppercase tracking-[0.2em] text-gray-400 dark:text-slate-500">
+                  <div className="mt-4">
+                    <div className="text-[10px] uppercase tracking-[0.2em] text-white/40">
                       Live logs
                     </div>
-                    <pre className="mt-2 max-h-40 overflow-auto rounded-[12px] bg-black/5 p-3 text-[11px] text-gray-700 dark:bg-white/5 dark:text-slate-200">
+                    <pre className="mt-2 max-h-40 overflow-auto rounded-[10px] bg-black/60 p-3 font-mono text-[10px] text-white/70">
                       {bpmModalData.fullData?.debugTxt || 'No live logs yet.'}
                     </pre>
                   </div>
-                  <div>
-                    <div className="text-[11px] uppercase tracking-[0.2em] text-gray-400 dark:text-slate-500">
+                  <div className="mt-4">
+                    <div className="text-[10px] uppercase tracking-[0.2em] text-white/40">
                       Last payload
                     </div>
-                    <pre className="mt-2 max-h-40 overflow-auto rounded-[12px] bg-black/5 p-3 text-[11px] text-gray-700 dark:bg-white/5 dark:text-slate-200">
+                    <pre className="mt-2 max-h-40 overflow-auto rounded-[10px] bg-black/60 p-3 font-mono text-[10px] text-white/70">
                       {bpmDebugInfo[bpmModalData.trackId]
                         ? JSON.stringify(bpmDebugInfo[bpmModalData.trackId], null, 2)
                         : 'No previous payloads yet.'}

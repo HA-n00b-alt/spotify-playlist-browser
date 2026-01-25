@@ -997,7 +997,8 @@ export function useBpmAnalysis(tracks: Track[]) {
         body: JSON.stringify({ trackIds: [track.id] }),
       })
       const targetIds = new Set([track.id])
-      streamBpmsForTracks([track], targetIds, targetIds, options)
+      await streamBpmsForTracks([track], targetIds, targetIds, options)
+      setState('recalcStatus', { loading: false, success: true })
     } catch (error) {
       setState('recalcStatus', {
         loading: false,
