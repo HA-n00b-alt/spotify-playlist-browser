@@ -191,18 +191,45 @@ export default function PlaylistHeader({
         </div>
       </div>
       {bpmSummary && showBpmNotice && (
-        <div className="mt-4 inline-flex items-start gap-2 text-[11px] text-amber-600">
-          <svg viewBox="0 0 20 20" aria-hidden="true" className="mt-0.5 h-3.5 w-3.5">
-            <path
-              d="M10 2.5 18.5 17H1.5L10 2.5Z"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.2"
-              strokeLinejoin="round"
-            />
-            <path d="M10 7.5v4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-            <circle cx="10" cy="14.5" r="0.8" fill="currentColor" />
-          </svg>
+        <div
+          className={`mt-4 inline-flex items-start gap-2 text-[11px] ${
+            bpmSummary.shouldShowProgress || bpmSummary.tracksWithNa > 0
+              ? 'text-amber-600'
+              : 'text-emerald-600'
+          }`}
+        >
+          {bpmSummary.shouldShowProgress || bpmSummary.tracksWithNa > 0 ? (
+            <svg viewBox="0 0 20 20" aria-hidden="true" className="mt-0.5 h-3.5 w-3.5">
+              <path
+                d="M10 2.5 18.5 17H1.5L10 2.5Z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                strokeLinejoin="round"
+              />
+              <path d="M10 7.5v4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+              <circle cx="10" cy="14.5" r="0.8" fill="currentColor" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 20 20" aria-hidden="true" className="mt-0.5 h-3.5 w-3.5">
+              <circle
+                cx="10"
+                cy="10"
+                r="7.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.2"
+              />
+              <path
+                d="M6.5 10.5l2.2 2.2 4.8-5.2"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          )}
           <span>
             {bpmSummary.shouldShowProgress
               ? `BPM processing (${bpmSummary.tracksRemainingToSearch} remaining)`
@@ -213,14 +240,22 @@ export default function PlaylistHeader({
           <button
             type="button"
             onClick={onShowBpmMoreInfo}
-            className="text-amber-600 underline-offset-2 hover:text-amber-800 hover:underline"
+            className={`underline-offset-2 hover:underline ${
+              bpmSummary.shouldShowProgress || bpmSummary.tracksWithNa > 0
+                ? 'text-amber-600 hover:text-amber-800'
+                : 'text-emerald-600 hover:text-emerald-800'
+            }`}
           >
             Details
           </button>
           <button
             type="button"
             onClick={onDismissBpmNotice}
-            className="text-amber-600 hover:text-amber-800"
+            className={
+              bpmSummary.shouldShowProgress || bpmSummary.tracksWithNa > 0
+                ? 'text-amber-600 hover:text-amber-800'
+                : 'text-emerald-600 hover:text-emerald-800'
+            }
             aria-label="Dismiss notice"
           >
             ×

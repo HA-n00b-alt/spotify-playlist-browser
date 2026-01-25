@@ -183,18 +183,15 @@ export default function BpmDetailsModal({
   useEffect(() => {
     if (!isOpen || !bpmModalData) return
     setDebugBaseline(bpmModalData.fullData?.debugTxt || '')
-  }, [isOpen, bpmModalData?.trackId, bpmModalData?.fullData?.debugTxt])
+  }, [isOpen, bpmModalData])
 
   useEffect(() => {
     setRecalcScope(recalcScopeForMode(recalcMode))
     setRecalcStrategy(recalcStrategyForMode(recalcMode))
   }, [recalcMode])
 
-  if (!isOpen || !bpmModalData || !bpmModalSummary || !selectedBpmTrack) {
-    return null
-  }
-
   const formattedDebugPayload = useMemo(() => {
+    if (!bpmModalData) return null
     const payload = bpmDebugInfo[bpmModalData.trackId]
     if (!payload) return null
     if (typeof payload === 'string') {
@@ -205,12 +202,16 @@ export default function BpmDetailsModal({
       }
     }
     return JSON.stringify(payload, null, 2)
-  }, [bpmDebugInfo, bpmModalData.trackId])
+  }, [bpmDebugInfo, bpmModalData])
 
-  const liveDebugTxt = bpmModalData.fullData?.debugTxt || ''
+  const liveDebugTxt = bpmModalData?.fullData?.debugTxt || ''
   const scopedDebugTxt = liveDebugTxt.startsWith(debugBaseline)
     ? liveDebugTxt.slice(debugBaseline.length).trim()
     : liveDebugTxt.trim()
+
+  if (!isOpen || !bpmModalData || !bpmModalSummary || !selectedBpmTrack) {
+    return null
+  }
 
   return (
     <div
