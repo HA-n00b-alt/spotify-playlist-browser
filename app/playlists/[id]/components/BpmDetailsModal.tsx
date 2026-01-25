@@ -152,9 +152,9 @@ export default function BpmDetailsModal({
   onRecalcTrack,
 }: BpmDetailsModalProps) {
   const ghostFieldClass =
-    'w-full bg-transparent border-b border-white/5 py-1 text-sm text-white/90 placeholder:text-white/10 outline-none appearance-none [-moz-appearance:_textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
+    'w-full bg-transparent border-b border-slate-300/60 py-1 text-sm text-slate-800 placeholder:text-slate-400 outline-none appearance-none [-moz-appearance:_textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none dark:border-white/5 dark:text-white/90 dark:placeholder:text-white/10'
   const manualSelectClass =
-    'bg-transparent border-b border-white/5 px-0 py-1 text-sm outline-none appearance-none'
+    'bg-transparent border-b border-slate-300/60 px-0 py-1 text-sm outline-none appearance-none dark:border-white/5'
   const recalcScopeForMode = (mode: BpmFallbackOverride): 'bpm' | 'key' | 'both' => {
     if (mode === 'bpm_only' || mode === 'fallback_only_bpm') return 'bpm'
     if (mode === 'key_only' || mode === 'fallback_only_key') return 'key'
@@ -221,12 +221,12 @@ export default function BpmDetailsModal({
             <div className="text-[10px] font-bold uppercase tracking-[0.05em] text-gray-500 dark:text-white/50">
               BPM
             </div>
-            <div className="mt-3 flex items-center gap-3 text-4xl font-bold text-white">
+            <div className="mt-3 flex items-center gap-3 text-4xl font-bold text-slate-900 dark:text-white">
               {typeof bpmModalSummary.currentBpm === 'number'
                 ? `${Math.round(bpmModalSummary.currentBpm)} BPM`
                 : '—'}
               {isAdmin && typeof bpmModalSummary.currentBpm === 'number' && (
-                <div className="inline-flex h-6 items-center rounded-[6px] border border-white/20 bg-white/[0.04] text-[11px] font-semibold text-white/80">
+                <div className="inline-flex h-6 items-center rounded-[6px] border border-slate-300/60 bg-white/70 text-[11px] font-semibold text-slate-700 dark:border-white/20 dark:bg-white/[0.04] dark:text-white/80">
                   <button
                     onClick={async () => {
                       const currentBpm = bpmModalSummary.currentBpm
@@ -239,12 +239,12 @@ export default function BpmDetailsModal({
                       })
                     }}
                     disabled={isUpdatingSelection}
-                    className="px-3 leading-none hover:text-white disabled:text-white/40"
+                    className="px-3 leading-none hover:text-slate-900 disabled:text-slate-400 dark:hover:text-white dark:disabled:text-white/40"
                     aria-label="Store half BPM"
                   >
                     ½
                   </button>
-                  <span className="h-4 w-px bg-white/20" />
+                  <span className="h-4 w-px bg-slate-300/70 dark:bg-white/20" />
                   <button
                     onClick={async () => {
                       const currentBpm = bpmModalSummary.currentBpm
@@ -257,7 +257,7 @@ export default function BpmDetailsModal({
                       })
                     }}
                     disabled={isUpdatingSelection}
-                    className="px-3 leading-none hover:text-white disabled:text-white/40"
+                    className="px-3 leading-none hover:text-slate-900 disabled:text-slate-400 dark:hover:text-white dark:disabled:text-white/40"
                     aria-label="Store double BPM"
                   >
                     2x
@@ -370,17 +370,17 @@ export default function BpmDetailsModal({
                         disabled={isUpdatingSelection || (isSelected && !isAdmin)}
                         className={`group relative -ml-5 flex w-full items-center justify-between px-3 py-2 pl-5 text-left text-sm transition ${
                           isSelected
-                            ? 'bg-white/[0.04] text-white'
-                            : 'text-white/60 hover:text-white'
+                            ? 'bg-slate-200/60 text-slate-700 dark:bg-white/[0.04] dark:text-white'
+                            : 'text-slate-500 hover:text-slate-700 dark:text-white/60 dark:hover:text-white'
                         }`}
                       >
                         {isSelected && (
                           <span className="absolute left-0 top-2 bottom-2 w-[2px] bg-emerald-400" />
                         )}
-                        <div className={`text-[12px] font-semibold ${isSelected ? 'text-white/60' : 'text-white/50 group-hover:text-white/70'}`}>
+                        <div className={`text-[12px] font-semibold ${isSelected ? 'text-slate-600 dark:text-white/60' : 'text-slate-500 group-hover:text-slate-700 dark:text-white/50 dark:group-hover:text-white/70'}`}>
                           {candidate.label}
                         </div>
-                        <div className={`text-[12px] ${isSelected ? 'text-white/60' : 'text-white/50 group-hover:text-white/70'}`}>
+                        <div className={`text-[12px] ${isSelected ? 'text-slate-600 dark:text-white/60' : 'text-slate-500 group-hover:text-slate-700 dark:text-white/50 dark:group-hover:text-white/70'}`}>
                           {candidate.value != null ? Math.round(candidate.value) : 'N/A'} ·{' '}
                           {candidate.value != null && candidate.confidence != null
                             ? `${Math.round(candidate.confidence * 100)}%`
@@ -393,10 +393,10 @@ export default function BpmDetailsModal({
 
                 {isAdmin && (
                   <div className="mt-6 flex flex-col gap-2 group/input">
-                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-white/40 transition-colors group-focus-within/input:text-emerald-400">
+                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-colors group-focus-within/input:text-emerald-400 dark:text-white/40">
                       <span>Manual override</span>
                       <svg
-                        className="h-2.5 w-2.5 text-white/40"
+                        className="h-2.5 w-2.5 text-slate-400 dark:text-white/40"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
@@ -438,13 +438,13 @@ export default function BpmDetailsModal({
                             onSetManualBpm('')
                           }}
                           disabled={isUpdatingSelection}
-                          className="text-[11px] font-semibold text-emerald-300 hover:text-emerald-200 disabled:text-emerald-300/40"
+                          className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 disabled:text-emerald-300/60 dark:text-emerald-300 dark:hover:text-emerald-200 dark:disabled:text-emerald-300/40"
                         >
                           Save
                         </button>
                       ) : null}
                       {bpmModalData.bpmSelected === 'manual' && bpmModalData.fullData?.bpmManual != null && (
-                        <span className="text-[11px] text-white/40">
+                        <span className="text-[11px] text-slate-500 dark:text-white/40">
                           Selected: {Math.round(bpmModalData.fullData.bpmManual)}
                         </span>
                       )}
@@ -460,7 +460,7 @@ export default function BpmDetailsModal({
             <div className="text-[10px] font-bold uppercase tracking-[0.05em] text-gray-500 dark:text-white/50">
               Key & scale
             </div>
-            <div className="mt-3 flex items-center gap-2 text-4xl font-bold text-white">
+            <div className="mt-3 flex items-center gap-2 text-4xl font-bold text-slate-900 dark:text-white">
               {bpmModalSummary.currentKey || bpmModalSummary.currentScale
                 ? `${bpmModalSummary.currentKey || ''} ${bpmModalSummary.currentScale || ''}`.trim()
                 : '—'}
@@ -493,17 +493,17 @@ export default function BpmDetailsModal({
                       disabled={isUpdatingSelection || (isSelected && !isAdmin)}
                       className={`group relative -ml-5 flex w-full items-center justify-between px-3 py-2 pl-5 text-left text-sm transition ${
                         isSelected
-                          ? 'bg-white/[0.04] text-white'
-                          : 'text-white/60 hover:text-white'
+                          ? 'bg-slate-200/60 text-slate-700 dark:bg-white/[0.04] dark:text-white'
+                          : 'text-slate-500 hover:text-slate-700 dark:text-white/60 dark:hover:text-white'
                       }`}
                     >
                       {isSelected && (
                         <span className="absolute left-0 top-2 bottom-2 w-[2px] bg-emerald-400" />
                       )}
-                      <div className={`text-[12px] font-semibold ${isSelected ? 'text-white/60' : 'text-white/50 group-hover:text-white/70'}`}>
+                      <div className={`text-[12px] font-semibold ${isSelected ? 'text-slate-600 dark:text-white/60' : 'text-slate-500 group-hover:text-slate-700 dark:text-white/50 dark:group-hover:text-white/70'}`}>
                         {candidate.label}
                       </div>
-                      <div className={`text-[12px] ${isSelected ? 'text-white/60' : 'text-white/50 group-hover:text-white/70'}`}>
+                      <div className={`text-[12px] ${isSelected ? 'text-slate-600 dark:text-white/60' : 'text-slate-500 group-hover:text-slate-700 dark:text-white/50 dark:group-hover:text-white/70'}`}>
                         {candidate.key ?? 'N/A'} ·{' '}
                         {candidate.key != null && candidate.confidence != null
                           ? `${Math.round(candidate.confidence * 100)}%`
@@ -521,10 +521,10 @@ export default function BpmDetailsModal({
 
             {isAdmin && (
               <div className="mt-6 flex flex-col gap-2 group/input">
-                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-white/40 transition-colors group-focus-within/input:text-emerald-400">
+                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-colors group-focus-within/input:text-emerald-400 dark:text-white/40">
                   <span>Manual override</span>
                   <svg
-                    className="h-2.5 w-2.5 text-white/40"
+                    className="h-2.5 w-2.5 text-slate-400 dark:text-white/40"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -543,7 +543,9 @@ export default function BpmDetailsModal({
                       value={manualKey || bpmModalData.fullData?.keyManual || ''}
                       onChange={(e) => onSetManualKey(e.target.value)}
                       className={`${manualSelectClass} no-chevron min-w-[120px] ${
-                        (manualKey || bpmModalData.fullData?.keyManual) ? 'text-white/90' : 'text-white/10'
+                        (manualKey || bpmModalData.fullData?.keyManual)
+                          ? 'text-slate-800 dark:text-white/90'
+                          : 'text-slate-400 dark:text-white/10'
                       }`}
                     >
                       <option value="">Enter Key</option>
@@ -558,7 +560,9 @@ export default function BpmDetailsModal({
                       value={manualScale || bpmModalData.fullData?.scaleManual || ''}
                       onChange={(e) => onSetManualScale(e.target.value)}
                       className={`${manualSelectClass} no-chevron min-w-[120px] ${
-                        (manualScale || bpmModalData.fullData?.scaleManual) ? 'text-white/90' : 'text-white/10'
+                        (manualScale || bpmModalData.fullData?.scaleManual)
+                          ? 'text-slate-800 dark:text-white/90'
+                          : 'text-slate-400 dark:text-white/10'
                       }`}
                     >
                       <option value="">Scale</option>
@@ -604,10 +608,10 @@ export default function BpmDetailsModal({
           </div>
 
           <section className="pl-5">
-            <div className="flex flex-col gap-3 rounded-[14px] border border-white/10 bg-white/[0.04] px-3 py-2 sm:flex-row sm:items-center">
+            <div className="flex flex-col gap-3 rounded-[14px] border border-slate-200 bg-white px-3 py-2 sm:flex-row sm:items-center dark:border-white/10 dark:bg-white/[0.04]">
               <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
                 <div className="flex flex-col items-start gap-1 sm:items-start">
-                  <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-white/40">
+                  <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-400 dark:text-white/40">
                     Scope
                   </span>
                   <div className="flex items-center gap-1">
@@ -621,8 +625,8 @@ export default function BpmDetailsModal({
                         disabled={recalcStatus?.loading}
                         className={`rounded-[8px] px-3 py-1 text-[11px] font-semibold transition ${
                           recalcScope === scope
-                            ? 'bg-white/10 text-white'
-                            : 'text-white/60 hover:bg-white/5 hover:text-white'
+                            ? 'bg-slate-200 text-slate-900 dark:bg-white/10 dark:text-white'
+                            : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white'
                         }`}
                       >
                         {scope === 'bpm' ? 'BPM' : scope === 'key' ? 'Key' : 'Both'}
@@ -630,9 +634,9 @@ export default function BpmDetailsModal({
                     ))}
                   </div>
                 </div>
-                <span className="hidden h-full w-px bg-white/10 sm:block" />
+                <span className="hidden h-full w-px bg-slate-200 sm:block dark:bg-white/10" />
                 <div className="flex flex-col items-start gap-1 sm:items-start">
-                  <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-white/40">
+                  <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-400 dark:text-white/40">
                     Algorithm
                   </span>
                   <div className="flex items-center gap-1">
@@ -646,11 +650,11 @@ export default function BpmDetailsModal({
                         disabled={recalcStatus?.loading}
                         className={`rounded-[8px] px-3 py-1 text-[11px] font-semibold transition ${
                           recalcStrategy === strategy
-                            ? 'bg-white/10 text-white'
-                            : 'text-white/60 hover:bg-white/5 hover:text-white'
+                            ? 'bg-slate-200 text-slate-900 dark:bg-white/10 dark:text-white'
+                            : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white'
                         }`}
                       >
-                        {strategy === 'standard' ? 'Standard' : strategy === 'fallback' ? 'Fallback' : 'Both'}
+                        {strategy === 'standard' ? 'Essentia' : strategy === 'fallback' ? 'Librosa' : 'Both'}
                       </button>
                     ))}
                   </div>
@@ -679,7 +683,7 @@ export default function BpmDetailsModal({
             <section className="pl-5">
               <button
                 onClick={() => onSetShowBpmModalDebug(!showBpmModalDebug)}
-                className="mx-auto block text-center text-[10px] font-semibold text-white/40 hover:text-white/70"
+                className="mx-auto block text-center text-[10px] font-semibold text-slate-400 hover:text-slate-600 dark:text-white/40 dark:hover:text-white/70"
               >
                 {showBpmModalDebug ? 'Hide Debug Logs' : 'View Debug Logs'}
               </button>
