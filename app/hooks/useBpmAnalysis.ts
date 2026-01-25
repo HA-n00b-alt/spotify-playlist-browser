@@ -330,7 +330,11 @@ export function useBpmAnalysis(tracks: Track[]) {
   const streamBatchResults = useCallback(async (
     batchId: string,
     indexToTrackId: Map<number, string>,
-    previewMeta: Record<string, any>
+    previewMeta: Record<string, any>,
+    needsBpm?: Set<string>,
+    needsKey?: Set<string>,
+    bpmUpdateAlgo: 'essentia' | 'librosa' | 'both' = 'both',
+    keyUpdateAlgo: 'essentia' | 'librosa' | 'both' = 'both'
   ) => {
     if (streamAbortRef.current) {
       streamAbortRef.current.abort()
@@ -367,49 +371,121 @@ export function useBpmAnalysis(tracks: Track[]) {
         if (!trackId) return
 
         const meta = previewMeta[trackId]
-        const bpmSelected = selectBestBpm(
-          data.bpm_essentia,
-          data.bpm_confidence_essentia,
-          data.bpm_librosa,
-          data.bpm_confidence_librosa
-        )
-        const keySelected = selectBestKey(
-          data.key_essentia,
-          data.keyscale_confidence_essentia,
-          data.key_librosa,
-          data.keyscale_confidence_librosa
-        )
+        const shouldUpdateBpm = !needsBpm || needsBpm.has(trackId)
+        const shouldUpdateKey = !needsKey || needsKey.has(trackId)
+        const shouldUpdateBpmEssentia = shouldUpdateBpm && (bpmUpdateAlgo === 'essentia' || bpmUpdateAlgo === 'both')
+        const shouldUpdateBpmLibrosa = shouldUpdateBpm && (bpmUpdateAlgo === 'librosa' || bpmUpdateAlgo === 'both')
+        const shouldUpdateKeyEssentia = shouldUpdateKey && (keyUpdateAlgo === 'essentia' || keyUpdateAlgo === 'both')
+        const shouldUpdateKeyLibrosa = shouldUpdateKey && (keyUpdateAlgo === 'librosa' || keyUpdateAlgo === 'both')
+        const previousBpmSelection = bpmFullData[trackId]?.bpmSelected
+        const previousKeySelection = bpmFullData[trackId]?.keySelected
 
-        setState('bpmFullData', (prev) => ({
-          ...prev,
-          [trackId]: {
-            bpmEssentia: data.bpm_essentia,
-            bpmRawEssentia: data.bpm_raw_essentia,
-            bpmConfidenceEssentia: data.bpm_confidence_essentia,
-            bpmLibrosa: data.bpm_librosa,
-            bpmRawLibrosa: data.bpm_raw_librosa,
-            bpmConfidenceLibrosa: data.bpm_confidence_librosa,
-            keyEssentia: data.key_essentia,
-            scaleEssentia: data.scale_essentia,
-            keyscaleConfidenceEssentia: data.keyscale_confidence_essentia,
-            keyLibrosa: data.key_librosa,
-            scaleLibrosa: data.scale_librosa,
-            keyscaleConfidenceLibrosa: data.keyscale_confidence_librosa,
-            bpmSelected,
-            keySelected,
-            debugTxt: data.debug_txt,
-          },
-        }))
+        setState('bpmFullData', (prev) => {
+          const previous = prev[trackId] || {}
+          const bpmEssentia = shouldUpdateBpmEssentia ? (data.bpm_essentia ?? previous.bpmEssentia) : previous.bpmEssentia
+          const bpmRawEssentia = shouldUpdateBpmEssentia ? (data.bpm_raw_essentia ?? previous.bpmRawEssentia) : previous.bpmRawEssentia
+          const bpmConfidenceEssentia = shouldUpdateBpmEssentia
+            ? (data.bpm_confidence_essentia ?? previous.bpmConfidenceEssentia)
+            : previous.bpmConfidenceEssentia
+          const bpmLibrosa = shouldUpdateBpmLibrosa ? (data.bpm_librosa ?? previous.bpmLibrosa) : previous.bpmLibrosa
+          const bpmRawLibrosa = shouldUpdateBpmLibrosa ? (data.bpm_raw_librosa ?? previous.bpmRawLibrosa) : previous.bpmRawLibrosa
+          const bpmConfidenceLibrosa = shouldUpdateBpmLibrosa
+            ? (data.bpm_confidence_librosa ?? previous.bpmConfidenceLibrosa)
+            : previous.bpmConfidenceLibrosa
+          const keyEssentia = shouldUpdateKeyEssentia ? (data.key_essentia ?? previous.keyEssentia) : previous.keyEssentia
+          const scaleEssentia = shouldUpdateKeyEssentia ? (data.scale_essentia ?? previous.scaleEssentia) : previous.scaleEssentia
+          const keyscaleConfidenceEssentia = shouldUpdateKeyEssentia
+            ? (data.keyscale_confidence_essentia ?? previous.keyscaleConfidenceEssentia)
+            : previous.keyscaleConfidenceEssentia
+          const keyLibrosa = shouldUpdateKeyLibrosa ? (data.key_librosa ?? previous.keyLibrosa) : previous.keyLibrosa
+          const scaleLibrosa = shouldUpdateKeyLibrosa ? (data.scale_librosa ?? previous.scaleLibrosa) : previous.scaleLibrosa
+          const keyscaleConfidenceLibrosa = shouldUpdateKeyLibrosa
+            ? (data.keyscale_confidence_librosa ?? previous.keyscaleConfidenceLibrosa)
+            : previous.keyscaleConfidenceLibrosa
+          const previousBpmSelected = previous.bpmSelected
+          const previousKeySelected = previous.keySelected
+          const resolvedBpmSelected = !previousBpmSelected
+            ? shouldUpdateBpmLibrosa && !shouldUpdateBpmEssentia
+              ? 'librosa'
+              : shouldUpdateBpmEssentia && !shouldUpdateBpmLibrosa
+                ? 'essentia'
+                : selectBestBpm(bpmEssentia, bpmConfidenceEssentia, bpmLibrosa, bpmConfidenceLibrosa)
+            : previousBpmSelected === 'manual' || !(shouldUpdateBpmEssentia && shouldUpdateBpmLibrosa)
+              ? previousBpmSelected
+              : selectBestBpm(bpmEssentia, bpmConfidenceEssentia, bpmLibrosa, bpmConfidenceLibrosa)
+          const resolvedKeySelected = !previousKeySelected
+            ? shouldUpdateKeyLibrosa && !shouldUpdateKeyEssentia
+              ? 'librosa'
+              : shouldUpdateKeyEssentia && !shouldUpdateKeyLibrosa
+                ? 'essentia'
+                : selectBestKey(keyEssentia, keyscaleConfidenceEssentia, keyLibrosa, keyscaleConfidenceLibrosa)
+            : previousKeySelected === 'manual' || !(shouldUpdateKeyEssentia && shouldUpdateKeyLibrosa)
+              ? previousKeySelected
+              : selectBestKey(keyEssentia, keyscaleConfidenceEssentia, keyLibrosa, keyscaleConfidenceLibrosa)
 
-        if (data.bpm_essentia != null || data.bpm_librosa != null) {
-          const selectedBpm = bpmSelected === 'librosa' ? data.bpm_librosa : data.bpm_essentia
-          setState('trackBpms', (prev) => ({ ...prev, [trackId]: selectedBpm }))
+          return {
+            ...previous,
+            bpmEssentia,
+            bpmRawEssentia,
+            bpmConfidenceEssentia,
+            bpmLibrosa,
+            bpmRawLibrosa,
+            bpmConfidenceLibrosa,
+            keyEssentia,
+            scaleEssentia,
+            keyscaleConfidenceEssentia,
+            keyLibrosa,
+            scaleLibrosa,
+            keyscaleConfidenceLibrosa,
+            bpmSelected: resolvedBpmSelected,
+            keySelected: resolvedKeySelected,
+            debugTxt: data.debug_txt ?? previous.debugTxt,
+          }
+        })
+
+        if (shouldUpdateBpm && (data.bpm_essentia != null || data.bpm_librosa != null)) {
+          const effectiveBpmSelection = previousBpmSelection
+            || (shouldUpdateBpmLibrosa && !shouldUpdateBpmEssentia
+              ? 'librosa'
+              : shouldUpdateBpmEssentia && !shouldUpdateBpmLibrosa
+                ? 'essentia'
+                : selectBestBpm(
+                    data.bpm_essentia,
+                    data.bpm_confidence_essentia,
+                    data.bpm_librosa,
+                    data.bpm_confidence_librosa
+                  ))
+          if (effectiveBpmSelection === 'essentia' && shouldUpdateBpmEssentia && data.bpm_essentia != null) {
+            setState('trackBpms', (prev) => ({ ...prev, [trackId]: data.bpm_essentia }))
+          }
+          if (effectiveBpmSelection === 'librosa' && shouldUpdateBpmLibrosa && data.bpm_librosa != null) {
+            setState('trackBpms', (prev) => ({ ...prev, [trackId]: data.bpm_librosa }))
+          }
         }
-        if (data.key_essentia || data.key_librosa || data.scale_essentia || data.scale_librosa) {
-          const selectedKey = keySelected === 'librosa' ? data.key_librosa : data.key_essentia
-          const selectedScale = keySelected === 'librosa' ? data.scale_librosa : data.scale_essentia
-          setState('trackKeys', (prev) => ({ ...prev, [trackId]: selectedKey || null }))
-          setState('trackScales', (prev) => ({ ...prev, [trackId]: selectedScale || null }))
+        if (shouldUpdateKey && (data.key_essentia || data.key_librosa || data.scale_essentia || data.scale_librosa)) {
+          const effectiveKeySelection = previousKeySelection
+            || (shouldUpdateKeyLibrosa && !shouldUpdateKeyEssentia
+              ? 'librosa'
+              : shouldUpdateKeyEssentia && !shouldUpdateKeyLibrosa
+                ? 'essentia'
+                : selectBestKey(
+                    data.key_essentia,
+                    data.keyscale_confidence_essentia,
+                    data.key_librosa,
+                    data.keyscale_confidence_librosa
+                  ))
+          if (effectiveKeySelection === 'essentia' && shouldUpdateKeyEssentia) {
+            const selectedKey = data.key_essentia || null
+            const selectedScale = data.scale_essentia || null
+            setState('trackKeys', (prev) => ({ ...prev, [trackId]: selectedKey }))
+            setState('trackScales', (prev) => ({ ...prev, [trackId]: selectedScale }))
+          }
+          if (effectiveKeySelection === 'librosa' && shouldUpdateKeyLibrosa) {
+            const selectedKey = data.key_librosa || null
+            const selectedScale = data.scale_librosa || null
+            setState('trackKeys', (prev) => ({ ...prev, [trackId]: selectedKey }))
+            setState('trackScales', (prev) => ({ ...prev, [trackId]: selectedScale }))
+          }
         }
 
         if (meta) {
@@ -508,7 +584,7 @@ export function useBpmAnalysis(tracks: Track[]) {
         }
       })
     }
-  }, [getPreviewUrlFromMeta, selectBestBpm, selectBestKey, setState])
+  }, [bpmFullData, getPreviewUrlFromMeta, selectBestBpm, selectBestKey, setState])
 
   const applyBatchResults = useCallback((results: Record<string, any>) => {
     const toNumber = (value: unknown): number | null => {
@@ -733,6 +809,20 @@ export function useBpmAnalysis(tracks: Track[]) {
         const effectiveFallbackOverride = overrideFallback && overrideFallback !== 'default'
           ? overrideFallback
           : bpmRequestSettings.fallbackOverride
+        const bpmUpdateAlgo: 'essentia' | 'librosa' | 'both' = (
+          effectiveFallbackOverride === 'fallback_only' || effectiveFallbackOverride === 'fallback_only_bpm'
+        )
+          ? 'librosa'
+          : (effectiveFallbackOverride === 'always' || effectiveFallbackOverride === 'bpm_only')
+            ? 'both'
+            : 'essentia'
+        const keyUpdateAlgo: 'essentia' | 'librosa' | 'both' = (
+          effectiveFallbackOverride === 'fallback_only' || effectiveFallbackOverride === 'fallback_only_key'
+        )
+          ? 'librosa'
+          : (effectiveFallbackOverride === 'always' || effectiveFallbackOverride === 'key_only')
+            ? 'both'
+            : 'essentia'
         const requestBody: Record<string, unknown> = {
           trackIds,
           country: countryCode,
@@ -818,7 +908,15 @@ export function useBpmAnalysis(tracks: Track[]) {
             indexToTrackId.set(Number(indexStr), trackId as string)
           }
 
-          await streamBatchResults(data.batchId, indexToTrackId, previewMeta)
+          await streamBatchResults(
+            data.batchId,
+            indexToTrackId,
+            previewMeta,
+            fallbackNeedsBpm,
+            fallbackNeedsKey,
+            bpmUpdateAlgo,
+            keyUpdateAlgo
+          )
         }
       } catch (error) {
         console.error('[BPM Client] Stream batch error:', error)
@@ -1008,13 +1106,21 @@ export function useBpmAnalysis(tracks: Track[]) {
   ) => {
     setState('recalcStatus', { loading: true })
     try {
+      const override = options?.fallbackOverride
+      const recalcScope = override === 'bpm_only' || override === 'fallback_only_bpm'
+        ? 'bpm'
+        : override === 'key_only' || override === 'fallback_only_key'
+          ? 'key'
+          : 'both'
       await fetch('/api/bpm/recalculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ trackIds: [track.id] }),
       })
       const targetIds = new Set([track.id])
-      await streamBpmsForTracks([track], targetIds, targetIds, options)
+      const needsBpm = recalcScope === 'key' ? new Set<string>() : targetIds
+      const needsKey = recalcScope === 'bpm' ? new Set<string>() : targetIds
+      await streamBpmsForTracks([track], needsBpm, needsKey, options)
       setState('recalcStatus', { loading: false, success: true })
     } catch (error) {
       setState('recalcStatus', {
