@@ -4246,7 +4246,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                               </div>
                               <div className="text-sm text-gray-900 dark:text-slate-100">
                                 {Math.round(candidate.value)} BPM
-                                {candidate.raw != null && candidate.raw !== candidate.value ? (
+                                {typeof candidate.raw === 'number' && candidate.raw !== candidate.value ? (
                                   <span className="ml-2 text-xs text-gray-400">raw {candidate.raw.toFixed(1)}</span>
                                 ) : null}
                               </div>

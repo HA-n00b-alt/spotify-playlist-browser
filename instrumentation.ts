@@ -13,11 +13,23 @@ const isNoisyWarningEvent = (event: Sentry.Event): boolean => {
   if (NOISY_WARNINGS.some((warning) => message.includes(warning))) {
     return true
   }
+  const originalMessage =
+    event.extra && typeof event.extra['originalException'] === 'string'
+      ? event.extra['originalException']
+      : ''
+  if (originalMessage && NOISY_WARNINGS.some((warning) => originalMessage.includes(warning))) {
+    return true
+  }
   const exceptionValues = event.exception?.values || []
   return exceptionValues.some((entry) => {
     const value = entry?.value || ''
     return NOISY_WARNINGS.some((warning) => value.includes(warning))
   })
+}
+
+const isNoisyWarningMessage = (message?: string | null): boolean => {
+  if (!message) return false
+  return NOISY_WARNINGS.some((warning) => message.includes(warning))
 }
 
 export async function register() {
@@ -33,6 +45,12 @@ export async function register() {
       integrations: [
         Sentry.consoleLoggingIntegration({ levels: ['log', 'warn', 'error'] }),
       ],
+      beforeBreadcrumb(breadcrumb) {
+        if (breadcrumb.category === 'console' && isNoisyWarningMessage(breadcrumb.message)) {
+          return null
+        }
+        return breadcrumb
+      },
       beforeSend(event) {
         if (isNoisyWarningEvent(event)) {
           return null
@@ -60,6 +78,12 @@ export async function register() {
       integrations: [
         Sentry.consoleLoggingIntegration({ levels: ['log', 'warn', 'error'] }),
       ],
+      beforeBreadcrumb(breadcrumb) {
+        if (breadcrumb.category === 'console' && isNoisyWarningMessage(breadcrumb.message)) {
+          return null
+        }
+        return breadcrumb
+      },
       beforeSend(event) {
         if (isNoisyWarningEvent(event)) {
           return null
