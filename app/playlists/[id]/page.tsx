@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
+import { useEffect, useReducer, useRef, useMemo, useCallback } from 'react'
 import type { MouseEvent } from 'react'
 import Link from 'next/link'
 import PageHeader from '../../components/PageHeader'
@@ -37,6 +37,240 @@ interface PlaylistTracksPageProps {
   }
 }
 
+type BpmFullDataEntry = {
+  bpmEssentia?: number | null
+  bpmRawEssentia?: number | null
+  bpmConfidenceEssentia?: number | null
+  bpmLibrosa?: number | null
+  bpmRawLibrosa?: number | null
+  bpmConfidenceLibrosa?: number | null
+  keyEssentia?: string | null
+  scaleEssentia?: string | null
+  keyscaleConfidenceEssentia?: number | null
+  keyLibrosa?: string | null
+  scaleLibrosa?: string | null
+  keyscaleConfidenceLibrosa?: number | null
+  bpmSelected?: 'essentia' | 'librosa' | 'manual'
+  keySelected?: 'essentia' | 'librosa' | 'manual'
+  bpmManual?: number | null
+  keyManual?: string | null
+  scaleManual?: string | null
+  debugTxt?: string | null
+}
+
+type BpmState = {
+  trackBpms: Record<string, number | null>
+  trackKeys: Record<string, string | null>
+  trackScales: Record<string, string | null>
+  loadingBpmFields: Set<string>
+  loadingKeyFields: Set<string>
+  tracksNeedingBpm: Set<string>
+  tracksNeedingKey: Set<string>
+  tracksNeedingCalc: Set<string>
+  loadingPreviewIds: Set<string>
+  bpmStreamStatus: Record<string, 'partial' | 'final' | 'error'>
+  showBpmDebug: boolean
+  bpmDebugLevel: string
+  bpmFallbackOverride: BpmFallbackOverride
+  bpmConfidenceThreshold: string
+  bpmDebugInfo: Record<string, any>
+  bpmDetails: Record<string, { source?: string; error?: string }>
+  musoPreviewStatus: { loading: boolean; success?: boolean; error?: string } | null
+  mismatchPreviewUrls: { itunes?: string | null; spotify?: string | null; loading?: boolean }
+  previewUrls: Record<string, string | null>
+  bpmFullData: Record<string, BpmFullDataEntry>
+  showBpmModal: boolean
+  showBpmModalDebug: boolean
+  recalcMode: 'standard' | 'force' | 'fallback'
+  selectedBpmTrack: Track | null
+  bpmProcessingStartTime: number | null
+  bpmProcessingEndTime: number | null
+  bpmTracksCalculated: number
+  retryStatus: { loading: boolean; success?: boolean; error?: string } | null
+  retryAttempted: boolean
+  retryTrackId: string | null
+  recalcStatus: { loading: boolean; success?: boolean; error?: string } | null
+  manualBpm: string
+  manualKey: string
+  manualScale: string
+  isUpdatingSelection: boolean
+  showBpmMoreInfo: boolean
+  countryCode: string
+  tracksInDb: Set<string>
+  recalculating: boolean
+  showBpmInfo: boolean
+  showBpmNotice: boolean
+  showBpmRecalcPrompt: boolean
+  pendingRecalcIds: { all: string[]; newOnly: string[] }
+}
+
+type CreditsState = {
+  creditsByTrackId: Record<
+    string,
+    {
+      performedBy: string[]
+      writtenBy: string[]
+      producedBy: string[]
+      mixedBy: string[]
+      masteredBy: string[]
+      releaseId?: string | null
+      retrievedAt?: string | null
+    }
+  >
+  creditsLoadingIds: Set<string>
+  creditsErrorByTrackId: Record<string, string>
+  showCreditsModal: boolean
+  selectedCreditsTrack: Track | null
+}
+
+type FiltersState = {
+  pageSize: number | 'all'
+  currentPage: number
+  searchQuery: string
+  sortField: SortField | null
+  sortDirection: SortDirection
+  showAdvanced: boolean
+  yearFrom: string
+  yearTo: string
+  bpmFrom: string
+  bpmTo: string
+  includeHalfDoubleBpm: boolean
+}
+
+type UiState = {
+  isAdmin: boolean
+  loggedInUserName: string | null
+  isHeaderRefreshing: boolean
+  contextMenu: {
+    x: number
+    y: number
+    spotifyUrl: string
+    spotifyUri: string
+    track?: Track
+  } | null
+}
+
+type CacheState = {
+  isRefreshing: boolean
+  showCacheModal: boolean
+  refreshDone: boolean
+}
+
+type PlaybackState = {
+  playingTrackId: string | null
+}
+
+type SetAction<State, K extends keyof State = keyof State> = {
+  type: 'set'
+  key: K
+  value: State[K] | ((prev: State[K]) => State[K])
+}
+
+const makeReducer = <State,>() => {
+  return (state: State, action: SetAction<State>): State => {
+    if (action.type !== 'set') return state
+    const nextValue = typeof action.value === 'function'
+      ? (action.value as (prev: State[typeof action.key]) => State[typeof action.key])(state[action.key])
+      : action.value
+    return {
+      ...state,
+      [action.key]: nextValue,
+    }
+  }
+}
+
+const bpmReducer = makeReducer<BpmState>()
+const creditsReducer = makeReducer<CreditsState>()
+const filtersReducer = makeReducer<FiltersState>()
+const uiReducer = makeReducer<UiState>()
+const cacheReducer = makeReducer<CacheState>()
+const playbackReducer = makeReducer<PlaybackState>()
+
+const createInitialBpmState = (): BpmState => ({
+  trackBpms: {},
+  trackKeys: {},
+  trackScales: {},
+  loadingBpmFields: new Set(),
+  loadingKeyFields: new Set(),
+  tracksNeedingBpm: new Set(),
+  tracksNeedingKey: new Set(),
+  tracksNeedingCalc: new Set(),
+  loadingPreviewIds: new Set(),
+  bpmStreamStatus: {},
+  showBpmDebug: false,
+  bpmDebugLevel: 'minimal',
+  bpmFallbackOverride: 'never',
+  bpmConfidenceThreshold: '0.65',
+  bpmDebugInfo: {},
+  bpmDetails: {},
+  musoPreviewStatus: null,
+  mismatchPreviewUrls: {},
+  previewUrls: {},
+  bpmFullData: {},
+  showBpmModal: false,
+  showBpmModalDebug: false,
+  recalcMode: 'standard',
+  selectedBpmTrack: null,
+  bpmProcessingStartTime: null,
+  bpmProcessingEndTime: null,
+  bpmTracksCalculated: 0,
+  retryStatus: null,
+  retryAttempted: false,
+  retryTrackId: null,
+  recalcStatus: null,
+  manualBpm: '',
+  manualKey: '',
+  manualScale: 'major',
+  isUpdatingSelection: false,
+  showBpmMoreInfo: false,
+  countryCode: 'us',
+  tracksInDb: new Set(),
+  recalculating: false,
+  showBpmInfo: false,
+  showBpmNotice: true,
+  showBpmRecalcPrompt: false,
+  pendingRecalcIds: { all: [], newOnly: [] },
+})
+
+const createInitialCreditsState = (): CreditsState => ({
+  creditsByTrackId: {},
+  creditsLoadingIds: new Set(),
+  creditsErrorByTrackId: {},
+  showCreditsModal: false,
+  selectedCreditsTrack: null,
+})
+
+const createInitialFiltersState = (): FiltersState => ({
+  pageSize: 50,
+  currentPage: 1,
+  searchQuery: '',
+  sortField: null,
+  sortDirection: 'asc',
+  showAdvanced: false,
+  yearFrom: '',
+  yearTo: '',
+  bpmFrom: '',
+  bpmTo: '',
+  includeHalfDoubleBpm: false,
+})
+
+const createInitialUiState = (): UiState => ({
+  isAdmin: false,
+  loggedInUserName: null,
+  isHeaderRefreshing: false,
+  contextMenu: null,
+})
+
+const createInitialCacheState = (): CacheState => ({
+  isRefreshing: false,
+  showCacheModal: false,
+  refreshDone: false,
+})
+
+const createInitialPlaybackState = (): PlaybackState => ({
+  playingTrackId: null,
+})
+
 export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) {
   // Use React Query for playlist and tracks data
   const { 
@@ -57,129 +291,329 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   
   const loading = isLoadingPlaylist || isLoadingTracks
   const error = playlistError?.message || tracksError?.message || null
-  const [trackBpms, setTrackBpms] = useState<Record<string, number | null>>({})
-  const [trackKeys, setTrackKeys] = useState<Record<string, string | null>>({})
-  const [trackScales, setTrackScales] = useState<Record<string, string | null>>({})
-  const [loadingBpmFields, setLoadingBpmFields] = useState<Set<string>>(new Set())
-  const [loadingKeyFields, setLoadingKeyFields] = useState<Set<string>>(new Set())
-  const [tracksNeedingBpm, setTracksNeedingBpm] = useState<Set<string>>(new Set())
-  const [tracksNeedingKey, setTracksNeedingKey] = useState<Set<string>>(new Set())
-  const [tracksNeedingCalc, setTracksNeedingCalc] = useState<Set<string>>(new Set())
-  const [loadingPreviewIds, setLoadingPreviewIds] = useState<Set<string>>(new Set())
-  const [bpmStreamStatus, setBpmStreamStatus] = useState<Record<string, 'partial' | 'final' | 'error'>>({})
+  const [bpmState, bpmDispatch] = useReducer(bpmReducer, undefined, createInitialBpmState)
+  const [creditsState, creditsDispatch] = useReducer(creditsReducer, undefined, createInitialCreditsState)
+  const [filtersState, filtersDispatch] = useReducer(filtersReducer, undefined, createInitialFiltersState)
+  const [uiState, uiDispatch] = useReducer(uiReducer, undefined, createInitialUiState)
+  const [cacheState, cacheDispatch] = useReducer(cacheReducer, undefined, createInitialCacheState)
+  const [playbackState, playbackDispatch] = useReducer(playbackReducer, undefined, createInitialPlaybackState)
+
+  const {
+    trackBpms,
+    trackKeys,
+    trackScales,
+    loadingBpmFields,
+    loadingKeyFields,
+    tracksNeedingBpm,
+    tracksNeedingKey,
+    tracksNeedingCalc,
+    loadingPreviewIds,
+    bpmStreamStatus,
+    showBpmDebug,
+    bpmDebugLevel,
+    bpmFallbackOverride,
+    bpmConfidenceThreshold,
+    bpmDebugInfo,
+    bpmDetails,
+    musoPreviewStatus,
+    mismatchPreviewUrls,
+    previewUrls,
+    bpmFullData,
+    showBpmModal,
+    showBpmModalDebug,
+    recalcMode,
+    selectedBpmTrack,
+    bpmProcessingStartTime,
+    bpmProcessingEndTime,
+    bpmTracksCalculated,
+    retryStatus,
+    retryAttempted,
+    retryTrackId,
+    recalcStatus,
+    manualBpm,
+    manualKey,
+    manualScale,
+    isUpdatingSelection,
+    showBpmMoreInfo,
+    countryCode,
+    tracksInDb,
+    recalculating,
+    showBpmInfo,
+    showBpmNotice,
+    showBpmRecalcPrompt,
+    pendingRecalcIds,
+  } = bpmState
+
+  const {
+    creditsByTrackId,
+    creditsLoadingIds,
+    creditsErrorByTrackId,
+    showCreditsModal,
+    selectedCreditsTrack,
+  } = creditsState
+
+  const {
+    pageSize,
+    currentPage,
+    searchQuery,
+    sortField,
+    sortDirection,
+    showAdvanced,
+    yearFrom,
+    yearTo,
+    bpmFrom,
+    bpmTo,
+    includeHalfDoubleBpm,
+  } = filtersState
+
+  const {
+    isAdmin,
+    loggedInUserName,
+    isHeaderRefreshing,
+    contextMenu,
+  } = uiState
+
+  const {
+    isRefreshing,
+    showCacheModal,
+    refreshDone,
+  } = cacheState
+
+  const { playingTrackId } = playbackState
+
+  const setTrackBpms = (value: BpmState['trackBpms'] | ((prev: BpmState['trackBpms']) => BpmState['trackBpms'])) => {
+    bpmDispatch({ type: 'set', key: 'trackBpms', value })
+  }
+  const setTrackKeys = (value: BpmState['trackKeys'] | ((prev: BpmState['trackKeys']) => BpmState['trackKeys'])) => {
+    bpmDispatch({ type: 'set', key: 'trackKeys', value })
+  }
+  const setTrackScales = (value: BpmState['trackScales'] | ((prev: BpmState['trackScales']) => BpmState['trackScales'])) => {
+    bpmDispatch({ type: 'set', key: 'trackScales', value })
+  }
+  const setLoadingBpmFields = (value: BpmState['loadingBpmFields'] | ((prev: BpmState['loadingBpmFields']) => BpmState['loadingBpmFields'])) => {
+    bpmDispatch({ type: 'set', key: 'loadingBpmFields', value })
+  }
+  const setLoadingKeyFields = (value: BpmState['loadingKeyFields'] | ((prev: BpmState['loadingKeyFields']) => BpmState['loadingKeyFields'])) => {
+    bpmDispatch({ type: 'set', key: 'loadingKeyFields', value })
+  }
+  const setTracksNeedingBpm = (value: BpmState['tracksNeedingBpm'] | ((prev: BpmState['tracksNeedingBpm']) => BpmState['tracksNeedingBpm'])) => {
+    bpmDispatch({ type: 'set', key: 'tracksNeedingBpm', value })
+  }
+  const setTracksNeedingKey = (value: BpmState['tracksNeedingKey'] | ((prev: BpmState['tracksNeedingKey']) => BpmState['tracksNeedingKey'])) => {
+    bpmDispatch({ type: 'set', key: 'tracksNeedingKey', value })
+  }
+  const setTracksNeedingCalc = (value: BpmState['tracksNeedingCalc'] | ((prev: BpmState['tracksNeedingCalc']) => BpmState['tracksNeedingCalc'])) => {
+    bpmDispatch({ type: 'set', key: 'tracksNeedingCalc', value })
+  }
+  const setLoadingPreviewIds = (value: BpmState['loadingPreviewIds'] | ((prev: BpmState['loadingPreviewIds']) => BpmState['loadingPreviewIds'])) => {
+    bpmDispatch({ type: 'set', key: 'loadingPreviewIds', value })
+  }
+  const setBpmStreamStatus = (value: BpmState['bpmStreamStatus'] | ((prev: BpmState['bpmStreamStatus']) => BpmState['bpmStreamStatus'])) => {
+    bpmDispatch({ type: 'set', key: 'bpmStreamStatus', value })
+  }
+  const setShowBpmDebug = (value: BpmState['showBpmDebug'] | ((prev: BpmState['showBpmDebug']) => BpmState['showBpmDebug'])) => {
+    bpmDispatch({ type: 'set', key: 'showBpmDebug', value })
+  }
+  const setBpmDebugLevel = (value: BpmState['bpmDebugLevel'] | ((prev: BpmState['bpmDebugLevel']) => BpmState['bpmDebugLevel'])) => {
+    bpmDispatch({ type: 'set', key: 'bpmDebugLevel', value })
+  }
+  const setBpmFallbackOverride = (value: BpmState['bpmFallbackOverride'] | ((prev: BpmState['bpmFallbackOverride']) => BpmState['bpmFallbackOverride'])) => {
+    bpmDispatch({ type: 'set', key: 'bpmFallbackOverride', value })
+  }
+  const setBpmConfidenceThreshold = (value: BpmState['bpmConfidenceThreshold'] | ((prev: BpmState['bpmConfidenceThreshold']) => BpmState['bpmConfidenceThreshold'])) => {
+    bpmDispatch({ type: 'set', key: 'bpmConfidenceThreshold', value })
+  }
+  const setBpmDebugInfo = (value: BpmState['bpmDebugInfo'] | ((prev: BpmState['bpmDebugInfo']) => BpmState['bpmDebugInfo'])) => {
+    bpmDispatch({ type: 'set', key: 'bpmDebugInfo', value })
+  }
+  const setBpmDetails = (value: BpmState['bpmDetails'] | ((prev: BpmState['bpmDetails']) => BpmState['bpmDetails'])) => {
+    bpmDispatch({ type: 'set', key: 'bpmDetails', value })
+  }
+  const setMusoPreviewStatus = (value: BpmState['musoPreviewStatus'] | ((prev: BpmState['musoPreviewStatus']) => BpmState['musoPreviewStatus'])) => {
+    bpmDispatch({ type: 'set', key: 'musoPreviewStatus', value })
+  }
+  const setMismatchPreviewUrls = (value: BpmState['mismatchPreviewUrls'] | ((prev: BpmState['mismatchPreviewUrls']) => BpmState['mismatchPreviewUrls'])) => {
+    bpmDispatch({ type: 'set', key: 'mismatchPreviewUrls', value })
+  }
+  const setPreviewUrls = (value: BpmState['previewUrls'] | ((prev: BpmState['previewUrls']) => BpmState['previewUrls'])) => {
+    bpmDispatch({ type: 'set', key: 'previewUrls', value })
+  }
+  const setBpmFullData = (value: BpmState['bpmFullData'] | ((prev: BpmState['bpmFullData']) => BpmState['bpmFullData'])) => {
+    bpmDispatch({ type: 'set', key: 'bpmFullData', value })
+  }
+  const setShowBpmModal = (value: BpmState['showBpmModal'] | ((prev: BpmState['showBpmModal']) => BpmState['showBpmModal'])) => {
+    bpmDispatch({ type: 'set', key: 'showBpmModal', value })
+  }
+  const setShowBpmModalDebug = (value: BpmState['showBpmModalDebug'] | ((prev: BpmState['showBpmModalDebug']) => BpmState['showBpmModalDebug'])) => {
+    bpmDispatch({ type: 'set', key: 'showBpmModalDebug', value })
+  }
+  const setRecalcMode = (value: BpmState['recalcMode'] | ((prev: BpmState['recalcMode']) => BpmState['recalcMode'])) => {
+    bpmDispatch({ type: 'set', key: 'recalcMode', value })
+  }
+  const setSelectedBpmTrack = (value: BpmState['selectedBpmTrack'] | ((prev: BpmState['selectedBpmTrack']) => BpmState['selectedBpmTrack'])) => {
+    bpmDispatch({ type: 'set', key: 'selectedBpmTrack', value })
+  }
+  const setBpmProcessingStartTime = (value: BpmState['bpmProcessingStartTime'] | ((prev: BpmState['bpmProcessingStartTime']) => BpmState['bpmProcessingStartTime'])) => {
+    bpmDispatch({ type: 'set', key: 'bpmProcessingStartTime', value })
+  }
+  const setBpmProcessingEndTime = (value: BpmState['bpmProcessingEndTime'] | ((prev: BpmState['bpmProcessingEndTime']) => BpmState['bpmProcessingEndTime'])) => {
+    bpmDispatch({ type: 'set', key: 'bpmProcessingEndTime', value })
+  }
+  const setBpmTracksCalculated = (value: BpmState['bpmTracksCalculated'] | ((prev: BpmState['bpmTracksCalculated']) => BpmState['bpmTracksCalculated'])) => {
+    bpmDispatch({ type: 'set', key: 'bpmTracksCalculated', value })
+  }
+  const setRetryStatus = (value: BpmState['retryStatus'] | ((prev: BpmState['retryStatus']) => BpmState['retryStatus'])) => {
+    bpmDispatch({ type: 'set', key: 'retryStatus', value })
+  }
+  const setRetryAttempted = (value: BpmState['retryAttempted'] | ((prev: BpmState['retryAttempted']) => BpmState['retryAttempted'])) => {
+    bpmDispatch({ type: 'set', key: 'retryAttempted', value })
+  }
+  const setRetryTrackId = (value: BpmState['retryTrackId'] | ((prev: BpmState['retryTrackId']) => BpmState['retryTrackId'])) => {
+    bpmDispatch({ type: 'set', key: 'retryTrackId', value })
+  }
+  const setRecalcStatus = (value: BpmState['recalcStatus'] | ((prev: BpmState['recalcStatus']) => BpmState['recalcStatus'])) => {
+    bpmDispatch({ type: 'set', key: 'recalcStatus', value })
+  }
+  const setManualBpm = (value: BpmState['manualBpm'] | ((prev: BpmState['manualBpm']) => BpmState['manualBpm'])) => {
+    bpmDispatch({ type: 'set', key: 'manualBpm', value })
+  }
+  const setManualKey = (value: BpmState['manualKey'] | ((prev: BpmState['manualKey']) => BpmState['manualKey'])) => {
+    bpmDispatch({ type: 'set', key: 'manualKey', value })
+  }
+  const setManualScale = (value: BpmState['manualScale'] | ((prev: BpmState['manualScale']) => BpmState['manualScale'])) => {
+    bpmDispatch({ type: 'set', key: 'manualScale', value })
+  }
+  const setIsUpdatingSelection = (value: BpmState['isUpdatingSelection'] | ((prev: BpmState['isUpdatingSelection']) => BpmState['isUpdatingSelection'])) => {
+    bpmDispatch({ type: 'set', key: 'isUpdatingSelection', value })
+  }
+  const setShowBpmMoreInfo = (value: BpmState['showBpmMoreInfo'] | ((prev: BpmState['showBpmMoreInfo']) => BpmState['showBpmMoreInfo'])) => {
+    bpmDispatch({ type: 'set', key: 'showBpmMoreInfo', value })
+  }
+  const setCountryCode = (value: BpmState['countryCode'] | ((prev: BpmState['countryCode']) => BpmState['countryCode'])) => {
+    bpmDispatch({ type: 'set', key: 'countryCode', value })
+  }
+  const setTracksInDb = (value: BpmState['tracksInDb'] | ((prev: BpmState['tracksInDb']) => BpmState['tracksInDb'])) => {
+    bpmDispatch({ type: 'set', key: 'tracksInDb', value })
+  }
+  const setRecalculating = (value: BpmState['recalculating'] | ((prev: BpmState['recalculating']) => BpmState['recalculating'])) => {
+    bpmDispatch({ type: 'set', key: 'recalculating', value })
+  }
+  const setShowBpmInfo = (value: BpmState['showBpmInfo'] | ((prev: BpmState['showBpmInfo']) => BpmState['showBpmInfo'])) => {
+    bpmDispatch({ type: 'set', key: 'showBpmInfo', value })
+  }
+  const setShowBpmNotice = (value: BpmState['showBpmNotice'] | ((prev: BpmState['showBpmNotice']) => BpmState['showBpmNotice'])) => {
+    bpmDispatch({ type: 'set', key: 'showBpmNotice', value })
+  }
+  const setShowBpmRecalcPrompt = (value: BpmState['showBpmRecalcPrompt'] | ((prev: BpmState['showBpmRecalcPrompt']) => BpmState['showBpmRecalcPrompt'])) => {
+    bpmDispatch({ type: 'set', key: 'showBpmRecalcPrompt', value })
+  }
+  const setPendingRecalcIds = (value: BpmState['pendingRecalcIds'] | ((prev: BpmState['pendingRecalcIds']) => BpmState['pendingRecalcIds'])) => {
+    bpmDispatch({ type: 'set', key: 'pendingRecalcIds', value })
+  }
+
+  const setCreditsByTrackId = (value: CreditsState['creditsByTrackId'] | ((prev: CreditsState['creditsByTrackId']) => CreditsState['creditsByTrackId'])) => {
+    creditsDispatch({ type: 'set', key: 'creditsByTrackId', value })
+  }
+  const setCreditsLoadingIds = (value: CreditsState['creditsLoadingIds'] | ((prev: CreditsState['creditsLoadingIds']) => CreditsState['creditsLoadingIds'])) => {
+    creditsDispatch({ type: 'set', key: 'creditsLoadingIds', value })
+  }
+  const setCreditsErrorByTrackId = (value: CreditsState['creditsErrorByTrackId'] | ((prev: CreditsState['creditsErrorByTrackId']) => CreditsState['creditsErrorByTrackId'])) => {
+    creditsDispatch({ type: 'set', key: 'creditsErrorByTrackId', value })
+  }
+  const setShowCreditsModal = (value: CreditsState['showCreditsModal'] | ((prev: CreditsState['showCreditsModal']) => CreditsState['showCreditsModal'])) => {
+    creditsDispatch({ type: 'set', key: 'showCreditsModal', value })
+  }
+  const setSelectedCreditsTrack = (value: CreditsState['selectedCreditsTrack'] | ((prev: CreditsState['selectedCreditsTrack']) => CreditsState['selectedCreditsTrack'])) => {
+    creditsDispatch({ type: 'set', key: 'selectedCreditsTrack', value })
+  }
+
+  const setPageSize = (value: FiltersState['pageSize'] | ((prev: FiltersState['pageSize']) => FiltersState['pageSize'])) => {
+    filtersDispatch({ type: 'set', key: 'pageSize', value })
+  }
+  const setCurrentPage = (value: FiltersState['currentPage'] | ((prev: FiltersState['currentPage']) => FiltersState['currentPage'])) => {
+    filtersDispatch({ type: 'set', key: 'currentPage', value })
+  }
+  const setSearchQuery = (value: FiltersState['searchQuery'] | ((prev: FiltersState['searchQuery']) => FiltersState['searchQuery'])) => {
+    filtersDispatch({ type: 'set', key: 'searchQuery', value })
+  }
+  const setSortField = (value: FiltersState['sortField'] | ((prev: FiltersState['sortField']) => FiltersState['sortField'])) => {
+    filtersDispatch({ type: 'set', key: 'sortField', value })
+  }
+  const setSortDirection = (value: FiltersState['sortDirection'] | ((prev: FiltersState['sortDirection']) => FiltersState['sortDirection'])) => {
+    filtersDispatch({ type: 'set', key: 'sortDirection', value })
+  }
+  const setShowAdvanced = (value: FiltersState['showAdvanced'] | ((prev: FiltersState['showAdvanced']) => FiltersState['showAdvanced'])) => {
+    filtersDispatch({ type: 'set', key: 'showAdvanced', value })
+  }
+  const setYearFrom = (value: FiltersState['yearFrom'] | ((prev: FiltersState['yearFrom']) => FiltersState['yearFrom'])) => {
+    filtersDispatch({ type: 'set', key: 'yearFrom', value })
+  }
+  const setYearTo = (value: FiltersState['yearTo'] | ((prev: FiltersState['yearTo']) => FiltersState['yearTo'])) => {
+    filtersDispatch({ type: 'set', key: 'yearTo', value })
+  }
+  const setBpmFrom = (value: FiltersState['bpmFrom'] | ((prev: FiltersState['bpmFrom']) => FiltersState['bpmFrom'])) => {
+    filtersDispatch({ type: 'set', key: 'bpmFrom', value })
+  }
+  const setBpmTo = (value: FiltersState['bpmTo'] | ((prev: FiltersState['bpmTo']) => FiltersState['bpmTo'])) => {
+    filtersDispatch({ type: 'set', key: 'bpmTo', value })
+  }
+  const setIncludeHalfDoubleBpm = (value: FiltersState['includeHalfDoubleBpm'] | ((prev: FiltersState['includeHalfDoubleBpm']) => FiltersState['includeHalfDoubleBpm'])) => {
+    filtersDispatch({ type: 'set', key: 'includeHalfDoubleBpm', value })
+  }
+
+  const setIsAdmin = (value: UiState['isAdmin'] | ((prev: UiState['isAdmin']) => UiState['isAdmin'])) => {
+    uiDispatch({ type: 'set', key: 'isAdmin', value })
+  }
+  const setLoggedInUserName = (value: UiState['loggedInUserName'] | ((prev: UiState['loggedInUserName']) => UiState['loggedInUserName'])) => {
+    uiDispatch({ type: 'set', key: 'loggedInUserName', value })
+  }
+  const setIsHeaderRefreshing = (value: UiState['isHeaderRefreshing'] | ((prev: UiState['isHeaderRefreshing']) => UiState['isHeaderRefreshing'])) => {
+    uiDispatch({ type: 'set', key: 'isHeaderRefreshing', value })
+  }
+  const setContextMenu = (value: UiState['contextMenu'] | ((prev: UiState['contextMenu']) => UiState['contextMenu'])) => {
+    uiDispatch({ type: 'set', key: 'contextMenu', value })
+  }
+
+  const setIsRefreshing = (value: CacheState['isRefreshing'] | ((prev: CacheState['isRefreshing']) => CacheState['isRefreshing'])) => {
+    cacheDispatch({ type: 'set', key: 'isRefreshing', value })
+  }
+  const setShowCacheModal = (value: CacheState['showCacheModal'] | ((prev: CacheState['showCacheModal']) => CacheState['showCacheModal'])) => {
+    cacheDispatch({ type: 'set', key: 'showCacheModal', value })
+  }
+  const setRefreshDone = (value: CacheState['refreshDone'] | ((prev: CacheState['refreshDone']) => CacheState['refreshDone'])) => {
+    cacheDispatch({ type: 'set', key: 'refreshDone', value })
+  }
+
+  const setPlayingTrackId = (value: PlaybackState['playingTrackId'] | ((prev: PlaybackState['playingTrackId']) => PlaybackState['playingTrackId'])) => {
+    playbackDispatch({ type: 'set', key: 'playingTrackId', value })
+  }
+
   const streamAbortRef = useRef<AbortController | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
-  const [showBpmDebug, setShowBpmDebug] = useState(false)
-  const [bpmDebugLevel, setBpmDebugLevel] = useState('minimal')
-  const [bpmFallbackOverride, setBpmFallbackOverride] = useState<BpmFallbackOverride>('never')
-  const [bpmConfidenceThreshold, setBpmConfidenceThreshold] = useState('0.65')
-  const [bpmDebugInfo, setBpmDebugInfo] = useState<Record<string, any>>({})
-  const [bpmDetails, setBpmDetails] = useState<Record<string, { source?: string; error?: string }>>({})
-  const [musoPreviewStatus, setMusoPreviewStatus] = useState<{ loading: boolean; success?: boolean; error?: string } | null>(null)
-  const [mismatchPreviewUrls, setMismatchPreviewUrls] = useState<{ itunes?: string | null; spotify?: string | null; loading?: boolean }>({})
-  const [previewUrls, setPreviewUrls] = useState<Record<string, string | null>>({}) // Store successful preview URLs from DB
-  // Store all BPM data (Essentia + Librosa) for modal
-  const [bpmFullData, setBpmFullData] = useState<Record<string, {
-    bpmEssentia?: number | null
-    bpmRawEssentia?: number | null
-    bpmConfidenceEssentia?: number | null
-    bpmLibrosa?: number | null
-    bpmRawLibrosa?: number | null
-    bpmConfidenceLibrosa?: number | null
-    keyEssentia?: string | null
-    scaleEssentia?: string | null
-    keyscaleConfidenceEssentia?: number | null
-    keyLibrosa?: string | null
-    scaleLibrosa?: string | null
-    keyscaleConfidenceLibrosa?: number | null
-    bpmSelected?: 'essentia' | 'librosa' | 'manual'
-    keySelected?: 'essentia' | 'librosa' | 'manual'
-    bpmManual?: number | null
-    keyManual?: string | null
-    scaleManual?: string | null
-    debugTxt?: string | null
-  }>>({})
-  const [showBpmModal, setShowBpmModal] = useState(false)
-  const [showBpmModalDebug, setShowBpmModalDebug] = useState(false)
-  const [recalcMode, setRecalcMode] = useState<'standard' | 'force' | 'fallback'>('standard')
-  const [selectedBpmTrack, setSelectedBpmTrack] = useState<Track | null>(null)
-  const [bpmProcessingStartTime, setBpmProcessingStartTime] = useState<number | null>(null)
-  const [bpmProcessingEndTime, setBpmProcessingEndTime] = useState<number | null>(null)
-  const [bpmTracksCalculated, setBpmTracksCalculated] = useState<number>(0) // Track how many were actually calculated (not cached)
-  const [retryStatus, setRetryStatus] = useState<{ loading: boolean; success?: boolean; error?: string } | null>(null)
-  const [retryAttempted, setRetryAttempted] = useState(false)
-  const [retryTrackId, setRetryTrackId] = useState<string | null>(null)
-  const [recalcStatus, setRecalcStatus] = useState<{ loading: boolean; success?: boolean; error?: string } | null>(null)
-  const [creditsByTrackId, setCreditsByTrackId] = useState<
-    Record<
-      string,
-      {
-        performedBy: string[]
-        writtenBy: string[]
-        producedBy: string[]
-        mixedBy: string[]
-        masteredBy: string[]
-        releaseId?: string | null
-        retrievedAt?: string | null
-      }
-    >
-  >({})
-  const [creditsLoadingIds, setCreditsLoadingIds] = useState<Set<string>>(new Set())
-  const [creditsErrorByTrackId, setCreditsErrorByTrackId] = useState<Record<string, string>>({})
-  const [showCreditsModal, setShowCreditsModal] = useState(false)
-  const [selectedCreditsTrack, setSelectedCreditsTrack] = useState<Track | null>(null)
-  const [pageSize, setPageSize] = useState<number | 'all'>(50)
-  const [currentPage, setCurrentPage] = useState(1)
-  // State for manual override in modal
-  const [manualBpm, setManualBpm] = useState<string>('')
-  const [manualKey, setManualKey] = useState<string>('')
-  const [manualScale, setManualScale] = useState<string>('major')
-  const [isUpdatingSelection, setIsUpdatingSelection] = useState(false)
   
   // Initialize manual values when modal opens
   useEffect(() => {
     if (showBpmModal && selectedBpmTrack) {
       const fullData = bpmFullData[selectedBpmTrack.id]
       if (fullData?.bpmManual) {
-        setManualBpm(String(fullData.bpmManual))
+        bpmDispatch({ type: 'set', key: 'manualBpm', value: String(fullData.bpmManual) })
       }
       if (fullData?.keyManual) {
-        setManualKey(fullData.keyManual)
+        bpmDispatch({ type: 'set', key: 'manualKey', value: fullData.keyManual })
       }
       if (fullData?.scaleManual) {
-        setManualScale(fullData.scaleManual)
+        bpmDispatch({ type: 'set', key: 'manualScale', value: fullData.scaleManual })
       }
     } else {
       // Reset when modal closes
-      setManualBpm('')
-      setManualKey('')
-      setManualScale('major')
+      bpmDispatch({ type: 'set', key: 'manualBpm', value: '' })
+      bpmDispatch({ type: 'set', key: 'manualKey', value: '' })
+      bpmDispatch({ type: 'set', key: 'manualScale', value: 'major' })
     }
-  }, [showBpmModal, selectedBpmTrack, bpmFullData])
+  }, [showBpmModal, selectedBpmTrack, bpmFullData, bpmDispatch])
   useEffect(() => {
-    setMusoPreviewStatus(null)
-  }, [showBpmModal, selectedBpmTrack])
-  const [showBpmMoreInfo, setShowBpmMoreInfo] = useState(false)
-  const [countryCode, setCountryCode] = useState<string>('us')
-  const [tracksInDb, setTracksInDb] = useState<Set<string>>(new Set()) // Track IDs that are already in the DB
-  const [recalculating, setRecalculating] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [sortField, setSortField] = useState<SortField | null>(null)
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
-  const [showAdvanced, setShowAdvanced] = useState(false)
-  const [yearFrom, setYearFrom] = useState('')
-  const [yearTo, setYearTo] = useState('')
-  const [bpmFrom, setBpmFrom] = useState('')
-  const [bpmTo, setBpmTo] = useState('')
-  const [includeHalfDoubleBpm, setIncludeHalfDoubleBpm] = useState(false)
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [showBpmInfo, setShowBpmInfo] = useState(false)
-  const [showBpmNotice, setShowBpmNotice] = useState(true)
-  const [playingTrackId, setPlayingTrackId] = useState<string | null>(null)
-  const [loggedInUserName, setLoggedInUserName] = useState<string | null>(null)
-  const [showBpmRecalcPrompt, setShowBpmRecalcPrompt] = useState(false)
-  const [pendingRecalcIds, setPendingRecalcIds] = useState<{ all: string[]; newOnly: string[] }>({ all: [], newOnly: [] })
-  const [isHeaderRefreshing, setIsHeaderRefreshing] = useState(false)
+    bpmDispatch({ type: 'set', key: 'musoPreviewStatus', value: null })
+  }, [showBpmModal, selectedBpmTrack, bpmDispatch])
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const authErrorHandledRef = useRef(false) // Prevent infinite loops on auth errors
   const audioCache = useRef<Map<string, string>>(new Map()) // Cache audio blobs by URL
@@ -188,16 +622,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   // Get cache info from React Query data
   const isCached = playlistInfo?.is_cached ?? false
   const cachedAt = playlistInfo?.cached_at ?? null
-  const [isRefreshing, setIsRefreshing] = useState(false)
-  const [showCacheModal, setShowCacheModal] = useState(false)
-  const [refreshDone, setRefreshDone] = useState(false)
-  const [contextMenu, setContextMenu] = useState<{
-    x: number
-    y: number
-    spotifyUrl: string
-    spotifyUri: string
-    track?: Track
-  } | null>(null)
 
   const fetchBpmForTrack = useCallback(async (trackId: string, country?: string) => {
     const key = `${trackId}:${country || ''}`
@@ -242,7 +666,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         audioRef.current.pause()
         audioRef.current.currentTime = 0
       }
-      setPlayingTrackId(null)
+      playbackDispatch({ type: 'set', key: 'playingTrackId', value: null })
       audioRef.current = null
     }
 
@@ -264,7 +688,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       window.removeEventListener('beforeunload', handleBeforeUnload)
       window.removeEventListener('pagehide', handlePageHide)
     }
-  }, [])
+  }, [playbackDispatch])
 
   useEffect(() => {
     return () => {
@@ -289,7 +713,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       .then((res) => res.json())
       .then((data) => {
         if (data?.authenticated && data?.user) {
-          setLoggedInUserName(data.user.display_name || data.user.id || null)
+          uiDispatch({
+            type: 'set',
+            key: 'loggedInUserName',
+            value: data.user.display_name || data.user.id || null,
+          })
           return
         }
         if (!data?.authenticated) {
@@ -297,13 +725,17 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         }
       })
       .catch(() => {})
-  }, [])
+  }, [uiDispatch])
   
   // Close context menu on click outside or escape key
   useEffect(() => {
-    const handleClickOutside = () => setContextMenu(null)
+    const handleClickOutside = () => {
+      uiDispatch({ type: 'set', key: 'contextMenu', value: null })
+    }
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setContextMenu(null)
+      if (e.key === 'Escape') {
+        uiDispatch({ type: 'set', key: 'contextMenu', value: null })
+      }
     }
     
     if (contextMenu) {
@@ -319,7 +751,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         document.removeEventListener('contextmenu', handleContextMenu)
       }
     }
-  }, [contextMenu])
+  }, [contextMenu, uiDispatch])
 
   // Reset auth error ref when playlist ID changes (user navigates to different playlist)
   useEffect(() => {
@@ -353,7 +785,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         const res = await fetch('/api/auth/is-admin')
         if (res.ok) {
           const data = await res.json()
-          setIsAdmin(data.isAdmin || false)
+          uiDispatch({ type: 'set', key: 'isAdmin', value: data.isAdmin || false })
         }
       } catch (e) {
         console.error('Error checking admin status:', e)
@@ -361,7 +793,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     }
 
     checkAdmin()
-  }, [])
+  }, [uiDispatch])
   
   // Function to refresh playlist data
   const handleRefresh = async () => {
@@ -415,22 +847,22 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   }
 
   const closeBpmModal = useCallback(() => {
-    setShowBpmModal(false)
-    setRetryStatus(null)
-    setRetryAttempted(false)
-    setRetryTrackId(null)
-    setManualBpm('')
-    setManualKey('')
-    setManualScale('major')
-    setMusoPreviewStatus(null)
-    setMismatchPreviewUrls({})
-    setShowBpmModalDebug(false)
-    setRecalcMode('standard')
-  }, [])
+    bpmDispatch({ type: 'set', key: 'showBpmModal', value: false })
+    bpmDispatch({ type: 'set', key: 'retryStatus', value: null })
+    bpmDispatch({ type: 'set', key: 'retryAttempted', value: false })
+    bpmDispatch({ type: 'set', key: 'retryTrackId', value: null })
+    bpmDispatch({ type: 'set', key: 'manualBpm', value: '' })
+    bpmDispatch({ type: 'set', key: 'manualKey', value: '' })
+    bpmDispatch({ type: 'set', key: 'manualScale', value: 'major' })
+    bpmDispatch({ type: 'set', key: 'musoPreviewStatus', value: null })
+    bpmDispatch({ type: 'set', key: 'mismatchPreviewUrls', value: {} })
+    bpmDispatch({ type: 'set', key: 'showBpmModalDebug', value: false })
+    bpmDispatch({ type: 'set', key: 'recalcMode', value: 'standard' })
+  }, [bpmDispatch])
 
   const closeCreditsModal = useCallback(() => {
-    setShowCreditsModal(false)
-  }, [])
+    creditsDispatch({ type: 'set', key: 'showCreditsModal', value: false })
+  }, [creditsDispatch])
 
   const updateBpmSelection = async (payload: {
     spotifyTrackId: string
@@ -2281,12 +2713,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     }
   }
 
-  const openBpmModalForTrack = useCallback((track: Track) => {
+  const openBpmModalForTrack = (track: Track) => {
     setSelectedBpmTrack(track)
     setRetryStatus(null)
     setRetryAttempted(false)
     setShowBpmModal(true)
-  }, [])
+  }
 
   const handleRetryBpmForTrack = () => {
     if (!selectedBpmTrack || !bpmModalData) return
@@ -2464,14 +2896,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       : sortedTracks.slice((safePage - 1) * pageSize, safePage * pageSize)
 
   useEffect(() => {
-    setCurrentPage(1)
-  }, [searchQuery, sortField, sortDirection, pageSize])
+    filtersDispatch({ type: 'set', key: 'currentPage', value: 1 })
+  }, [searchQuery, sortField, sortDirection, pageSize, filtersDispatch])
 
   useEffect(() => {
     if (currentPage > totalPages) {
-      setCurrentPage(totalPages)
+      filtersDispatch({ type: 'set', key: 'currentPage', value: totalPages })
     }
-  }, [currentPage, totalPages])
+  }, [currentPage, totalPages, filtersDispatch])
 
   // Compute BPM modal data (must be before any early returns)
   const bpmModalData = useMemo(() => {
@@ -2669,9 +3101,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
   useEffect(() => {
     if (bpmSummary) {
-      setShowBpmNotice(true)
+      bpmDispatch({ type: 'set', key: 'showBpmNotice', value: true })
     }
-  }, [bpmSummary])
+  }, [bpmSummary, bpmDispatch])
 
 
   // Load preferred page size from localStorage
@@ -2680,14 +3112,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     const saved = window.localStorage.getItem('playlistPageSize')
     if (!saved) return
     if (saved === 'all') {
-      setPageSize('all')
+      filtersDispatch({ type: 'set', key: 'pageSize', value: 'all' })
       return
     }
     const parsed = Number(saved)
     if (!Number.isNaN(parsed) && parsed > 0) {
-      setPageSize(parsed)
+      filtersDispatch({ type: 'set', key: 'pageSize', value: parsed })
     }
-  }, [])
+  }, [filtersDispatch])
 
   // Persist page size preference
   useEffect(() => {
