@@ -436,9 +436,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     spotifyTrackId: string
     bpmSelected?: 'essentia' | 'librosa' | 'manual'
     keySelected?: 'essentia' | 'librosa' | 'manual'
-    bpmManual?: number
-    keyManual?: string
-    scaleManual?: string
+    bpmManual?: number | null
+    keyManual?: string | null
+    scaleManual?: string | null
   }) => {
     setIsUpdatingSelection(true)
     try {
