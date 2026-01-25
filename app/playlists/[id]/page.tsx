@@ -618,7 +618,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     setBpmState('musoPreviewStatus', null)
     setBpmState('mismatchPreviewUrls', {})
     setBpmState('showBpmModalDebug', false)
-    setBpmState('recalcMode', 'default')
+    setBpmState('recalcMode', 'never')
   }, [setBpmState])
 
   const closeCreditsModal = useCallback(() => {
@@ -1292,8 +1292,8 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           onChange={(e) => setBpmFallbackOverride(e.target.value as BpmFallbackOverride)}
           className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
         >
-          <option value="default">Confidence-based (default)</option>
-          <option value="never">Never use fallback</option>
+          <option value="never">Essentia only (no fallback)</option>
+          <option value="default">Auto fallback (confidence-based)</option>
           <option value="always">Always use fallback</option>
           <option value="bpm_only">Force fallback for BPM only</option>
           <option value="key_only">Force fallback for key only</option>

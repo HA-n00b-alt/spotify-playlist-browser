@@ -153,8 +153,20 @@ export default function BpmDetailsModal({
   if (!isOpen || !bpmModalData || !bpmModalSummary || !selectedBpmTrack) {
     return null
   }
-  const manualFieldClass =
-    'h-10 rounded-[8px] bg-gray-200 dark:bg-black/20 px-3 py-2 text-sm text-gray-900 dark:text-white/90 focus:outline-none focus:ring-2 focus:ring-emerald-500/40'
+  const ghostFieldClass =
+    'h-10 w-full bg-transparent px-0 py-2 text-sm text-white/90 focus:outline-none border-b border-white/15 focus:border-emerald-400'
+  const manualSelectClass =
+    'h-10 bg-transparent px-0 py-2 text-sm text-white/90 focus:outline-none border-b border-white/15 focus:border-emerald-400'
+  const recalcOptions: Array<{ value: BpmFallbackOverride; label: string }> = [
+    { value: 'never', label: 'Essentia' },
+    { value: 'default', label: 'Auto' },
+    { value: 'always', label: 'Always' },
+    { value: 'bpm_only', label: 'BPM' },
+    { value: 'key_only', label: 'Key' },
+    { value: 'fallback_only', label: 'Fallback' },
+    { value: 'fallback_only_bpm', label: 'FB BPM' },
+    { value: 'fallback_only_key', label: 'FB Key' },
+  ]
 
   return (
     <div
@@ -184,33 +196,17 @@ export default function BpmDetailsModal({
 
         <div className="mt-6 space-y-12">
           <div className="grid gap-12 lg:grid-cols-2">
-          <section
-            className={`relative rounded-[12px] bg-gray-100 dark:bg-slate-900 px-4 py-4 text-gray-900 dark:text-white ${
-              typeof bpmModalSummary.currentBpm === 'number' ? 'pl-5' : ''
-            }`}
-          >
-            {typeof bpmModalSummary.currentBpm === 'number' ? (
-              <span className="absolute left-0 top-2 bottom-2 w-[2px] bg-emerald-500 dark:bg-emerald-400" />
-            ) : null}
+          <section className="relative rounded-[12px] bg-gray-100 dark:bg-slate-900 px-4 py-4 pl-5 text-gray-900 dark:text-white">
+            <span className="absolute left-0 top-2 bottom-2 w-[2px] bg-emerald-500 dark:bg-emerald-400" />
             <div className="text-[10px] font-bold uppercase tracking-[0.05em] text-gray-500 dark:text-white/50">
               BPM
             </div>
-            <div className="mt-3 flex items-center gap-2 text-4xl font-bold text-gray-900 dark:text-white">
+            <div className="mt-3 flex items-center gap-3 text-4xl font-bold text-white">
               {typeof bpmModalSummary.currentBpm === 'number'
                 ? `${Math.round(bpmModalSummary.currentBpm)} BPM`
                 : '—'}
-            </div>
-            <div className="mt-1 flex items-center justify-between gap-4">
-              <div className="text-[11px] text-gray-600 dark:text-white/50">
-                Algo: {bpmModalSummary.bpmSelectedLabel}
-                {' · '}
-                Confidence:{' '}
-                {bpmModalSummary.bpmSelectedConfidence != null
-                  ? `${Math.round(bpmModalSummary.bpmSelectedConfidence * 100)}%`
-                  : 'n/a'}
-              </div>
               {isAdmin && typeof bpmModalSummary.currentBpm === 'number' && (
-                <div className="flex flex-wrap gap-2 text-xs">
+                <div className="inline-flex items-center rounded-full border border-white/20 text-[11px] font-semibold text-white/80">
                   <button
                     onClick={async () => {
                       const currentBpm = bpmModalSummary.currentBpm
@@ -223,10 +219,12 @@ export default function BpmDetailsModal({
                       })
                     }}
                     disabled={isUpdatingSelection}
-                    className="rounded-full px-3 py-1 text-gray-600 hover:text-gray-900 hover:bg-gray-200 disabled:text-gray-400 dark:text-white/60 dark:hover:text-white dark:hover:bg-white/10 dark:disabled:text-white/30"
+                    className="px-2 py-1 hover:text-white disabled:text-white/40"
+                    aria-label="Store half BPM"
                   >
-                    Store Half
+                    ½
                   </button>
+                  <span className="h-4 w-px bg-white/15" />
                   <button
                     onClick={async () => {
                       const currentBpm = bpmModalSummary.currentBpm
@@ -239,12 +237,23 @@ export default function BpmDetailsModal({
                       })
                     }}
                     disabled={isUpdatingSelection}
-                    className="rounded-full px-3 py-1 text-gray-600 hover:text-gray-900 hover:bg-gray-200 disabled:text-gray-400 dark:text-white/60 dark:hover:text-white dark:hover:bg-white/10 dark:disabled:text-white/30"
+                    className="px-2 py-1 hover:text-white disabled:text-white/40"
+                    aria-label="Store double BPM"
                   >
-                    Store Double
+                    2x
                   </button>
                 </div>
               )}
+            </div>
+            <div className="mt-1 flex items-center justify-between gap-4">
+              <div className="text-[11px] text-gray-600 dark:text-white/50">
+                Algo: {bpmModalSummary.bpmSelectedLabel}
+                {' · '}
+                Confidence:{' '}
+                {bpmModalSummary.bpmSelectedConfidence != null
+                  ? `${Math.round(bpmModalSummary.bpmSelectedConfidence * 100)}%`
+                  : 'n/a'}
+              </div>
             </div>
 
             {!bpmModalData.hasEssentiaBpm && !bpmModalData.hasLibrosaBpm && bpmModalData.currentBpm == null ? (
@@ -329,50 +338,53 @@ export default function BpmDetailsModal({
                   {bpmModalSummary.bpmCandidates.map((candidate) => {
                     const isSelected = bpmModalData.bpmSelected === candidate.id
                     return (
-                      <div
+                      <button
                         key={candidate.id}
-                        className="flex items-center justify-between rounded-[12px] bg-gray-200 dark:bg-black/20 px-3 py-2 text-sm text-gray-800 dark:text-white/80"
+                        onClick={() => {
+                          if (!isAdmin || isSelected) return
+                          onUpdateBpmSelection({
+                            spotifyTrackId: bpmModalData.trackId,
+                            bpmSelected: candidate.id,
+                          })
+                        }}
+                        disabled={isUpdatingSelection || (isSelected && !isAdmin)}
+                        className={`group -ml-5 flex w-full items-center justify-between rounded-[10px] px-3 py-2 pl-5 text-left text-sm transition ${
+                          isSelected
+                            ? 'border-l-2 border-emerald-400 bg-white/5 text-white'
+                            : 'border-l-2 border-transparent text-white/60 hover:text-white'
+                        }`}
                       >
-                        <div>
-                          <div className="text-[10px] font-bold uppercase tracking-[0.05em] text-gray-600 dark:text-white/50">
-                            {candidate.label}
-                          </div>
-                          <div className="text-sm font-semibold text-gray-900 dark:text-white">
-                            {Math.round(candidate.value)} BPM
-                            {typeof candidate.raw === 'number' && candidate.raw !== candidate.value ? (
-                              <span className="ml-2 text-xs text-gray-500 dark:text-white/40">raw {candidate.raw.toFixed(1)}</span>
-                            ) : null}
-                          </div>
-                          <div className="text-[11px] text-gray-600 dark:text-white/50">
-                            Confidence:{' '}
-                            {candidate.confidence != null
-                              ? `${Math.round(candidate.confidence * 100)}%`
-                              : 'n/a'}
-                          </div>
+                        <div className="text-[12px] font-semibold text-white/70 group-hover:text-white">
+                          {candidate.label}
                         </div>
-                        {isSelected ? null : isAdmin ? (
-                          <button
-                            onClick={() =>
-                              onUpdateBpmSelection({
-                                spotifyTrackId: bpmModalData.trackId,
-                                bpmSelected: candidate.id,
-                              })
-                            }
-                            disabled={isUpdatingSelection}
-                            className="rounded-full px-3 py-1 text-[11px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-300 disabled:text-gray-400 dark:text-white/60 dark:hover:text-white dark:hover:bg-white/10 dark:disabled:text-white/30"
-                          >
-                            Use this
-                          </button>
-                        ) : null}
-                      </div>
+                        <div className="text-[12px] text-white/70 group-hover:text-white">
+                          {Math.round(candidate.value)} BPM ·{' '}
+                          {candidate.confidence != null
+                            ? `${Math.round(candidate.confidence * 100)}%`
+                            : 'n/a'}
+                        </div>
+                      </button>
                     )
                   })}
                 </div>
 
                 {isAdmin && (
                   <div className="mt-6">
-                    <div className="text-[10px] font-bold uppercase tracking-[0.05em] text-gray-600 dark:text-white/50">
+                    <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.05em] text-gray-600 dark:text-white/50">
                       Manual override
+                      <svg
+                        className="h-3 w-3 text-white/50"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                      </svg>
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <input
@@ -380,7 +392,7 @@ export default function BpmDetailsModal({
                         value={manualBpm || bpmModalData.fullData?.bpmManual || ''}
                         onChange={(e) => onSetManualBpm(e.target.value)}
                         placeholder="Enter BPM"
-                        className={`${manualFieldClass} w-32`}
+                        className={`${ghostFieldClass} w-28`}
                         min="1"
                         max="300"
                       />
@@ -400,13 +412,13 @@ export default function BpmDetailsModal({
                             onSetManualBpm('')
                           }}
                           disabled={isUpdatingSelection}
-                          className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 disabled:text-emerald-300 dark:text-emerald-300 dark:hover:text-emerald-200 dark:disabled:text-emerald-300/40"
+                          className="text-[11px] font-semibold text-emerald-300 hover:text-emerald-200 disabled:text-emerald-300/40"
                         >
                           Save
                         </button>
                       ) : null}
                       {bpmModalData.bpmSelected === 'manual' && bpmModalData.fullData?.bpmManual != null && (
-                        <span className="text-[11px] text-gray-500 dark:text-white/40">
+                        <span className="text-[11px] text-white/40">
                           Selected: {Math.round(bpmModalData.fullData.bpmManual)}
                         </span>
                       )}
@@ -417,18 +429,12 @@ export default function BpmDetailsModal({
             )}
           </section>
 
-          <section
-            className={`relative rounded-[12px] bg-gray-100 dark:bg-slate-900 px-4 py-4 text-gray-900 dark:text-white ${
-              bpmModalSummary.currentKey || bpmModalSummary.currentScale ? 'pl-5' : ''
-            }`}
-          >
-            {bpmModalSummary.currentKey || bpmModalSummary.currentScale ? (
-              <span className="absolute left-0 top-2 bottom-2 w-[2px] bg-emerald-500 dark:bg-emerald-400" />
-            ) : null}
+          <section className="relative rounded-[12px] bg-gray-100 dark:bg-slate-900 px-4 py-4 pl-5 text-gray-900 dark:text-white">
+            <span className="absolute left-0 top-2 bottom-2 w-[2px] bg-emerald-500 dark:bg-emerald-400" />
             <div className="text-[10px] font-bold uppercase tracking-[0.05em] text-gray-500 dark:text-white/50">
               Key & scale
             </div>
-            <div className="mt-3 flex items-center gap-2 text-4xl font-bold text-gray-900 dark:text-white">
+            <div className="mt-3 flex items-center gap-2 text-4xl font-bold text-white">
               {bpmModalSummary.currentKey || bpmModalSummary.currentScale
                 ? `${bpmModalSummary.currentKey || ''} ${bpmModalSummary.currentScale || ''}`.trim()
                 : '—'}
@@ -449,39 +455,33 @@ export default function BpmDetailsModal({
                 {bpmModalSummary.keyCandidates.map((candidate) => {
                   const isSelected = bpmModalData.keySelected === candidate.id
                   return (
-                    <div
+                    <button
                       key={candidate.id}
-                      className="flex items-center justify-between rounded-[12px] bg-gray-200 dark:bg-black/20 px-3 py-2 text-sm text-gray-800 dark:text-white/80"
+                      onClick={() => {
+                        if (!isAdmin || isSelected) return
+                        onUpdateBpmSelection({
+                          spotifyTrackId: bpmModalData.trackId,
+                          keySelected: candidate.id,
+                        })
+                      }}
+                      disabled={isUpdatingSelection || (isSelected && !isAdmin)}
+                      className={`group -ml-5 flex w-full items-center justify-between rounded-[10px] px-3 py-2 pl-5 text-left text-sm transition ${
+                        isSelected
+                          ? 'border-l-2 border-emerald-400 bg-white/5 text-white'
+                          : 'border-l-2 border-transparent text-white/60 hover:text-white'
+                      }`}
                     >
-                      <div>
-                        <div className="text-[10px] font-bold uppercase tracking-[0.05em] text-gray-600 dark:text-white/50">
-                          {candidate.label}
-                        </div>
-                        <div className="text-sm font-semibold text-gray-900 dark:text-white">
-                          {candidate.key || '—'} {candidate.scale || ''}
-                        </div>
-                        <div className="text-[11px] text-gray-600 dark:text-white/50">
-                          Confidence:{' '}
-                          {candidate.confidence != null
-                            ? `${Math.round(candidate.confidence * 100)}%`
-                            : 'n/a'}
-                        </div>
+                      <div className="text-[12px] font-semibold text-white/70 group-hover:text-white">
+                        {candidate.label}
                       </div>
-                      {isSelected ? null : isAdmin ? (
-                        <button
-                          onClick={() =>
-                            onUpdateBpmSelection({
-                              spotifyTrackId: bpmModalData.trackId,
-                              keySelected: candidate.id,
-                            })
-                          }
-                          disabled={isUpdatingSelection}
-                          className="rounded-full px-3 py-1 text-[11px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-300 disabled:text-gray-400 dark:text-white/60 dark:hover:text-white dark:hover:bg-white/10 dark:disabled:text-white/30"
-                        >
-                          Use this
-                        </button>
-                      ) : null}
-                    </div>
+                      <div className="text-[12px] text-white/70 group-hover:text-white">
+                        {(candidate.key || '—') + (candidate.scale ? ` ${candidate.scale}` : '')}{' '}
+                        ·{' '}
+                        {candidate.confidence != null
+                          ? `${Math.round(candidate.confidence * 100)}%`
+                          : 'n/a'}
+                      </div>
+                    </button>
                   )
                 })}
               </div>
@@ -493,14 +493,27 @@ export default function BpmDetailsModal({
 
             {isAdmin && (
               <div className="mt-6">
-                <div className="text-[10px] font-bold uppercase tracking-[0.05em] text-gray-600 dark:text-white/50">
+                <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.05em] text-gray-600 dark:text-white/50">
                   Manual override
+                  <svg
+                    className="h-3 w-3 text-white/50"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                  </svg>
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <select
                     value={manualKey || bpmModalData.fullData?.keyManual || ''}
                     onChange={(e) => onSetManualKey(e.target.value)}
-                    className={`${manualFieldClass} min-w-[120px]`}
+                    className={`${manualSelectClass} min-w-[120px]`}
                   >
                     <option value="">Select Key</option>
                     {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].map(k => (
@@ -510,7 +523,7 @@ export default function BpmDetailsModal({
                   <select
                     value={manualScale || bpmModalData.fullData?.scaleManual || 'major'}
                     onChange={(e) => onSetManualScale(e.target.value)}
-                    className={`${manualFieldClass} min-w-[120px]`}
+                    className={`${manualSelectClass} min-w-[120px]`}
                   >
                     <option value="major">Major</option>
                     <option value="minor">Minor</option>
@@ -552,35 +565,30 @@ export default function BpmDetailsModal({
           </div>
 
           <section>
-            <div className="text-[10px] font-bold uppercase tracking-[0.05em] text-gray-500/50 dark:text-white/50">
-              Recalculate
-            </div>
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <select
-                value={recalcMode}
-                onChange={(e) => onSetRecalcMode(e.target.value as BpmFallbackOverride)}
-                className={`${manualFieldClass} min-w-[220px]`}
-                disabled={recalcStatus?.loading}
-              >
-                <option value="default">Default (confidence-based)</option>
-                <option value="never">Never use fallback</option>
-                <option value="always">Always use fallback</option>
-                <option value="bpm_only">Force fallback for BPM only</option>
-                <option value="key_only">Force fallback for key only</option>
-                <option value="fallback_only">Fallback only (skip Essentia)</option>
-                <option value="fallback_only_bpm">Fallback only BPM</option>
-                <option value="fallback_only_key">Fallback only key</option>
-              </select>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="inline-flex flex-wrap items-center rounded-full border border-white/10 bg-white/5 p-1">
+                {recalcOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => onSetRecalcMode(option.value)}
+                    disabled={recalcStatus?.loading}
+                    className={`rounded-full px-3 py-1 text-[11px] font-semibold transition ${
+                      recalcMode === option.value
+                        ? 'bg-emerald-500/20 text-emerald-200'
+                        : 'text-white/60 hover:text-white'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
               <button
                 onClick={() => onRecalcTrack(recalcMode)}
                 disabled={recalcStatus?.loading}
-                className="h-10 rounded-full bg-white/70 px-4 text-[11px] font-semibold text-gray-900 shadow-sm transition hover:bg-white/90 disabled:opacity-60 dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
+                className="h-10 rounded-full bg-emerald-500 px-4 text-[11px] font-semibold text-white shadow-sm transition hover:bg-emerald-400 disabled:opacity-60"
               >
                 {recalcStatus?.loading ? 'Recalculating...' : 'Recalculate'}
               </button>
-            </div>
-            <div className="mt-2 text-[11px] text-gray-500/80 dark:text-white/50">
-              Choose how fallback should be applied for this recalculation.
             </div>
             {recalcStatus?.error && (
               <div className="mt-2 text-xs text-red-600">{recalcStatus.error}</div>

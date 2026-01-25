@@ -121,7 +121,7 @@ const createInitialBpmState = (): BpmState => ({
   bpmFullData: {},
   showBpmModal: false,
   showBpmModalDebug: false,
-  recalcMode: 'default',
+  recalcMode: 'never',
   selectedBpmTrack: null,
   bpmProcessingStartTime: null,
   bpmProcessingEndTime: null,
