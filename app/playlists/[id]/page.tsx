@@ -3279,7 +3279,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         creditsRoleMap={creditsRoleMap}
         formatRetrievedMonthYear={formatRetrievedMonthYear}
         renderCreditLinks={renderCreditLinks}
-        onRefreshCredits={loadCreditsForTrack}
+        onRefreshCredits={(track, force) => loadCreditsForTrack(track, Boolean(force))}
         onClose={closeCreditsModal}
       />
       
