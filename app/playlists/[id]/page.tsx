@@ -13,6 +13,9 @@ import BpmDetailsModal from './components/BpmDetailsModal'
 import CreditsModal from './components/CreditsModal'
 import { usePlaylist, useRefreshPlaylist } from '../../hooks/usePlaylist'
 import { usePlaylistTracks, useRefreshPlaylistTracks } from '../../hooks/usePlaylistTracks'
+import { usePlaylistFilters } from '../../hooks/usePlaylistFilters'
+import { useBpmAnalysis, type BpmFallbackOverride } from '../../hooks/useBpmAnalysis'
+import { useAudioPlayer } from '../../hooks/useAudioPlayer'
 import { useQueryClient } from '@tanstack/react-query'
 import type { 
   SpotifyTrack, 
@@ -29,7 +32,6 @@ import {
 
 // Use shared types
 type Track = SpotifyTrack
-type BpmFallbackOverride = 'never' | 'always' | 'bpm_only' | 'key_only' | 'default'
 
 interface PlaylistTracksPageProps {
   params: {
@@ -37,72 +39,6 @@ interface PlaylistTracksPageProps {
   }
 }
 
-type BpmFullDataEntry = {
-  bpmEssentia?: number | null
-  bpmRawEssentia?: number | null
-  bpmConfidenceEssentia?: number | null
-  bpmLibrosa?: number | null
-  bpmRawLibrosa?: number | null
-  bpmConfidenceLibrosa?: number | null
-  keyEssentia?: string | null
-  scaleEssentia?: string | null
-  keyscaleConfidenceEssentia?: number | null
-  keyLibrosa?: string | null
-  scaleLibrosa?: string | null
-  keyscaleConfidenceLibrosa?: number | null
-  bpmSelected?: 'essentia' | 'librosa' | 'manual'
-  keySelected?: 'essentia' | 'librosa' | 'manual'
-  bpmManual?: number | null
-  keyManual?: string | null
-  scaleManual?: string | null
-  debugTxt?: string | null
-}
-
-type BpmState = {
-  trackBpms: Record<string, number | null>
-  trackKeys: Record<string, string | null>
-  trackScales: Record<string, string | null>
-  loadingBpmFields: Set<string>
-  loadingKeyFields: Set<string>
-  tracksNeedingBpm: Set<string>
-  tracksNeedingKey: Set<string>
-  tracksNeedingCalc: Set<string>
-  loadingPreviewIds: Set<string>
-  bpmStreamStatus: Record<string, 'partial' | 'final' | 'error'>
-  showBpmDebug: boolean
-  bpmDebugLevel: string
-  bpmFallbackOverride: BpmFallbackOverride
-  bpmConfidenceThreshold: string
-  bpmDebugInfo: Record<string, any>
-  bpmDetails: Record<string, { source?: string; error?: string }>
-  musoPreviewStatus: { loading: boolean; success?: boolean; error?: string } | null
-  mismatchPreviewUrls: { itunes?: string | null; spotify?: string | null; loading?: boolean }
-  previewUrls: Record<string, string | null>
-  bpmFullData: Record<string, BpmFullDataEntry>
-  showBpmModal: boolean
-  showBpmModalDebug: boolean
-  recalcMode: 'standard' | 'force' | 'fallback'
-  selectedBpmTrack: Track | null
-  bpmProcessingStartTime: number | null
-  bpmProcessingEndTime: number | null
-  bpmTracksCalculated: number
-  retryStatus: { loading: boolean; success?: boolean; error?: string } | null
-  retryAttempted: boolean
-  retryTrackId: string | null
-  recalcStatus: { loading: boolean; success?: boolean; error?: string } | null
-  manualBpm: string
-  manualKey: string
-  manualScale: string
-  isUpdatingSelection: boolean
-  showBpmMoreInfo: boolean
-  countryCode: string
-  tracksInDb: Set<string>
-  recalculating: boolean
-  showBpmInfo: boolean
-  showBpmNotice: boolean
-  showBpmRecalcPrompt: boolean
-  pendingRecalcIds: { all: string[]; newOnly: string[] }
-}
 
 type CreditsState = {
   creditsByTrackId: Record<
@@ -123,19 +59,6 @@ type CreditsState = {
   selectedCreditsTrack: Track | null
 }
 
-type FiltersState = {
-  pageSize: number | 'all'
-  currentPage: number
-  searchQuery: string
-  sortField: SortField | null
-  sortDirection: SortDirection
-  showAdvanced: boolean
-  yearFrom: string
-  yearTo: string
-  bpmFrom: string
-  bpmTo: string
-  includeHalfDoubleBpm: boolean
-}
 
 type UiState = {
   isAdmin: boolean
@@ -156,15 +79,14 @@ type CacheState = {
   refreshDone: boolean
 }
 
-type PlaybackState = {
-  playingTrackId: string | null
-}
 
-type SetAction<State, K extends keyof State = keyof State> = {
-  type: 'set'
-  key: K
-  value: State[K] | ((prev: State[K]) => State[K])
-}
+type SetAction<State> = {
+  [K in keyof State]: {
+    type: 'set'
+    key: K
+    value: State[K] | ((prev: State[K]) => State[K])
+  }
+}[keyof State]
 
 const makeReducer = <State,>() => {
   return (state: State, action: SetAction<State>): State => {
@@ -179,58 +101,10 @@ const makeReducer = <State,>() => {
   }
 }
 
-const bpmReducer = makeReducer<BpmState>()
 const creditsReducer = makeReducer<CreditsState>()
-const filtersReducer = makeReducer<FiltersState>()
 const uiReducer = makeReducer<UiState>()
 const cacheReducer = makeReducer<CacheState>()
-const playbackReducer = makeReducer<PlaybackState>()
 
-const createInitialBpmState = (): BpmState => ({
-  trackBpms: {},
-  trackKeys: {},
-  trackScales: {},
-  loadingBpmFields: new Set(),
-  loadingKeyFields: new Set(),
-  tracksNeedingBpm: new Set(),
-  tracksNeedingKey: new Set(),
-  tracksNeedingCalc: new Set(),
-  loadingPreviewIds: new Set(),
-  bpmStreamStatus: {},
-  showBpmDebug: false,
-  bpmDebugLevel: 'minimal',
-  bpmFallbackOverride: 'never',
-  bpmConfidenceThreshold: '0.65',
-  bpmDebugInfo: {},
-  bpmDetails: {},
-  musoPreviewStatus: null,
-  mismatchPreviewUrls: {},
-  previewUrls: {},
-  bpmFullData: {},
-  showBpmModal: false,
-  showBpmModalDebug: false,
-  recalcMode: 'standard',
-  selectedBpmTrack: null,
-  bpmProcessingStartTime: null,
-  bpmProcessingEndTime: null,
-  bpmTracksCalculated: 0,
-  retryStatus: null,
-  retryAttempted: false,
-  retryTrackId: null,
-  recalcStatus: null,
-  manualBpm: '',
-  manualKey: '',
-  manualScale: 'major',
-  isUpdatingSelection: false,
-  showBpmMoreInfo: false,
-  countryCode: 'us',
-  tracksInDb: new Set(),
-  recalculating: false,
-  showBpmInfo: false,
-  showBpmNotice: true,
-  showBpmRecalcPrompt: false,
-  pendingRecalcIds: { all: [], newOnly: [] },
-})
 
 const createInitialCreditsState = (): CreditsState => ({
   creditsByTrackId: {},
@@ -240,19 +114,6 @@ const createInitialCreditsState = (): CreditsState => ({
   selectedCreditsTrack: null,
 })
 
-const createInitialFiltersState = (): FiltersState => ({
-  pageSize: 50,
-  currentPage: 1,
-  searchQuery: '',
-  sortField: null,
-  sortDirection: 'asc',
-  showAdvanced: false,
-  yearFrom: '',
-  yearTo: '',
-  bpmFrom: '',
-  bpmTo: '',
-  includeHalfDoubleBpm: false,
-})
 
 const createInitialUiState = (): UiState => ({
   isAdmin: false,
@@ -267,9 +128,6 @@ const createInitialCacheState = (): CacheState => ({
   refreshDone: false,
 })
 
-const createInitialPlaybackState = (): PlaybackState => ({
-  playingTrackId: null,
-})
 
 export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) {
   // Use React Query for playlist and tracks data
@@ -291,12 +149,24 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   
   const loading = isLoadingPlaylist || isLoadingTracks
   const error = playlistError?.message || tracksError?.message || null
-  const [bpmState, bpmDispatch] = useReducer(bpmReducer, undefined, createInitialBpmState)
+  const {
+    state: bpmState,
+    setState: setBpmState,
+    fetchTracksInDbForIds,
+    fetchBpmForTrack,
+    getPreviewUrlFromMeta,
+    fetchBpmsBatch,
+    streamBpmsForTracks,
+    updateBpmSelection,
+    recalcTrackWithOptions,
+    handleMusoPreviewBpm,
+    bpmSummary,
+    loadingTrackIds,
+    isTrackLoading,
+  } = useBpmAnalysis(tracks)
   const [creditsState, creditsDispatch] = useReducer(creditsReducer, undefined, createInitialCreditsState)
-  const [filtersState, filtersDispatch] = useReducer(filtersReducer, undefined, createInitialFiltersState)
   const [uiState, uiDispatch] = useReducer(uiReducer, undefined, createInitialUiState)
   const [cacheState, cacheDispatch] = useReducer(cacheReducer, undefined, createInitialCacheState)
-  const [playbackState, playbackDispatch] = useReducer(playbackReducer, undefined, createInitialPlaybackState)
 
   const {
     trackBpms,
@@ -353,8 +223,11 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   } = creditsState
 
   const {
-    pageSize,
-    currentPage,
+    filteredTracks,
+    sortedTracks,
+    paginatedTracks,
+    totalPages,
+    safePage,
     searchQuery,
     sortField,
     sortDirection,
@@ -364,7 +237,37 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     bpmFrom,
     bpmTo,
     includeHalfDoubleBpm,
-  } = filtersState
+    pageSize,
+    currentPage,
+    setSearchQuery,
+    setSortField,
+    setSortDirection,
+    setShowAdvanced,
+    setYearFrom,
+    setYearTo,
+    setBpmFrom,
+    setBpmTo,
+    setIncludeHalfDoubleBpm,
+    setPageSize,
+    setCurrentPage,
+    handleSort,
+    getYearString,
+  } = usePlaylistFilters(tracks, trackBpms)
+
+  const {
+    playingTrackId,
+    handleTrackClick,
+    handleTrackTitleClick,
+    getPreviewTooltip,
+  } = useAudioPlayer({
+    previewUrls,
+    setPreviewUrls,
+    loadingPreviewIds,
+    setLoadingPreviewIds,
+    fetchPreviewMeta: fetchBpmForTrack,
+    getPreviewUrlFromMeta,
+    countryCode,
+  })
 
   const {
     isAdmin,
@@ -379,136 +282,135 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     refreshDone,
   } = cacheState
 
-  const { playingTrackId } = playbackState
 
   const setTrackBpms = (value: BpmState['trackBpms'] | ((prev: BpmState['trackBpms']) => BpmState['trackBpms'])) => {
-    bpmDispatch({ type: 'set', key: 'trackBpms', value })
+    setBpmState('trackBpms', value)
   }
   const setTrackKeys = (value: BpmState['trackKeys'] | ((prev: BpmState['trackKeys']) => BpmState['trackKeys'])) => {
-    bpmDispatch({ type: 'set', key: 'trackKeys', value })
+    setBpmState('trackKeys', value)
   }
   const setTrackScales = (value: BpmState['trackScales'] | ((prev: BpmState['trackScales']) => BpmState['trackScales'])) => {
-    bpmDispatch({ type: 'set', key: 'trackScales', value })
+    setBpmState('trackScales', value)
   }
   const setLoadingBpmFields = (value: BpmState['loadingBpmFields'] | ((prev: BpmState['loadingBpmFields']) => BpmState['loadingBpmFields'])) => {
-    bpmDispatch({ type: 'set', key: 'loadingBpmFields', value })
+    setBpmState('loadingBpmFields', value)
   }
   const setLoadingKeyFields = (value: BpmState['loadingKeyFields'] | ((prev: BpmState['loadingKeyFields']) => BpmState['loadingKeyFields'])) => {
-    bpmDispatch({ type: 'set', key: 'loadingKeyFields', value })
+    setBpmState('loadingKeyFields', value)
   }
   const setTracksNeedingBpm = (value: BpmState['tracksNeedingBpm'] | ((prev: BpmState['tracksNeedingBpm']) => BpmState['tracksNeedingBpm'])) => {
-    bpmDispatch({ type: 'set', key: 'tracksNeedingBpm', value })
+    setBpmState('tracksNeedingBpm', value)
   }
   const setTracksNeedingKey = (value: BpmState['tracksNeedingKey'] | ((prev: BpmState['tracksNeedingKey']) => BpmState['tracksNeedingKey'])) => {
-    bpmDispatch({ type: 'set', key: 'tracksNeedingKey', value })
+    setBpmState('tracksNeedingKey', value)
   }
   const setTracksNeedingCalc = (value: BpmState['tracksNeedingCalc'] | ((prev: BpmState['tracksNeedingCalc']) => BpmState['tracksNeedingCalc'])) => {
-    bpmDispatch({ type: 'set', key: 'tracksNeedingCalc', value })
+    setBpmState('tracksNeedingCalc', value)
   }
   const setLoadingPreviewIds = (value: BpmState['loadingPreviewIds'] | ((prev: BpmState['loadingPreviewIds']) => BpmState['loadingPreviewIds'])) => {
-    bpmDispatch({ type: 'set', key: 'loadingPreviewIds', value })
+    setBpmState('loadingPreviewIds', value)
   }
   const setBpmStreamStatus = (value: BpmState['bpmStreamStatus'] | ((prev: BpmState['bpmStreamStatus']) => BpmState['bpmStreamStatus'])) => {
-    bpmDispatch({ type: 'set', key: 'bpmStreamStatus', value })
+    setBpmState('bpmStreamStatus', value)
   }
   const setShowBpmDebug = (value: BpmState['showBpmDebug'] | ((prev: BpmState['showBpmDebug']) => BpmState['showBpmDebug'])) => {
-    bpmDispatch({ type: 'set', key: 'showBpmDebug', value })
+    setBpmState('showBpmDebug', value)
   }
   const setBpmDebugLevel = (value: BpmState['bpmDebugLevel'] | ((prev: BpmState['bpmDebugLevel']) => BpmState['bpmDebugLevel'])) => {
-    bpmDispatch({ type: 'set', key: 'bpmDebugLevel', value })
+    setBpmState('bpmDebugLevel', value)
   }
   const setBpmFallbackOverride = (value: BpmState['bpmFallbackOverride'] | ((prev: BpmState['bpmFallbackOverride']) => BpmState['bpmFallbackOverride'])) => {
-    bpmDispatch({ type: 'set', key: 'bpmFallbackOverride', value })
+    setBpmState('bpmFallbackOverride', value)
   }
   const setBpmConfidenceThreshold = (value: BpmState['bpmConfidenceThreshold'] | ((prev: BpmState['bpmConfidenceThreshold']) => BpmState['bpmConfidenceThreshold'])) => {
-    bpmDispatch({ type: 'set', key: 'bpmConfidenceThreshold', value })
+    setBpmState('bpmConfidenceThreshold', value)
   }
   const setBpmDebugInfo = (value: BpmState['bpmDebugInfo'] | ((prev: BpmState['bpmDebugInfo']) => BpmState['bpmDebugInfo'])) => {
-    bpmDispatch({ type: 'set', key: 'bpmDebugInfo', value })
+    setBpmState('bpmDebugInfo', value)
   }
   const setBpmDetails = (value: BpmState['bpmDetails'] | ((prev: BpmState['bpmDetails']) => BpmState['bpmDetails'])) => {
-    bpmDispatch({ type: 'set', key: 'bpmDetails', value })
+    setBpmState('bpmDetails', value)
   }
   const setMusoPreviewStatus = (value: BpmState['musoPreviewStatus'] | ((prev: BpmState['musoPreviewStatus']) => BpmState['musoPreviewStatus'])) => {
-    bpmDispatch({ type: 'set', key: 'musoPreviewStatus', value })
+    setBpmState('musoPreviewStatus', value)
   }
   const setMismatchPreviewUrls = (value: BpmState['mismatchPreviewUrls'] | ((prev: BpmState['mismatchPreviewUrls']) => BpmState['mismatchPreviewUrls'])) => {
-    bpmDispatch({ type: 'set', key: 'mismatchPreviewUrls', value })
+    setBpmState('mismatchPreviewUrls', value)
   }
   const setPreviewUrls = (value: BpmState['previewUrls'] | ((prev: BpmState['previewUrls']) => BpmState['previewUrls'])) => {
-    bpmDispatch({ type: 'set', key: 'previewUrls', value })
+    setBpmState('previewUrls', value)
   }
   const setBpmFullData = (value: BpmState['bpmFullData'] | ((prev: BpmState['bpmFullData']) => BpmState['bpmFullData'])) => {
-    bpmDispatch({ type: 'set', key: 'bpmFullData', value })
+    setBpmState('bpmFullData', value)
   }
   const setShowBpmModal = (value: BpmState['showBpmModal'] | ((prev: BpmState['showBpmModal']) => BpmState['showBpmModal'])) => {
-    bpmDispatch({ type: 'set', key: 'showBpmModal', value })
+    setBpmState('showBpmModal', value)
   }
   const setShowBpmModalDebug = (value: BpmState['showBpmModalDebug'] | ((prev: BpmState['showBpmModalDebug']) => BpmState['showBpmModalDebug'])) => {
-    bpmDispatch({ type: 'set', key: 'showBpmModalDebug', value })
+    setBpmState('showBpmModalDebug', value)
   }
   const setRecalcMode = (value: BpmState['recalcMode'] | ((prev: BpmState['recalcMode']) => BpmState['recalcMode'])) => {
-    bpmDispatch({ type: 'set', key: 'recalcMode', value })
+    setBpmState('recalcMode', value)
   }
   const setSelectedBpmTrack = (value: BpmState['selectedBpmTrack'] | ((prev: BpmState['selectedBpmTrack']) => BpmState['selectedBpmTrack'])) => {
-    bpmDispatch({ type: 'set', key: 'selectedBpmTrack', value })
+    setBpmState('selectedBpmTrack', value)
   }
   const setBpmProcessingStartTime = (value: BpmState['bpmProcessingStartTime'] | ((prev: BpmState['bpmProcessingStartTime']) => BpmState['bpmProcessingStartTime'])) => {
-    bpmDispatch({ type: 'set', key: 'bpmProcessingStartTime', value })
+    setBpmState('bpmProcessingStartTime', value)
   }
   const setBpmProcessingEndTime = (value: BpmState['bpmProcessingEndTime'] | ((prev: BpmState['bpmProcessingEndTime']) => BpmState['bpmProcessingEndTime'])) => {
-    bpmDispatch({ type: 'set', key: 'bpmProcessingEndTime', value })
+    setBpmState('bpmProcessingEndTime', value)
   }
   const setBpmTracksCalculated = (value: BpmState['bpmTracksCalculated'] | ((prev: BpmState['bpmTracksCalculated']) => BpmState['bpmTracksCalculated'])) => {
-    bpmDispatch({ type: 'set', key: 'bpmTracksCalculated', value })
+    setBpmState('bpmTracksCalculated', value)
   }
   const setRetryStatus = (value: BpmState['retryStatus'] | ((prev: BpmState['retryStatus']) => BpmState['retryStatus'])) => {
-    bpmDispatch({ type: 'set', key: 'retryStatus', value })
+    setBpmState('retryStatus', value)
   }
   const setRetryAttempted = (value: BpmState['retryAttempted'] | ((prev: BpmState['retryAttempted']) => BpmState['retryAttempted'])) => {
-    bpmDispatch({ type: 'set', key: 'retryAttempted', value })
+    setBpmState('retryAttempted', value)
   }
   const setRetryTrackId = (value: BpmState['retryTrackId'] | ((prev: BpmState['retryTrackId']) => BpmState['retryTrackId'])) => {
-    bpmDispatch({ type: 'set', key: 'retryTrackId', value })
+    setBpmState('retryTrackId', value)
   }
   const setRecalcStatus = (value: BpmState['recalcStatus'] | ((prev: BpmState['recalcStatus']) => BpmState['recalcStatus'])) => {
-    bpmDispatch({ type: 'set', key: 'recalcStatus', value })
+    setBpmState('recalcStatus', value)
   }
   const setManualBpm = (value: BpmState['manualBpm'] | ((prev: BpmState['manualBpm']) => BpmState['manualBpm'])) => {
-    bpmDispatch({ type: 'set', key: 'manualBpm', value })
+    setBpmState('manualBpm', value)
   }
   const setManualKey = (value: BpmState['manualKey'] | ((prev: BpmState['manualKey']) => BpmState['manualKey'])) => {
-    bpmDispatch({ type: 'set', key: 'manualKey', value })
+    setBpmState('manualKey', value)
   }
   const setManualScale = (value: BpmState['manualScale'] | ((prev: BpmState['manualScale']) => BpmState['manualScale'])) => {
-    bpmDispatch({ type: 'set', key: 'manualScale', value })
+    setBpmState('manualScale', value)
   }
   const setIsUpdatingSelection = (value: BpmState['isUpdatingSelection'] | ((prev: BpmState['isUpdatingSelection']) => BpmState['isUpdatingSelection'])) => {
-    bpmDispatch({ type: 'set', key: 'isUpdatingSelection', value })
+    setBpmState('isUpdatingSelection', value)
   }
   const setShowBpmMoreInfo = (value: BpmState['showBpmMoreInfo'] | ((prev: BpmState['showBpmMoreInfo']) => BpmState['showBpmMoreInfo'])) => {
-    bpmDispatch({ type: 'set', key: 'showBpmMoreInfo', value })
+    setBpmState('showBpmMoreInfo', value)
   }
   const setCountryCode = (value: BpmState['countryCode'] | ((prev: BpmState['countryCode']) => BpmState['countryCode'])) => {
-    bpmDispatch({ type: 'set', key: 'countryCode', value })
+    setBpmState('countryCode', value)
   }
   const setTracksInDb = (value: BpmState['tracksInDb'] | ((prev: BpmState['tracksInDb']) => BpmState['tracksInDb'])) => {
-    bpmDispatch({ type: 'set', key: 'tracksInDb', value })
+    setBpmState('tracksInDb', value)
   }
   const setRecalculating = (value: BpmState['recalculating'] | ((prev: BpmState['recalculating']) => BpmState['recalculating'])) => {
-    bpmDispatch({ type: 'set', key: 'recalculating', value })
+    setBpmState('recalculating', value)
   }
   const setShowBpmInfo = (value: BpmState['showBpmInfo'] | ((prev: BpmState['showBpmInfo']) => BpmState['showBpmInfo'])) => {
-    bpmDispatch({ type: 'set', key: 'showBpmInfo', value })
+    setBpmState('showBpmInfo', value)
   }
   const setShowBpmNotice = (value: BpmState['showBpmNotice'] | ((prev: BpmState['showBpmNotice']) => BpmState['showBpmNotice'])) => {
-    bpmDispatch({ type: 'set', key: 'showBpmNotice', value })
+    setBpmState('showBpmNotice', value)
   }
   const setShowBpmRecalcPrompt = (value: BpmState['showBpmRecalcPrompt'] | ((prev: BpmState['showBpmRecalcPrompt']) => BpmState['showBpmRecalcPrompt'])) => {
-    bpmDispatch({ type: 'set', key: 'showBpmRecalcPrompt', value })
+    setBpmState('showBpmRecalcPrompt', value)
   }
   const setPendingRecalcIds = (value: BpmState['pendingRecalcIds'] | ((prev: BpmState['pendingRecalcIds']) => BpmState['pendingRecalcIds'])) => {
-    bpmDispatch({ type: 'set', key: 'pendingRecalcIds', value })
+    setBpmState('pendingRecalcIds', value)
   }
 
   const setCreditsByTrackId = (value: CreditsState['creditsByTrackId'] | ((prev: CreditsState['creditsByTrackId']) => CreditsState['creditsByTrackId'])) => {
@@ -525,40 +427,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   }
   const setSelectedCreditsTrack = (value: CreditsState['selectedCreditsTrack'] | ((prev: CreditsState['selectedCreditsTrack']) => CreditsState['selectedCreditsTrack'])) => {
     creditsDispatch({ type: 'set', key: 'selectedCreditsTrack', value })
-  }
-
-  const setPageSize = (value: FiltersState['pageSize'] | ((prev: FiltersState['pageSize']) => FiltersState['pageSize'])) => {
-    filtersDispatch({ type: 'set', key: 'pageSize', value })
-  }
-  const setCurrentPage = (value: FiltersState['currentPage'] | ((prev: FiltersState['currentPage']) => FiltersState['currentPage'])) => {
-    filtersDispatch({ type: 'set', key: 'currentPage', value })
-  }
-  const setSearchQuery = (value: FiltersState['searchQuery'] | ((prev: FiltersState['searchQuery']) => FiltersState['searchQuery'])) => {
-    filtersDispatch({ type: 'set', key: 'searchQuery', value })
-  }
-  const setSortField = (value: FiltersState['sortField'] | ((prev: FiltersState['sortField']) => FiltersState['sortField'])) => {
-    filtersDispatch({ type: 'set', key: 'sortField', value })
-  }
-  const setSortDirection = (value: FiltersState['sortDirection'] | ((prev: FiltersState['sortDirection']) => FiltersState['sortDirection'])) => {
-    filtersDispatch({ type: 'set', key: 'sortDirection', value })
-  }
-  const setShowAdvanced = (value: FiltersState['showAdvanced'] | ((prev: FiltersState['showAdvanced']) => FiltersState['showAdvanced'])) => {
-    filtersDispatch({ type: 'set', key: 'showAdvanced', value })
-  }
-  const setYearFrom = (value: FiltersState['yearFrom'] | ((prev: FiltersState['yearFrom']) => FiltersState['yearFrom'])) => {
-    filtersDispatch({ type: 'set', key: 'yearFrom', value })
-  }
-  const setYearTo = (value: FiltersState['yearTo'] | ((prev: FiltersState['yearTo']) => FiltersState['yearTo'])) => {
-    filtersDispatch({ type: 'set', key: 'yearTo', value })
-  }
-  const setBpmFrom = (value: FiltersState['bpmFrom'] | ((prev: FiltersState['bpmFrom']) => FiltersState['bpmFrom'])) => {
-    filtersDispatch({ type: 'set', key: 'bpmFrom', value })
-  }
-  const setBpmTo = (value: FiltersState['bpmTo'] | ((prev: FiltersState['bpmTo']) => FiltersState['bpmTo'])) => {
-    filtersDispatch({ type: 'set', key: 'bpmTo', value })
-  }
-  const setIncludeHalfDoubleBpm = (value: FiltersState['includeHalfDoubleBpm'] | ((prev: FiltersState['includeHalfDoubleBpm']) => FiltersState['includeHalfDoubleBpm'])) => {
-    filtersDispatch({ type: 'set', key: 'includeHalfDoubleBpm', value })
   }
 
   const setIsAdmin = (value: UiState['isAdmin'] | ((prev: UiState['isAdmin']) => UiState['isAdmin'])) => {
@@ -584,117 +452,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     cacheDispatch({ type: 'set', key: 'refreshDone', value })
   }
 
-  const setPlayingTrackId = (value: PlaybackState['playingTrackId'] | ((prev: PlaybackState['playingTrackId']) => PlaybackState['playingTrackId'])) => {
-    playbackDispatch({ type: 'set', key: 'playingTrackId', value })
-  }
-
-  const streamAbortRef = useRef<AbortController | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
-  
-  // Initialize manual values when modal opens
-  useEffect(() => {
-    if (showBpmModal && selectedBpmTrack) {
-      const fullData = bpmFullData[selectedBpmTrack.id]
-      if (fullData?.bpmManual) {
-        bpmDispatch({ type: 'set', key: 'manualBpm', value: String(fullData.bpmManual) })
-      }
-      if (fullData?.keyManual) {
-        bpmDispatch({ type: 'set', key: 'manualKey', value: fullData.keyManual })
-      }
-      if (fullData?.scaleManual) {
-        bpmDispatch({ type: 'set', key: 'manualScale', value: fullData.scaleManual })
-      }
-    } else {
-      // Reset when modal closes
-      bpmDispatch({ type: 'set', key: 'manualBpm', value: '' })
-      bpmDispatch({ type: 'set', key: 'manualKey', value: '' })
-      bpmDispatch({ type: 'set', key: 'manualScale', value: 'major' })
-    }
-  }, [showBpmModal, selectedBpmTrack, bpmFullData, bpmDispatch])
-  useEffect(() => {
-    bpmDispatch({ type: 'set', key: 'musoPreviewStatus', value: null })
-  }, [showBpmModal, selectedBpmTrack, bpmDispatch])
-  const audioRef = useRef<HTMLAudioElement | null>(null)
   const authErrorHandledRef = useRef(false) // Prevent infinite loops on auth errors
-  const audioCache = useRef<Map<string, string>>(new Map()) // Cache audio blobs by URL
-  const bpmRequestCache = useRef<Map<string, Promise<any>>>(new Map())
   
   // Get cache info from React Query data
   const isCached = playlistInfo?.is_cached ?? false
-  const cachedAt = playlistInfo?.cached_at ?? null
-
-  const fetchBpmForTrack = useCallback(async (trackId: string, country?: string) => {
-    const key = `${trackId}:${country || ''}`
-    const existing = bpmRequestCache.current.get(key)
-    if (existing) {
-      return existing
-    }
-    const url = `/api/bpm?spotifyTrackId=${encodeURIComponent(trackId)}${country ? `&country=${encodeURIComponent(country)}` : ''}`
-    const request = fetch(url, { method: 'GET' }).then(async (res) => {
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`)
-      }
-      return res.json()
-    })
-    bpmRequestCache.current.set(key, request)
-    try {
-      return await request
-    } finally {
-      bpmRequestCache.current.delete(key)
-    }
-  }, [])
-
-  // Cleanup audio on unmount and clear cache on page unload
-  useEffect(() => {
-    // Capture audioRef and audioCache at effect time for cleanup
-    const audioElement = audioRef.current
-    const cache = audioCache.current
-    
-    const handleBeforeUnload = () => {
-      // Clear all blob URLs from cache
-      const currentCache = audioCache.current
-      currentCache.forEach((blobUrl) => {
-        if (blobUrl.startsWith('blob:')) {
-          URL.revokeObjectURL(blobUrl)
-        }
-      })
-      currentCache.clear()
-    }
-    
-    const handlePageHide = () => {
-      if (audioRef.current) {
-        audioRef.current.pause()
-        audioRef.current.currentTime = 0
-      }
-      playbackDispatch({ type: 'set', key: 'playingTrackId', value: null })
-      audioRef.current = null
-    }
-
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    window.addEventListener('pagehide', handlePageHide)
-    
-    return () => {
-      if (audioElement) {
-        audioElement.pause()
-        audioRef.current = null
-      }
-      // Cleanup blob URLs - use captured cache reference
-      cache.forEach((blobUrl) => {
-        if (blobUrl.startsWith('blob:')) {
-          URL.revokeObjectURL(blobUrl)
-        }
-      })
-      cache.clear()
-      window.removeEventListener('beforeunload', handleBeforeUnload)
-      window.removeEventListener('pagehide', handlePageHide)
-    }
-  }, [playbackDispatch])
-
-  useEffect(() => {
-    return () => {
-      streamAbortRef.current?.abort()
-    }
-  }, [])
+  const cachedAt = playlistInfo?.cached_at ? new Date(playlistInfo.cached_at) : null
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -847,68 +610,22 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   }
 
   const closeBpmModal = useCallback(() => {
-    bpmDispatch({ type: 'set', key: 'showBpmModal', value: false })
-    bpmDispatch({ type: 'set', key: 'retryStatus', value: null })
-    bpmDispatch({ type: 'set', key: 'retryAttempted', value: false })
-    bpmDispatch({ type: 'set', key: 'retryTrackId', value: null })
-    bpmDispatch({ type: 'set', key: 'manualBpm', value: '' })
-    bpmDispatch({ type: 'set', key: 'manualKey', value: '' })
-    bpmDispatch({ type: 'set', key: 'manualScale', value: 'major' })
-    bpmDispatch({ type: 'set', key: 'musoPreviewStatus', value: null })
-    bpmDispatch({ type: 'set', key: 'mismatchPreviewUrls', value: {} })
-    bpmDispatch({ type: 'set', key: 'showBpmModalDebug', value: false })
-    bpmDispatch({ type: 'set', key: 'recalcMode', value: 'standard' })
-  }, [bpmDispatch])
+    setBpmState('showBpmModal', false)
+    setBpmState('retryStatus', null)
+    setBpmState('retryAttempted', false)
+    setBpmState('retryTrackId', null)
+    setBpmState('manualBpm', '')
+    setBpmState('manualKey', '')
+    setBpmState('manualScale', 'major')
+    setBpmState('musoPreviewStatus', null)
+    setBpmState('mismatchPreviewUrls', {})
+    setBpmState('showBpmModalDebug', false)
+    setBpmState('recalcMode', 'standard')
+  }, [setBpmState])
 
   const closeCreditsModal = useCallback(() => {
     creditsDispatch({ type: 'set', key: 'showCreditsModal', value: false })
   }, [creditsDispatch])
-
-  const updateBpmSelection = async (payload: {
-    spotifyTrackId: string
-    bpmSelected?: 'essentia' | 'librosa' | 'manual'
-    keySelected?: 'essentia' | 'librosa' | 'manual'
-    bpmManual?: number | null
-    keyManual?: string | null
-    scaleManual?: string | null
-  }) => {
-    setIsUpdatingSelection(true)
-    try {
-      const res = await fetch('/api/bpm/update-selection', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      if (res.ok) {
-        await fetchBpmsBatch()
-      }
-    } finally {
-      setIsUpdatingSelection(false)
-    }
-  }
-
-  const recalcTrackWithOptions = async (
-    track: Track,
-    options?: { fallbackOverride?: BpmFallbackOverride }
-  ) => {
-    setRecalcStatus({ loading: true })
-    try {
-      await fetch('/api/bpm/recalculate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trackIds: [track.id] }),
-      })
-      const targetIds = new Set([track.id])
-      streamBpmsForTracks([track], targetIds, targetIds, options)
-      setRecalcStatus({ loading: false, success: true })
-    } catch (error) {
-      setRecalcStatus({
-        loading: false,
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to recalculate BPM/key',
-      })
-    }
-  }
 
   useEffect(() => {
     if (!showBpmModal && !showCreditsModal) return
@@ -925,34 +642,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [showBpmModal, showCreditsModal, closeBpmModal, closeCreditsModal])
-
-  const fetchTracksInDbForIds = async (trackIds: string[]) => {
-    if (trackIds.length === 0) {
-      return new Set<string>()
-    }
-    try {
-      const res = await fetch('/api/bpm/batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trackIds }),
-      })
-      if (!res.ok) {
-        return new Set<string>()
-      }
-      const data = await res.json()
-      const inDbSet = new Set<string>()
-      for (const [trackId, result] of Object.entries(data.results || {})) {
-        const r = result as any
-        if (r && (r.source !== undefined || r.error !== undefined || r.bpmRaw !== undefined || r.cached === true)) {
-          inDbSet.add(trackId)
-        }
-      }
-      return inDbSet
-    } catch (error) {
-      console.error('[BPM Client] Error checking tracks in DB:', error)
-      return new Set<string>()
-    }
-  }
 
   const handleHeaderRefresh = async () => {
     setIsHeaderRefreshing(true)
@@ -994,866 +683,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     }
     fetchCountry()
   }, [])
-
-  // Check status of all tracks in database
-  useEffect(() => {
-    if (tracks.length > 0) {
-      checkTracksInDb()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tracks.length])
-
-  // Check how many tracks have entries in the database
-  const checkTracksInDb = async () => {
-    const trackIds = tracks.map(t => t.id)
-    if (trackIds.length === 0) return
-
-    try {
-      const res = await fetch('/api/bpm/batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trackIds }),
-      })
-
-      if (res.ok) {
-        const data = await res.json()
-        // Track which tracks are in DB: if spotify_track_id exists in DB, the result will have source/error/bpmRaw fields
-        // If track is NOT in DB, result will be { bpm: null, cached: false } with no other fields
-        const inDbSet = new Set<string>()
-        for (const [trackId, result] of Object.entries(data.results || {})) {
-          const r = result as any
-          // Track is in DB if spotify_track_id exists in track_bpm_cache table
-          // This is indicated by presence of source, error, bpmRaw, or cached === true
-          if (r && (r.source !== undefined || r.error !== undefined || r.bpmRaw !== undefined || r.cached === true)) {
-            inDbSet.add(trackId)
-          }
-        }
-        setTracksInDb(inDbSet)
-      }
-    } catch (error) {
-      console.error('[BPM Client] Error checking tracks in DB:', error)
-    }
-  }
-
-  const getPreviewUrlFromMeta = (meta: { urls?: PreviewUrlEntry[] }) => {
-    if (!meta) return null
-    const successful = meta.urls?.find((entry) => entry.successful)
-    return successful?.url || null
-  }
-
-  const selectBestBpm = (
-    bpmEssentia: number | null | undefined,
-    bpmConfidenceEssentia: number | null | undefined,
-    bpmLibrosa: number | null | undefined,
-    bpmConfidenceLibrosa: number | null | undefined
-  ): 'essentia' | 'librosa' => {
-    if (bpmLibrosa == null) return 'essentia'
-    if (bpmEssentia == null) return 'librosa'
-    const essentiaConf = bpmConfidenceEssentia ?? 0
-    const librosaConf = bpmConfidenceLibrosa ?? 0
-    return librosaConf > essentiaConf ? 'librosa' : 'essentia'
-  }
-
-  const selectBestKey = (
-    keyEssentia: string | null | undefined,
-    keyscaleConfidenceEssentia: number | null | undefined,
-    keyLibrosa: string | null | undefined,
-    keyscaleConfidenceLibrosa: number | null | undefined
-  ): 'essentia' | 'librosa' => {
-    if (keyLibrosa == null) return 'essentia'
-    if (keyEssentia == null) return 'librosa'
-    const essentiaConf = keyscaleConfidenceEssentia ?? 0
-    const librosaConf = keyscaleConfidenceLibrosa ?? 0
-    return librosaConf > essentiaConf ? 'librosa' : 'essentia'
-  }
-
-  const loadingTrackIds = useMemo(() => {
-    const ids = new Set<string>()
-    loadingBpmFields.forEach(id => ids.add(id))
-    loadingKeyFields.forEach(id => ids.add(id))
-    return ids
-  }, [loadingBpmFields, loadingKeyFields])
-
-  const bpmRequestSettings = useMemo(() => {
-    const parsedConfidence = Number.parseFloat(bpmConfidenceThreshold)
-    const maxConfidence = Number.isFinite(parsedConfidence)
-      ? Math.min(Math.max(parsedConfidence, 0), 1)
-      : 0.65
-    const debugLevel = bpmDebugLevel.trim() ? bpmDebugLevel.trim() : 'minimal'
-    const fallbackOverride = bpmFallbackOverride === 'default' ? undefined : bpmFallbackOverride
-    return {
-      debugLevel,
-      maxConfidence,
-      fallbackOverride,
-    }
-  }, [bpmConfidenceThreshold, bpmDebugLevel, bpmFallbackOverride])
-
-  const isTrackLoading = (trackId: string) => loadingTrackIds.has(trackId)
-
-  // Fetch BPM for all tracks using batch endpoint
-  useEffect(() => {
-    if (tracks.length > 0 && Object.keys(trackBpms).length === 0) {
-      setBpmProcessingStartTime(Date.now())
-      fetchBpmsBatch()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tracks.length])
-
-  // Update tracks in DB when batch results come in
-  useEffect(() => {
-    // This will be updated when fetchBpmsBatch completes
-  }, [trackBpms, tracks.length])
-
-  // Track when BPM processing completes
-  useEffect(() => {
-    if (tracks.length > 0 && bpmProcessingStartTime && !bpmProcessingEndTime) {
-      const tracksWithBpm = Object.values(trackBpms).filter(bpm => bpm !== null && bpm !== undefined).length
-      const tracksWithoutBpm = tracks.filter(t => 
-        trackBpms[t.id] === undefined || trackBpms[t.id] === null
-      ).length
-      const tracksLoading = loadingTrackIds.size
-      
-      // Processing is complete when no tracks are loading and all tracks have been attempted
-      // Only set end time if at least one track was calculated (not just all cached)
-      if (tracksLoading === 0 && tracksWithoutBpm === 0 && tracksWithBpm > 0) {
-        setBpmProcessingEndTime(Date.now())
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trackBpms, loadingTrackIds, tracks.length, bpmProcessingStartTime, bpmProcessingEndTime])
-
-  // Batch fetch BPMs from cache
-  const fetchBpmsBatch = async () => {
-    const trackIds = tracks.map(t => t.id)
-    if (trackIds.length === 0) return
-
-    // Reset loading before selectively streaming uncached tracks
-    setLoadingBpmFields(new Set())
-    setLoadingKeyFields(new Set())
-    setTracksNeedingBpm(new Set())
-    setTracksNeedingKey(new Set())
-    setTracksNeedingCalc(new Set())
-    setBpmStreamStatus({})
-    // Show spinners while cached results are being fetched
-    setLoadingBpmFields(new Set(trackIds))
-    setLoadingKeyFields(new Set(trackIds))
-
-    const applyBatchResults = (results: Record<string, any>) => {
-      const newBpms: Record<string, number | null> = {}
-      const newKeys: Record<string, string | null> = {}
-      const newScales: Record<string, string | null> = {}
-      const newDetails: Record<string, { source?: string; error?: string }> = {}
-      const newPreviewUrls: Record<string, string | null> = {}
-      const needsBpm = new Set<string>()
-      const needsKey = new Set<string>()
-      const needsCalc = new Set<string>()
-      const nextStreamStatus: Record<string, 'partial' | 'final' | 'error'> = {}
-
-      for (const [trackId, result] of Object.entries(results || {})) {
-        const r = result as any
-        newBpms[trackId] = r.bpm
-        if (r.key !== undefined) {
-          newKeys[trackId] = r.key || null
-        }
-        if (r.scale !== undefined) {
-          newScales[trackId] = r.scale || null
-        }
-        if (r.bpmEssentia !== undefined || r.bpmLibrosa !== undefined || r.bpmSelected) {
-          setBpmFullData(prev => ({
-            ...prev,
-            [trackId]: {
-              bpmEssentia: r.bpmEssentia,
-              bpmRawEssentia: r.bpmRawEssentia,
-              bpmConfidenceEssentia: r.bpmConfidenceEssentia,
-              bpmLibrosa: r.bpmLibrosa,
-              bpmRawLibrosa: r.bpmRawLibrosa,
-              bpmConfidenceLibrosa: r.bpmConfidenceLibrosa,
-              keyEssentia: r.keyEssentia,
-              scaleEssentia: r.scaleEssentia,
-              keyscaleConfidenceEssentia: r.keyscaleConfidenceEssentia,
-              keyLibrosa: r.keyLibrosa,
-              scaleLibrosa: r.scaleLibrosa,
-              keyscaleConfidenceLibrosa: r.keyscaleConfidenceLibrosa,
-              bpmSelected: r.bpmSelected || 'essentia',
-              keySelected: r.keySelected || 'essentia',
-              bpmManual: r.bpmManual,
-              keyManual: r.keyManual,
-              scaleManual: r.scaleManual,
-              debugTxt: r.debugTxt,
-            },
-          }))
-        }
-        const previewUrlFromMeta = getPreviewUrlFromMeta({ urls: r.urls })
-        if (previewUrlFromMeta) {
-          newPreviewUrls[trackId] = previewUrlFromMeta
-        }
-        if (r.source || r.error || r.urls) {
-          newDetails[trackId] = {
-            source: r.source,
-            error: r.error,
-          }
-        }
-        if (r.source || r.error || r.urls) {
-          setBpmDebugInfo(prev => ({
-            ...prev,
-            [trackId]: {
-              ...r,
-              urls: r.urls || [],
-            },
-          }))
-        }
-
-        const hasError = Boolean(r.error)
-        const hasBpm = r.bpm != null
-        const hasKey = r.key != null
-        const hasScale = r.scale != null
-        const needsBpmValue = !hasBpm
-        const needsKeyValue = !hasKey || !hasScale
-
-        if (hasError) {
-          nextStreamStatus[trackId] = 'error'
-          newBpms[trackId] = r.bpm ?? null
-          if (r.key === undefined) {
-            newKeys[trackId] = null
-          }
-          if (r.scale === undefined) {
-            newScales[trackId] = null
-          }
-        } else {
-          if (needsBpmValue) {
-            needsBpm.add(trackId)
-          }
-          if (needsKeyValue) {
-            needsKey.add(trackId)
-          }
-          if (needsBpmValue || needsKeyValue) {
-            needsCalc.add(trackId)
-          }
-        }
-      }
-
-      setTrackBpms(newBpms)
-      setTrackKeys(prev => ({ ...prev, ...newKeys }))
-      setTrackScales(prev => ({ ...prev, ...newScales }))
-      setBpmDetails(newDetails)
-      setPreviewUrls(prev => ({ ...prev, ...newPreviewUrls }))
-      setTracksNeedingBpm(needsBpm)
-      setTracksNeedingKey(needsKey)
-      setTracksNeedingCalc(needsCalc)
-      setLoadingBpmFields(new Set(needsBpm))
-      setLoadingKeyFields(new Set(needsKey))
-      if (Object.keys(nextStreamStatus).length > 0) {
-        setBpmStreamStatus(prev => ({ ...prev, ...nextStreamStatus }))
-      }
-
-      const inDbSet = new Set<string>()
-      for (const [trackId, result] of Object.entries(results || {})) {
-        const r = result as any
-        if (r && (r.source !== undefined || r.error !== undefined || r.bpmRaw !== undefined || r.cached === true)) {
-          inDbSet.add(trackId)
-        }
-      }
-      setTracksInDb(prev => {
-        const combined = new Set(prev)
-        inDbSet.forEach(id => combined.add(id))
-        return combined
-      })
-
-      const calculatedFromBatch = Object.values(results || {}).filter((r: any) => r.bpm !== null && !r.cached).length
-      setBpmTracksCalculated(prev => prev + calculatedFromBatch)
-
-      const uncachedTracks = tracks.filter(t => needsCalc.has(t.id))
-      if (uncachedTracks.length > 0) {
-        console.log(`[BPM Client] Streaming ${uncachedTracks.length} uncached tracks`)
-        streamBpmsForTracks(uncachedTracks, needsBpm, needsKey)
-      } else {
-        setBpmProcessingStartTime(null)
-      }
-    }
-
-    try {
-      console.log(`[BPM Client] Fetching BPM batch for ${trackIds.length} tracks`)
-      const chunkSize = 100
-      const combinedResults: Record<string, any> = {}
-      for (let i = 0; i < trackIds.length; i += chunkSize) {
-        const chunkIds = trackIds.slice(i, i + chunkSize)
-        const res = await fetch('/api/bpm/batch', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ trackIds: chunkIds }),
-        })
-
-        if (res.ok) {
-          const data = await res.json()
-          console.log(`[BPM Client] Batch BPM data received:`, data)
-          Object.assign(combinedResults, data.results || {})
-        } else {
-          console.error(`[BPM Client] Batch fetch failed:`, res.status)
-          fetchBpmsForTracks(tracks.filter(t => chunkIds.includes(t.id)))
-        }
-      }
-
-      applyBatchResults(combinedResults)
-    } catch (error) {
-      console.error(`[BPM Client] Batch fetch error:`, error)
-      fetchBpmsForTracks(tracks)
-    }
-  }
-
-  const streamBpmsForTracks = async (
-    tracksToFetch: Track[],
-    needsBpm?: Set<string>,
-    needsKey?: Set<string>,
-    options?: { fallbackOverride?: BpmFallbackOverride }
-  ) => {
-    if (tracksToFetch.length === 0) return
-
-    const batchSize = 20
-    const fallbackNeedsBpm = needsBpm || new Set(tracksToFetch.map(track => track.id))
-    const fallbackNeedsKey = needsKey || new Set(tracksToFetch.map(track => track.id))
-
-    setTracksNeedingBpm(prev => {
-      const next = new Set(prev)
-      fallbackNeedsBpm.forEach(id => next.add(id))
-      return next
-    })
-    setTracksNeedingKey(prev => {
-      const next = new Set(prev)
-      fallbackNeedsKey.forEach(id => next.add(id))
-      return next
-    })
-    setTracksNeedingCalc(prev => {
-      const next = new Set(prev)
-      tracksToFetch.forEach(track => next.add(track.id))
-      return next
-    })
-
-    for (let i = 0; i < tracksToFetch.length; i += batchSize) {
-      const batch = tracksToFetch.slice(i, i + batchSize)
-      const trackIds = batch.map(track => track.id)
-
-      setLoadingBpmFields(prev => {
-        const next = new Set(prev)
-        trackIds.forEach(id => {
-          if (fallbackNeedsBpm.has(id)) {
-            next.add(id)
-          }
-        })
-        return next
-      })
-      setLoadingKeyFields(prev => {
-        const next = new Set(prev)
-        trackIds.forEach(id => {
-          if (fallbackNeedsKey.has(id)) {
-            next.add(id)
-          }
-        })
-        return next
-      })
-
-      try {
-        const overrideFallback = options?.fallbackOverride
-        const effectiveFallbackOverride = overrideFallback && overrideFallback !== 'default'
-          ? overrideFallback
-          : bpmRequestSettings.fallbackOverride
-        const requestBody: Record<string, unknown> = {
-          trackIds,
-          country: countryCode,
-          debug_level: bpmRequestSettings.debugLevel,
-          max_confidence: bpmRequestSettings.maxConfidence,
-        }
-        if (effectiveFallbackOverride) {
-          requestBody.fallback_override = effectiveFallbackOverride
-        }
-
-        const res = await fetch('/api/bpm/stream-batch', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
-        })
-
-        if (!res.ok) {
-          console.error(`[BPM Client] Stream batch failed:`, res.status)
-          fetchBpmsForTracks(batch)
-          continue
-        }
-
-        const data = await res.json()
-        const immediateResults = data.immediateResults || {}
-        const previewMeta = data.previewMeta || {}
-
-        for (const [trackId, result] of Object.entries(immediateResults)) {
-          const r = result as any
-          setTrackBpms(prev => ({ ...prev, [trackId]: null }))
-          setTrackKeys(prev => ({ ...prev, [trackId]: null }))
-          setTrackScales(prev => ({ ...prev, [trackId]: null }))
-          setBpmDetails(prev => ({
-            ...prev,
-            [trackId]: { source: r.source, error: r.error },
-          }))
-          setBpmDebugInfo(prev => ({
-            ...prev,
-            [trackId]: {
-              ...r,
-              urls: r.urls || [],
-            },
-          }))
-          const previewUrl = getPreviewUrlFromMeta({ urls: r.urls })
-          if (previewUrl) {
-            setPreviewUrls(prev => ({ ...prev, [trackId]: previewUrl }))
-          }
-          setBpmStreamStatus(prev => ({ ...prev, [trackId]: 'error' }))
-          setLoadingBpmFields(prev => {
-            const next = new Set(prev)
-            next.delete(trackId)
-            return next
-          })
-          setLoadingKeyFields(prev => {
-            const next = new Set(prev)
-            next.delete(trackId)
-            return next
-          })
-          setTracksInDb(prev => new Set(prev).add(trackId))
-          if (retryTrackId === trackId) {
-            setRetryStatus({ loading: false, success: false, error: r.error || 'BPM calculation failed' })
-            setRetryTrackId(null)
-          }
-        }
-
-        for (const [trackId, meta] of Object.entries(previewMeta)) {
-          const previewUrl = getPreviewUrlFromMeta(meta as any)
-          if (previewUrl) {
-            setPreviewUrls(prev => ({ ...prev, [trackId]: previewUrl }))
-          }
-        }
-
-        const indexToTrackIdEntries = Object.entries(data.indexToTrackId || {})
-        if (!data.batchId || indexToTrackIdEntries.length === 0) {
-          const fallbackTracks = batch.filter(track => !immediateResults[track.id])
-          if (fallbackTracks.length > 0) {
-            fetchBpmsForTracks(fallbackTracks)
-          }
-        } else {
-          const indexToTrackId = new Map<number, string>()
-          for (const [indexStr, trackId] of indexToTrackIdEntries) {
-            indexToTrackId.set(Number(indexStr), trackId as string)
-          }
-
-          await streamBatchResults(data.batchId, indexToTrackId, previewMeta)
-        }
-      } catch (error) {
-        console.error('[BPM Client] Stream batch error:', error)
-        fetchBpmsForTracks(batch)
-      }
-
-      if (i + batchSize < tracksToFetch.length) {
-        await new Promise(resolve => setTimeout(resolve, 200))
-      }
-    }
-  }
-
-  const streamBatchResults = async (
-    batchId: string,
-    indexToTrackId: Map<number, string>,
-    previewMeta: Record<string, any>
-  ) => {
-    if (streamAbortRef.current) {
-      streamAbortRef.current.abort()
-    }
-
-    const abortController = new AbortController()
-    streamAbortRef.current = abortController
-    const finalizedTracks = new Set<string>()
-
-    try {
-      const response = await fetch(`/api/stream/${batchId}`, {
-        signal: abortController.signal,
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
-        throw new Error(errorData.error || `HTTP ${response.status}`)
-      }
-
-      if (!response.body) {
-        throw new Error('No response body')
-      }
-
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      const maybeYield = async () => {
-        await new Promise(resolve => setTimeout(resolve, 0))
-      }
-
-      const handleStreamResult = async (data: any) => {
-        if (typeof data.index !== 'number') return
-        const trackId = indexToTrackId.get(data.index)
-        if (!trackId) return
-
-        const meta = previewMeta[trackId]
-        const bpmSelected = selectBestBpm(
-          data.bpm_essentia,
-          data.bpm_confidence_essentia,
-          data.bpm_librosa,
-          data.bpm_confidence_librosa
-        )
-        const keySelected = selectBestKey(
-          data.key_essentia,
-          data.keyscale_confidence_essentia,
-          data.key_librosa,
-          data.keyscale_confidence_librosa
-        )
-
-        const selectedBpm =
-          bpmSelected === 'librosa'
-            ? data.bpm_librosa ?? data.bpm_essentia ?? null
-            : data.bpm_essentia ?? data.bpm_librosa ?? null
-
-        const selectedKey =
-          keySelected === 'librosa'
-            ? data.key_librosa ?? data.key_essentia ?? null
-            : data.key_essentia ?? data.key_librosa ?? null
-
-        const selectedScale =
-          keySelected === 'librosa'
-            ? data.scale_librosa ?? data.scale_essentia ?? null
-            : data.scale_essentia ?? data.scale_librosa ?? null
-
-        setTrackBpms(prev => ({ ...prev, [trackId]: selectedBpm }))
-        if (selectedKey != null) {
-          setTrackKeys(prev => ({ ...prev, [trackId]: selectedKey }))
-        }
-        if (selectedScale != null) {
-          setTrackScales(prev => ({ ...prev, [trackId]: selectedScale }))
-        }
-        if (selectedBpm != null) {
-          setLoadingBpmFields(prev => {
-            const next = new Set(prev)
-            next.delete(trackId)
-            return next
-          })
-        }
-        if (selectedKey != null || selectedScale != null) {
-          setLoadingKeyFields(prev => {
-            const next = new Set(prev)
-            next.delete(trackId)
-            return next
-          })
-        }
-
-        setBpmFullData(prev => ({
-          ...prev,
-          [trackId]: {
-            ...prev[trackId],
-            bpmEssentia: data.bpm_essentia !== undefined ? data.bpm_essentia : prev[trackId]?.bpmEssentia,
-            bpmRawEssentia: data.bpm_raw_essentia !== undefined ? data.bpm_raw_essentia : prev[trackId]?.bpmRawEssentia,
-            bpmConfidenceEssentia: data.bpm_confidence_essentia !== undefined ? data.bpm_confidence_essentia : prev[trackId]?.bpmConfidenceEssentia,
-            bpmLibrosa: data.bpm_librosa !== undefined ? data.bpm_librosa : prev[trackId]?.bpmLibrosa,
-            bpmRawLibrosa: data.bpm_raw_librosa !== undefined ? data.bpm_raw_librosa : prev[trackId]?.bpmRawLibrosa,
-            bpmConfidenceLibrosa: data.bpm_confidence_librosa !== undefined ? data.bpm_confidence_librosa : prev[trackId]?.bpmConfidenceLibrosa,
-            keyEssentia: data.key_essentia !== undefined ? data.key_essentia : prev[trackId]?.keyEssentia,
-            scaleEssentia: data.scale_essentia !== undefined ? data.scale_essentia : prev[trackId]?.scaleEssentia,
-            keyscaleConfidenceEssentia: data.keyscale_confidence_essentia !== undefined ? data.keyscale_confidence_essentia : prev[trackId]?.keyscaleConfidenceEssentia,
-            keyLibrosa: data.key_librosa !== undefined ? data.key_librosa : prev[trackId]?.keyLibrosa,
-            scaleLibrosa: data.scale_librosa !== undefined ? data.scale_librosa : prev[trackId]?.scaleLibrosa,
-            keyscaleConfidenceLibrosa: data.keyscale_confidence_librosa !== undefined ? data.keyscale_confidence_librosa : prev[trackId]?.keyscaleConfidenceLibrosa,
-            bpmSelected: bpmSelected,
-            keySelected: keySelected,
-            debugTxt: data.debug_txt !== undefined ? data.debug_txt : prev[trackId]?.debugTxt,
-          },
-        }))
-
-        if (meta) {
-          setBpmDetails(prev => ({
-            ...prev,
-            [trackId]: { source: meta.source, error: undefined },
-          }))
-          setBpmDebugInfo(prev => ({
-            ...prev,
-            [trackId]: {
-              ...data,
-              source: meta.source,
-              urls: meta.urls || [],
-            },
-          }))
-          const previewUrl = getPreviewUrlFromMeta(meta)
-          if (previewUrl) {
-            setPreviewUrls(prev => ({ ...prev, [trackId]: previewUrl }))
-          }
-        }
-
-        const status =
-          data.result_status === 'partial' || data.result_status === 'final'
-            ? data.result_status
-            : data.status === 'partial' || data.status === 'final'
-              ? data.status
-              : 'final'
-        setBpmStreamStatus(prev => ({ ...prev, [trackId]: status }))
-
-        if (status === 'final') {
-          if (selectedBpm == null) {
-            setTrackBpms(prev => ({ ...prev, [trackId]: null }))
-            setLoadingBpmFields(prev => {
-              const next = new Set(prev)
-              next.delete(trackId)
-              return next
-            })
-          }
-          if (selectedKey == null || selectedScale == null) {
-            setTrackKeys(prev => ({ ...prev, [trackId]: selectedKey ?? null }))
-            setTrackScales(prev => ({ ...prev, [trackId]: selectedScale ?? null }))
-            setLoadingKeyFields(prev => {
-              const next = new Set(prev)
-              next.delete(trackId)
-              return next
-            })
-          }
-          if (!finalizedTracks.has(trackId)) {
-            finalizedTracks.add(trackId)
-            setTracksInDb(prev => new Set(prev).add(trackId))
-            if (meta) {
-              setBpmTracksCalculated(prev => prev + 1)
-              fetch('/api/bpm/ingest', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  trackId,
-                  result: data,
-                  previewMeta: meta,
-                }),
-              }).catch((error) => {
-                console.warn('[BPM Client] Failed to ingest BPM result:', error)
-              })
-            }
-            if (retryTrackId === trackId) {
-              setRetryStatus({ loading: false, success: true })
-              setRetryTrackId(null)
-            }
-          }
-        }
-      }
-
-      while (true) {
-        const { done, value } = await reader.read()
-
-        if (done) {
-          break
-        }
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          if (line.trim() === '') continue
-          try {
-            const data = JSON.parse(line)
-            if (data?.type === 'result') {
-              await handleStreamResult(data)
-              await maybeYield()
-            } else if (data?.type === 'error') {
-              console.warn('[BPM Client] Stream error:', data.message)
-            }
-          } catch (parseError) {
-            console.error('[BPM Client] Failed to parse stream line:', parseError)
-          }
-        }
-      }
-
-      if (buffer.trim()) {
-        try {
-          const data = JSON.parse(buffer.trim())
-          if (data?.type === 'result') {
-            await handleStreamResult(data)
-            await maybeYield()
-          }
-        } catch (parseError) {
-          console.error('[BPM Client] Failed to parse stream buffer:', parseError)
-        }
-      }
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        return
-      }
-      console.error('[BPM Client] Stream processing error:', error)
-    } finally {
-      const remainingTracks = Array.from(indexToTrackId.values()).filter(
-        (trackId) => !finalizedTracks.has(trackId)
-      )
-      if (remainingTracks.length > 0) {
-        const fallbackTracks = tracks.filter(track => remainingTracks.includes(track.id))
-        fetchBpmsForTracks(fallbackTracks)
-      }
-    }
-  }
-
-  // Function to fetch BPM for individual tracks (for uncached tracks)
-  const fetchBpmsForTracks = async (tracksToFetch: Track[]) => {
-    // Process in smaller batches to avoid overwhelming the server
-    const batchSize = 20
-    for (let i = 0; i < tracksToFetch.length; i += batchSize) {
-      const batch = tracksToFetch.slice(i, i + batchSize)
-      
-      await Promise.all(
-        batch.map(async (track) => {
-          if (isTrackLoading(track.id)) {
-            return
-          }
-
-          const hasBpm = trackBpms[track.id] !== undefined
-          const hasKey = trackKeys[track.id] != null && trackScales[track.id] != null
-          if (hasBpm && hasKey && bpmStreamStatus[track.id] !== 'partial') {
-            return // Already fetched or in progress
-          }
-          
-          setLoadingBpmFields(prev => new Set(prev).add(track.id))
-          setLoadingKeyFields(prev => new Set(prev).add(track.id))
-          
-          try {
-            const data = await fetchBpmForTrack(track.id, countryCode)
-            setTrackBpms(prev => ({
-              ...prev,
-              [track.id]: data.bpm,
-            }))
-            // Store key and scale if available
-            if (data.key !== undefined) {
-              setTrackKeys(prev => ({
-                ...prev,
-                [track.id]: data.key || null,
-              }))
-            }
-            if (data.scale !== undefined) {
-              setTrackScales(prev => ({
-                ...prev,
-                [track.id]: data.scale || null,
-              }))
-            }
-            const previewUrl = getPreviewUrlFromMeta({ urls: data.urls })
-            if (previewUrl) {
-              setPreviewUrls(prev => ({
-                ...prev,
-                [track.id]: previewUrl,
-              }))
-            }
-            setBpmDetails(prev => ({
-              ...prev,
-              [track.id]: {
-                source: data.source,
-                error: data.error,
-              },
-            }))
-            // Store full BPM data for modal
-            if (data.bpmEssentia !== undefined || data.bpmLibrosa !== undefined || data.bpmSelected || 
-                data.keyEssentia !== undefined || data.keyLibrosa !== undefined || data.keySelected) {
-              setBpmFullData(prev => ({
-                ...prev,
-                [track.id]: {
-                  bpmEssentia: data.bpmEssentia,
-                  bpmRawEssentia: data.bpmRawEssentia,
-                  bpmConfidenceEssentia: data.bpmConfidenceEssentia,
-                  bpmLibrosa: data.bpmLibrosa,
-                  bpmRawLibrosa: data.bpmRawLibrosa,
-                  bpmConfidenceLibrosa: data.bpmConfidenceLibrosa,
-                  keyEssentia: data.keyEssentia,
-                  scaleEssentia: data.scaleEssentia,
-                  keyscaleConfidenceEssentia: data.keyscaleConfidenceEssentia,
-                  keyLibrosa: data.keyLibrosa,
-                  scaleLibrosa: data.scaleLibrosa,
-                  keyscaleConfidenceLibrosa: data.keyscaleConfidenceLibrosa,
-                  bpmSelected: data.bpmSelected || 'essentia',
-                  keySelected: data.keySelected || 'essentia',
-                  bpmManual: data.bpmManual,
-                  keyManual: data.keyManual,
-                  scaleManual: data.scaleManual,
-                  debugTxt: data.debugTxt,
-                },
-              }))
-            }
-            setBpmDebugInfo(prev => ({
-              ...prev,
-              [track.id]: {
-                ...data,
-                urls: data.urls || [],
-              },
-            }))
-            // Mark track as in DB (now it has an entry, whether BPM or N/A)
-            setTracksInDb(prev => new Set(prev).add(track.id))
-            // Increment calculated count (this track was just calculated, not cached)
-            setBpmTracksCalculated(prev => prev + 1)
-            setBpmStreamStatus(prev => ({ ...prev, [track.id]: 'final' }))
-            setLoadingBpmFields(prev => {
-              const next = new Set(prev)
-              next.delete(track.id)
-              return next
-            })
-            setLoadingKeyFields(prev => {
-              const next = new Set(prev)
-              next.delete(track.id)
-              return next
-            })
-            if (retryTrackId === track.id) {
-              setRetryStatus({
-                loading: false,
-                success: data.bpm != null,
-                error: data.bpm != null ? undefined : data.error || 'BPM calculation failed',
-              })
-              setRetryTrackId(null)
-            }
-          } catch (error) {
-            console.error(`[BPM Client] Error fetching BPM for ${track.id}:`, error)
-            setTrackBpms(prev => ({
-              ...prev,
-              [track.id]: null,
-            }))
-            setTrackKeys(prev => ({
-              ...prev,
-              [track.id]: null,
-            }))
-            setTrackScales(prev => ({
-              ...prev,
-              [track.id]: null,
-            }))
-            setBpmStreamStatus(prev => ({ ...prev, [track.id]: 'error' }))
-            setLoadingBpmFields(prev => {
-              const next = new Set(prev)
-              next.delete(track.id)
-              return next
-            })
-            setLoadingKeyFields(prev => {
-              const next = new Set(prev)
-              next.delete(track.id)
-              return next
-            })
-            if (retryTrackId === track.id) {
-              setRetryStatus({ loading: false, success: false, error: 'Network error. Please try again.' })
-              setRetryTrackId(null)
-            }
-          } finally {
-            setLoadingBpmFields(prev => {
-              const next = new Set(prev)
-              next.delete(track.id)
-              return next
-            })
-            setLoadingKeyFields(prev => {
-              const next = new Set(prev)
-              next.delete(track.id)
-              return next
-            })
-          }
-        })
-      )
-      
-      // Small delay between batches
-      if (i + batchSize < tracksToFetch.length) {
-        await new Promise(resolve => setTimeout(resolve, 200))
-      }
-    }
-  }
 
   // Function to recalculate all BPM/key/scale for tracks in the playlist
   const triggerRecalculateTracks = async (trackIds: string[]) => {
@@ -2190,444 +1019,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     }
   }
 
-  const loadAudioWithCache = async (url: string, trackId?: string, allowRefresh = true): Promise<string> => {
-    console.log('[Preview Debug] loadAudioWithCache called with URL:', url)
-    
-    const originalUrl = url // Keep original for cache key if it's an API URL
-    
-    // Check if it's a Deezer API URL - if so, fetch it to get the preview URL
-    if (url.includes('api.deezer.com')) {
-      // Check cache first using the API URL as key
-      if (audioCache.current.has(originalUrl)) {
-        const cachedUrl = audioCache.current.get(originalUrl)!
-        console.log('[Preview Debug] Found cached preview URL from API:', cachedUrl)
-        // If cached value is a blob URL, return it; otherwise it's the preview URL, fetch it
-        if (cachedUrl.startsWith('blob:')) {
-          return cachedUrl
-        } else {
-          url = cachedUrl // Use the cached preview URL
-        }
-      } else {
-        // Fetch the preview URL from API
-        const previewUrl = await fetchDeezerPreviewUrl(url)
-        if (!previewUrl) {
-          throw new Error('Failed to get preview URL from Deezer API')
-        }
-        // Cache the preview URL using the API URL as key
-        audioCache.current.set(originalUrl, previewUrl)
-        url = previewUrl
-        console.log('[Preview Debug] Using preview URL from Deezer API:', url)
-      }
-    }
-    
-    // Check if it's a Deezer URL (needs CORS proxy)
-    const isDeezer = url.includes('cdn-preview') || url.includes('deezer.com') || url.includes('e-cdn-preview') || url.includes('cdnt-preview')
-    console.log('[Preview Debug] URL type check:', { url, isDeezer })
-    
-    // Check cache first (use the final preview URL as cache key)
-    if (audioCache.current.has(url)) {
-      const cachedUrl = audioCache.current.get(url)!
-      console.log('[Preview Debug] Found cached URL:', cachedUrl)
-      
-      // If it's a Deezer URL, make sure we cached a blob URL, not the direct URL
-      if (isDeezer && !cachedUrl.startsWith('blob:')) {
-        console.log('[Preview Debug] Cached Deezer URL is not a blob, re-fetching through proxy')
-        // Remove the invalid cache entry
-        audioCache.current.delete(url)
-        // Fall through to fetch via proxy
-      } else {
-        console.log('[Preview Debug] Using cached audio URL:', cachedUrl)
-        return cachedUrl
-      }
-    }
-    
-    try {
-      if (isDeezer) {
-        // For Deezer, try direct fetch first (might work if CORS allows or URL is still valid)
-        // If that fails, try proxy as fallback
-        console.log('[Preview Debug] Trying direct Deezer URL first...')
-        try {
-          const directResponse = await fetch(url, {
-            method: 'HEAD', // Just check if accessible
-            mode: 'no-cors', // This won't throw on CORS errors, but we can't read the response
-          })
-          console.log('[Preview Debug] Direct fetch HEAD check completed')
-          
-          // Try full fetch - if CORS allows it, this will work
-          const fullResponse = await fetch(url, {
-            mode: 'cors',
-            credentials: 'omit',
-          })
-          
-          if (fullResponse.ok) {
-            console.log('[Preview Debug] Direct Deezer URL works, using it')
-            const blob = await fullResponse.blob()
-            const blobUrl = URL.createObjectURL(blob)
-            audioCache.current.set(url, blobUrl)
-            return blobUrl
-          } else {
-            console.log('[Preview Debug] Direct fetch failed, trying proxy...')
-            throw new Error('Direct fetch failed')
-          }
-        } catch (directError) {
-          console.log('[Preview Debug] Direct fetch not possible, using proxy:', directError)
-          // Fall back to proxy
-          const proxyUrl = `/api/audio-proxy?url=${encodeURIComponent(url)}`
-          console.log('[Preview Debug] Fetching Deezer audio via proxy:', proxyUrl)
-          const response = await fetch(proxyUrl)
-          console.log('[Preview Debug] Proxy response status:', response.status, response.ok)
-          if (!response.ok) {
-            const errorText = await response.text()
-            console.error('[Preview Debug] Proxy fetch failed:', response.status, errorText)
-            if (response.status === 403 && trackId && allowRefresh) {
-              const refreshed = await refreshPreviewForTrack(trackId)
-              if (refreshed && refreshed !== url) {
-                return await loadAudioWithCache(refreshed, trackId, false)
-              }
-            }
-            // If proxy also fails, try direct URL as last resort (might work in some browsers)
-            console.log('[Preview Debug] Proxy failed, trying direct URL as last resort...')
-            audioCache.current.set(url, url)
-            return url
-          }
-          const blob = await response.blob()
-          console.log('[Preview Debug] Blob created:', { size: blob.size, type: blob.type })
-          const blobUrl = URL.createObjectURL(blob)
-          console.log('[Preview Debug] Blob URL created:', blobUrl)
-          audioCache.current.set(url, blobUrl)
-          return blobUrl
-        }
-      } else {
-        // For iTunes and other sources, prefer proxy to avoid CORS retries.
-        const proxyUrl = `/api/audio-proxy?url=${encodeURIComponent(url)}`
-        console.log('[Preview Debug] Fetching audio via proxy (non-Deezer):', proxyUrl)
-        const response = await fetch(proxyUrl)
-        if (!response.ok) {
-          const errorText = await response.text()
-          console.error('[Preview Debug] Proxy fetch failed (non-Deezer):', response.status, errorText)
-          audioCache.current.set(url, url)
-          return url
-        }
-        const blob = await response.blob()
-        const blobUrl = URL.createObjectURL(blob)
-        audioCache.current.set(url, blobUrl)
-        return blobUrl
-      }
-    } catch (error) {
-      console.error('[Preview Debug] Error loading audio:', error)
-      // On error, don't cache for Deezer (it will fail again)
-      // For non-Deezer, we can try direct URL
-      if (!isDeezer) {
-        console.log('[Preview Debug] Falling back to direct URL:', url)
-        audioCache.current.set(url, url)
-        return url
-      } else {
-        // For Deezer, the URL might be expired or blocked
-        // Clear any cached entry and throw the error
-        audioCache.current.delete(url)
-        console.error('[Preview Debug] Deezer URL failed, cleared from cache. URL may be expired:', url)
-        throw error
-      }
-    }
-  }
-  
-  /**
-   * Check if track has preview available
-   */
-  const hasPreview = (trackId: string): boolean => {
-    const url = previewUrls[trackId]
-    return url !== null && url !== undefined && url !== ''
-  }
-  
-  /**
-   * Get preview tooltip text
-   */
-  const getPreviewTooltip = (trackId: string): string => {
-    if (loadingPreviewIds.has(trackId)) {
-      return 'Loading preview...'
-    }
-    if (hasPreview(trackId)) {
-      return 'Click to play preview'
-    }
-    return 'Preview not available'
-  }
-  
-  /**
-   * Handle track row click - play preview if available from DB, otherwise trigger search
-   * Only uses preview URLs from DB (iTunes/Deezer), never Spotify's preview_url
-   */
-  const handleTrackClick = async (track: Track, event?: MouseEvent) => {
-    // If clicking on a link or button, don't handle the row click
-    if (event?.target instanceof HTMLElement) {
-      if (event.target.closest('a') || event.target.closest('button')) {
-        return
-      }
-    }
-
-    // Get preview URL from DB only
-    let previewUrl = previewUrls[track.id] || null
-
-    // If no preview URL available in DB, try to fetch from BPM API (which will search and update DB)
-    if (!previewUrl && !loadingPreviewIds.has(track.id)) {
-      try {
-        setLoadingPreviewIds(prev => new Set(prev).add(track.id))
-        const data = await fetchBpmForTrack(track.id, countryCode)
-        console.log('[Preview Debug] handleTrackClick - BPM API response urls:', data.urls)
-        const previewUrlFromMeta = getPreviewUrlFromMeta({ urls: data.urls })
-        if (previewUrlFromMeta) {
-          previewUrl = previewUrlFromMeta
-          setPreviewUrls(prev => ({
-            ...prev,
-            [track.id]: previewUrlFromMeta,
-          }))
-        }
-      } catch (error) {
-        console.error('Error fetching preview URL:', error)
-      } finally {
-        setLoadingPreviewIds(prev => {
-          const next = new Set(prev)
-          next.delete(track.id)
-          return next
-        })
-      }
-    }
-
-    // If we have a preview URL from DB, play it
-    if (previewUrl) {
-      console.log('[Preview Debug] handleTrackClick - Playing preview for track:', track.name, 'URL:', previewUrl)
-      
-      // Stop any currently playing audio
-      if (audioRef.current) {
-        audioRef.current.pause()
-        audioRef.current.currentTime = 0
-      }
-
-      // If clicking the same track that's playing, stop it
-      if (playingTrackId === track.id) {
-        console.log('[Preview Debug] handleTrackClick - Stopping already playing track')
-        setPlayingTrackId(null)
-        if (audioRef.current) {
-          audioRef.current.pause()
-          audioRef.current.currentTime = 0
-        }
-        return
-      }
-
-      // Play the preview
-      setPlayingTrackId(track.id)
-      
-      try {
-        // Load audio with caching and CORS handling
-        console.log('[Preview Debug] handleTrackClick - Loading audio with cache...')
-        const audioUrl = await loadAudioWithCache(previewUrl, track.id)
-        console.log('[Preview Debug] handleTrackClick - Audio URL loaded:', audioUrl)
-        
-        const audio = new Audio(audioUrl)
-        audio.volume = 0.5
-        audio.crossOrigin = 'anonymous' // Enable CORS for cross-origin audio
-        audioRef.current = audio
-        
-        console.log('[Preview Debug] handleTrackClick - Audio element created, attempting to play...')
-        audio.play().then(() => {
-          console.log('[Preview Debug] handleTrackClick - Audio play() succeeded')
-        }).catch((error) => {
-          console.error('[Preview Debug] handleTrackClick - Error playing preview:', error)
-          console.error('[Preview Debug] handleTrackClick - Error details:', {
-            name: error.name,
-            message: error.message,
-            stack: error.stack,
-            audioUrl,
-            previewUrl,
-            trackName: track.name
-          })
-          setPlayingTrackId(null)
-          audioRef.current = null
-        })
-
-        // When audio ends, reset playing state
-        audio.addEventListener('ended', () => {
-          console.log('[Preview Debug] handleTrackClick - Audio ended')
-          setPlayingTrackId(null)
-          audioRef.current = null
-        })
-        
-        // Add error event listener for more details
-        audio.addEventListener('error', (e) => {
-          console.error('[Preview Debug] handleTrackClick - Audio error event:', {
-            error: e,
-            errorCode: audio.error?.code,
-            errorMessage: audio.error?.message,
-            networkState: audio.networkState,
-            readyState: audio.readyState,
-            src: audio.src,
-            previewUrl,
-            trackName: track.name
-          })
-          setPlayingTrackId(null)
-          audioRef.current = null
-        })
-      } catch (error) {
-        console.error('[Preview Debug] handleTrackClick - Error loading audio:', error)
-        console.error('[Preview Debug] handleTrackClick - Error details:', {
-          error,
-          previewUrl,
-          trackName: track.name
-        })
-        setPlayingTrackId(null)
-      }
-    } else {
-      // No preview available from DB
-      console.log('[Preview Debug] handleTrackClick - No preview URL available for track:', track.name)
-      if (audioRef.current) {
-        audioRef.current.pause()
-        audioRef.current.currentTime = 0
-      }
-      setPlayingTrackId(null)
-      audioRef.current = null
-    }
-  }
-
-  /**
-   * Handle track title click - play preview (same as row click)
-   */
-  const handleTrackTitleClick = async (e: MouseEvent<HTMLAnchorElement>, track: Track) => {
-    e.preventDefault()
-    e.stopPropagation()
-    
-    // Left click - play preview directly (bypass the link check in handleTrackClick)
-    // Get preview URL from DB only
-    let previewUrl = previewUrls[track.id] || null
-
-    // If no preview URL available in DB, try to fetch from BPM API (which will search and update DB)
-    if (!previewUrl && !loadingPreviewIds.has(track.id)) {
-      try {
-        setLoadingPreviewIds(prev => new Set(prev).add(track.id))
-        const data = await fetchBpmForTrack(track.id, countryCode)
-        console.log('[Preview Debug] handleTrackTitleClick - BPM API response urls:', data.urls)
-        const previewUrlFromMeta = getPreviewUrlFromMeta({ urls: data.urls })
-        if (previewUrlFromMeta) {
-          previewUrl = previewUrlFromMeta
-          setPreviewUrls(prev => ({
-            ...prev,
-            [track.id]: previewUrlFromMeta,
-          }))
-        }
-      } catch (error) {
-        console.error('Error fetching preview URL:', error)
-      } finally {
-        setLoadingPreviewIds(prev => {
-          const next = new Set(prev)
-          next.delete(track.id)
-          return next
-        })
-      }
-    }
-
-    // If we have a preview URL from DB, play it
-    if (previewUrl) {
-      console.log('[Preview Debug] handleTrackTitleClick - Playing preview for track:', track.name, 'URL:', previewUrl)
-      
-      // Stop any currently playing audio
-      if (audioRef.current) {
-        audioRef.current.pause()
-        audioRef.current.currentTime = 0
-      }
-
-      // If clicking the same track that's playing, stop it
-      if (playingTrackId === track.id) {
-        console.log('[Preview Debug] handleTrackTitleClick - Stopping already playing track')
-        setPlayingTrackId(null)
-        if (audioRef.current) {
-          audioRef.current.pause()
-          audioRef.current.currentTime = 0
-        }
-        return
-      }
-
-      // Play the preview
-      setPlayingTrackId(track.id)
-      
-      try {
-        // Load audio with caching and CORS handling
-        console.log('[Preview Debug] handleTrackTitleClick - Loading audio with cache...')
-        const audioUrl = await loadAudioWithCache(previewUrl, track.id)
-        console.log('[Preview Debug] handleTrackTitleClick - Audio URL loaded:', audioUrl)
-        
-        const audio = new Audio(audioUrl)
-        audio.volume = 0.5
-        audio.crossOrigin = 'anonymous' // Enable CORS for cross-origin audio
-        audioRef.current = audio
-        
-        console.log('[Preview Debug] handleTrackTitleClick - Audio element created, attempting to play...')
-        audio.play().then(() => {
-          console.log('[Preview Debug] handleTrackTitleClick - Audio play() succeeded')
-        }).catch((error) => {
-          console.error('[Preview Debug] handleTrackTitleClick - Error playing preview:', error)
-          console.error('[Preview Debug] handleTrackTitleClick - Error details:', {
-            name: error.name,
-            message: error.message,
-            stack: error.stack,
-            audioUrl,
-            previewUrl,
-            trackName: track.name
-          })
-          setPlayingTrackId(null)
-          audioRef.current = null
-        })
-
-        // When audio ends, reset playing state
-        audio.addEventListener('ended', () => {
-          console.log('[Preview Debug] handleTrackTitleClick - Audio ended')
-          setPlayingTrackId(null)
-          audioRef.current = null
-        })
-        
-        // Add error event listener for more details
-        audio.addEventListener('error', (e) => {
-          console.error('[Preview Debug] handleTrackTitleClick - Audio error event:', {
-            error: e,
-            errorCode: audio.error?.code,
-            errorMessage: audio.error?.message,
-            networkState: audio.networkState,
-            readyState: audio.readyState,
-            src: audio.src,
-            previewUrl,
-            trackName: track.name
-          })
-          setPlayingTrackId(null)
-          audioRef.current = null
-          
-          // If it's a Deezer URL that failed, clear it from previewUrls so we can try to refresh it
-          if (previewUrl && (previewUrl.includes('deezer.com') || previewUrl.includes('cdn-preview') || previewUrl.includes('cdnt-preview'))) {
-            console.log('[Preview Debug] Deezer preview failed, clearing from state to allow refresh')
-            setPreviewUrls(prev => {
-              const next = { ...prev }
-              delete next[track.id]
-              return next
-            })
-          }
-        })
-      } catch (error) {
-        console.error('[Preview Debug] handleTrackTitleClick - Error loading audio:', error)
-        console.error('[Preview Debug] handleTrackTitleClick - Error details:', {
-          error,
-          previewUrl,
-          trackName: track.name
-        })
-        setPlayingTrackId(null)
-      }
-    } else {
-      // No preview available from DB
-      console.log('[Preview Debug] handleTrackTitleClick - No preview URL available for track:', track.name)
-      if (audioRef.current) {
-        audioRef.current.pause()
-        audioRef.current.currentTime = 0
-      }
-      setPlayingTrackId(null)
-      audioRef.current = null
-    }
-  }
-  
   /**
    * Handle track context menu (right-click)
    */
@@ -2747,163 +1138,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const formatDate = (dateString: string): string => {
     return new Date(dateString).toLocaleDateString()
   }
-
-  const getYear = (dateString: string | null | undefined): number | null => {
-    if (!dateString) return null
-    // Extract year from date string (format can be YYYY, YYYY-MM, or YYYY-MM-DD)
-    const year = dateString.split('-')[0]
-    const yearNum = parseInt(year, 10)
-    return isNaN(yearNum) ? null : yearNum
-  }
-
-  const getYearString = (dateString: string | null | undefined): string => {
-    const year = getYear(dateString)
-    return year ? year.toString() : 'N/A'
-  }
-
-  const filteredTracks = tracks.filter((track) => {
-    // Text search
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase()
-      const matchesText = (
-        track.name.toLowerCase().includes(query) ||
-        track.artists.some((artist) => artist.name.toLowerCase().includes(query)) ||
-        track.album.name.toLowerCase().includes(query) ||
-        track.album.release_date.includes(query) ||
-        ((trackBpms[track.id] != null && Math.round(trackBpms[track.id]!).toString().includes(query)) ||
-         (track.tempo && Math.round(track.tempo).toString().includes(query)))
-      )
-      if (!matchesText) return false
-    }
-
-    // Year filter
-    const trackYear = getYear(track.album.release_date)
-    if (yearFrom || yearTo) {
-      if (trackYear === null) return false
-      if (yearFrom && trackYear < parseInt(yearFrom, 10)) return false
-      if (yearTo && trackYear > parseInt(yearTo, 10)) return false
-    }
-
-    // BPM filter (use new API BPM if available, fallback to track.tempo)
-    const trackBpm = trackBpms[track.id] != null 
-      ? Math.round(trackBpms[track.id]!) 
-      : (track.tempo ? Math.round(track.tempo) : null)
-    if (bpmFrom || bpmTo) {
-      if (trackBpm === null) return false
-      
-      const bpmFromNum = bpmFrom ? parseInt(bpmFrom, 10) : null
-      const bpmToNum = bpmTo ? parseInt(bpmTo, 10) : null
-      
-      // Check if track BPM matches the range
-      const matchesBpm = (!bpmFromNum || trackBpm >= bpmFromNum) && (!bpmToNum || trackBpm <= bpmToNum)
-      
-      if (matchesBpm) {
-        return true
-      }
-      
-      // If includeHalfDoubleBpm is checked, also check half and double BPM
-      if (includeHalfDoubleBpm) {
-        const halfBpm = trackBpm / 2
-        const doubleBpm = trackBpm * 2
-        
-        const matchesHalf = (!bpmFromNum || halfBpm >= bpmFromNum) && (!bpmToNum || halfBpm <= bpmToNum)
-        const matchesDouble = (!bpmFromNum || doubleBpm >= bpmFromNum) && (!bpmToNum || doubleBpm <= bpmToNum)
-        
-        if (matchesHalf || matchesDouble) {
-          return true
-        }
-      }
-      
-      return false
-    }
-
-    return true
-  })
-
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
-    } else {
-      setSortField(field)
-      setSortDirection('asc')
-    }
-  }
-
-  const sortedTracks = [...filteredTracks].sort((a, b) => {
-    if (!sortField) return 0
-
-    let aValue: string | number
-    let bValue: string | number
-
-    switch (sortField) {
-      case 'name':
-        aValue = a.name.toLowerCase()
-        bValue = b.name.toLowerCase()
-        break
-      case 'artists':
-        aValue = a.artists.map((artist) => artist.name).join(', ').toLowerCase()
-        bValue = b.artists.map((artist) => artist.name).join(', ').toLowerCase()
-        break
-      case 'album':
-        aValue = a.album.name.toLowerCase()
-        bValue = b.album.name.toLowerCase()
-        break
-      case 'release_date':
-        aValue = a.album.release_date || ''
-        bValue = b.album.release_date || ''
-        break
-      case 'duration':
-        aValue = a.duration_ms
-        bValue = b.duration_ms
-        break
-      case 'added_at':
-        aValue = a.added_at || ''
-        bValue = b.added_at || ''
-        break
-      case 'tempo': {
-        const rawA = trackBpms[a.id]
-        const rawB = trackBpms[b.id]
-        const fallbackA = a.tempo ?? -1
-        const fallbackB = b.tempo ?? -1
-        const parsedA = typeof rawA === 'string' ? Number(rawA) : rawA
-        const parsedB = typeof rawB === 'string' ? Number(rawB) : rawB
-        const normalizedA =
-          typeof parsedA === 'number' && !Number.isNaN(parsedA) ? parsedA : fallbackA
-        const normalizedB =
-          typeof parsedB === 'number' && !Number.isNaN(parsedB) ? parsedB : fallbackB
-        aValue = normalizedA
-        bValue = normalizedB
-        break
-      }
-      case 'popularity':
-        aValue = a.popularity ?? -1
-        bValue = b.popularity ?? -1
-        break
-      default:
-        return 0
-    }
-
-    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1
-    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1
-    return 0
-  })
-
-  const totalPages = pageSize === 'all' ? 1 : Math.max(1, Math.ceil(sortedTracks.length / pageSize))
-  const safePage = Math.min(currentPage, totalPages)
-  const paginatedTracks =
-    pageSize === 'all'
-      ? sortedTracks
-      : sortedTracks.slice((safePage - 1) * pageSize, safePage * pageSize)
-
-  useEffect(() => {
-    filtersDispatch({ type: 'set', key: 'currentPage', value: 1 })
-  }, [searchQuery, sortField, sortDirection, pageSize, filtersDispatch])
-
-  useEffect(() => {
-    if (currentPage > totalPages) {
-      filtersDispatch({ type: 'set', key: 'currentPage', value: totalPages })
-    }
-  }, [currentPage, totalPages, filtersDispatch])
 
   // Compute BPM modal data (must be before any early returns)
   const bpmModalData = useMemo(() => {
@@ -3070,62 +1304,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     }
     void fetchSpotifyPreview()
   }, [showBpmModal, selectedBpmTrack, isrcMismatchDetails, mismatchPreviewUrls.spotify, mismatchPreviewUrls.loading])
-
-  const bpmSummary = useMemo(() => {
-    const totalTracks = tracks.length
-    if (totalTracks === 0) return null
-
-    const tracksToSearch = tracksNeedingCalc.size
-    const tracksLoading = loadingTrackIds.size
-    const tracksProcessedFromSearch = tracks.filter(t =>
-      tracksNeedingCalc.has(t.id) && !loadingTrackIds.has(t.id)
-    ).length
-    const tracksRemainingToSearch = Math.max(0, tracksToSearch - tracksProcessedFromSearch)
-    const tracksWithBpm = tracks.filter(t => trackBpms[t.id] != null && trackBpms[t.id] !== undefined).length
-    const tracksWithNa = tracks.filter(t => trackBpms[t.id] === null).length
-    const isProcessing = tracksLoading > 0 || tracksRemainingToSearch > 0
-    const hasStartedProcessing = tracksProcessedFromSearch > 0 || tracksLoading > 0
-    const shouldShowProgress = tracksToSearch > 0 && (isProcessing || hasStartedProcessing || bpmProcessingStartTime !== null)
-
-    return {
-      totalTracks,
-      tracksToSearch,
-      tracksLoading,
-      tracksProcessedFromSearch,
-      tracksRemainingToSearch,
-      tracksWithBpm,
-      tracksWithNa,
-      shouldShowProgress,
-    }
-  }, [tracks, tracksNeedingCalc, loadingTrackIds, trackBpms, bpmProcessingStartTime])
-
-  useEffect(() => {
-    if (bpmSummary) {
-      bpmDispatch({ type: 'set', key: 'showBpmNotice', value: true })
-    }
-  }, [bpmSummary, bpmDispatch])
-
-
-  // Load preferred page size from localStorage
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const saved = window.localStorage.getItem('playlistPageSize')
-    if (!saved) return
-    if (saved === 'all') {
-      filtersDispatch({ type: 'set', key: 'pageSize', value: 'all' })
-      return
-    }
-    const parsed = Number(saved)
-    if (!Number.isNaN(parsed) && parsed > 0) {
-      filtersDispatch({ type: 'set', key: 'pageSize', value: parsed })
-    }
-  }, [filtersDispatch])
-
-  // Persist page size preference
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    window.localStorage.setItem('playlistPageSize', String(pageSize))
-  }, [pageSize])
 
   const bpmAdminSettings = isAdmin ? (
     <>

@@ -24,7 +24,7 @@ type CreditsModalProps = {
   creditsRoleMap: Record<string, string>
   formatRetrievedMonthYear: (value?: string | null) => string
   renderCreditLinks: (people: string[], role: string) => ReactNode
-  onRefreshCredits: (track: Track, force?: boolean) => void
+  onRefreshCredits: (track: Track, force?: boolean) => void | Promise<void>
   onClose: () => void
 }
 
