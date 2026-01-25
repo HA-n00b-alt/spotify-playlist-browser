@@ -101,6 +101,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   }>>({})
   const [showBpmModal, setShowBpmModal] = useState(false)
   const [showBpmModalDebug, setShowBpmModalDebug] = useState(false)
+  const [recalcMode, setRecalcMode] = useState<'standard' | 'force' | 'fallback'>('standard')
   const [selectedBpmTrack, setSelectedBpmTrack] = useState<Track | null>(null)
   const [bpmProcessingStartTime, setBpmProcessingStartTime] = useState<number | null>(null)
   const [bpmProcessingEndTime, setBpmProcessingEndTime] = useState<number | null>(null)
@@ -424,6 +425,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     setMusoPreviewStatus(null)
     setMismatchPreviewUrls({})
     setShowBpmModalDebug(false)
+    setRecalcMode('standard')
   }, [])
 
   const closeCreditsModal = useCallback(() => {
@@ -4063,10 +4065,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           onClick={closeBpmModal}
         >
           <div
-            className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto dark:bg-slate-900 dark:text-slate-100"
+            className="bg-white rounded-[12px] shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto dark:bg-slate-900 dark:text-slate-100"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between border-b border-gray-200 pb-4 dark:border-slate-800">
+            <div className="flex items-start justify-between pb-4">
               <div>
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">
                   BPM and Key information
@@ -4088,17 +4090,31 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               </button>
             </div>
 
-            <div className="mt-5 space-y-6">
-              <section className="rounded-lg border border-gray-200 p-4 dark:border-slate-800">
+            <div className="mt-6 space-y-8">
+              <section>
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <div className="text-[11px] uppercase tracking-[0.2em] text-gray-400 dark:text-slate-500">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400 dark:text-slate-500">
                       BPM
                     </div>
-                    <div className="mt-2 text-3xl font-semibold text-gray-900 dark:text-slate-100">
+                    <div className="mt-3 flex items-center gap-2 text-4xl font-semibold text-gray-900 dark:text-slate-100">
                       {typeof bpmModalSummary.currentBpm === 'number'
-                        ? Math.round(bpmModalSummary.currentBpm)
+                        ? `${Math.round(bpmModalSummary.currentBpm)} BPM`
                         : '—'}
+                      {typeof bpmModalSummary.currentBpm === 'number' && (
+                        <svg
+                          className="h-5 w-5 text-emerald-500 dark:text-emerald-300"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                          aria-hidden="true"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M16.704 5.292a1 1 0 010 1.416l-7.1 7.1a1 1 0 01-1.416 0l-3.392-3.392a1 1 0 111.416-1.416l2.684 2.684 6.392-6.392a1 1 0 011.416 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      )}
                     </div>
                     <div className="mt-1 text-xs text-gray-500 dark:text-slate-400">
                       Algo: {bpmModalSummary.bpmSelectedLabel}
@@ -4123,7 +4139,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           })
                         }}
                         disabled={isUpdatingSelection}
-                        className="rounded-full border border-gray-200 px-3 py-1 text-gray-600 hover:border-gray-300 hover:text-gray-800 disabled:text-gray-400 dark:border-slate-700 dark:text-slate-300"
+                        className="rounded-full px-3 py-1 text-gray-600 hover:text-gray-900 hover:bg-black/5 disabled:text-gray-400 dark:text-slate-300 dark:hover:text-white dark:hover:bg-white/10"
                       >
                         Store Half
                       </button>
@@ -4139,7 +4155,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           })
                         }}
                         disabled={isUpdatingSelection}
-                        className="rounded-full border border-gray-200 px-3 py-1 text-gray-600 hover:border-gray-300 hover:text-gray-800 disabled:text-gray-400 dark:border-slate-700 dark:text-slate-300"
+                        className="rounded-full px-3 py-1 text-gray-600 hover:text-gray-900 hover:bg-black/5 disabled:text-gray-400 dark:text-slate-300 dark:hover:text-white dark:hover:bg-white/10"
                       >
                         Store Double
                       </button>
@@ -4160,14 +4176,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       </div>
                     )}
                     {isrcMismatchDetails && (
-                      <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+                      <div className="rounded-[12px] bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
                         <div className="font-semibold">ISRC mismatch details</div>
                         <div>Spotify ISRC: {isrcMismatchDetails.spotifyIsrc || 'Unknown'}</div>
                         <div>iTunes ISRC: {isrcMismatchDetails.previewIsrc || 'Unknown'}</div>
                       </div>
                     )}
                     {isrcMismatchDetails && (
-                      <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+                      <div className="rounded-[12px] bg-black/5 px-3 py-2 text-xs text-gray-700 dark:bg-white/5 dark:text-slate-300">
                         <div className="font-semibold text-gray-800 dark:text-slate-100">Compare audio previews</div>
                         <div className="mt-2 space-y-2">
                           <div>
@@ -4232,13 +4248,13 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   </div>
                 ) : (
                   <>
-                    <div className="mt-4 space-y-2">
+                    <div className="mt-6 space-y-2">
                       {bpmModalSummary.bpmCandidates.map((candidate) => {
                         const isSelected = bpmModalData.bpmSelected === candidate.id
                         return (
                           <div
                             key={candidate.id}
-                            className="flex items-center justify-between rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700 dark:border-slate-800 dark:text-slate-300"
+                            className="flex items-center justify-between rounded-[12px] px-3 py-2 text-sm text-gray-700 dark:text-slate-300"
                           >
                             <div>
                               <div className="text-[11px] uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">
@@ -4270,7 +4286,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                   })
                                 }
                                 disabled={isUpdatingSelection}
-                                className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-600 hover:border-gray-300 hover:text-gray-800 disabled:text-gray-400 dark:border-slate-700 dark:text-slate-300"
+                                className="rounded-full px-3 py-1 text-[11px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-black/5 disabled:text-gray-400 dark:text-slate-300 dark:hover:text-white dark:hover:bg-white/10"
                               >
                                 Use this
                               </button>
@@ -4281,17 +4297,17 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                     </div>
 
                     {isAdmin && (
-                      <div className="mt-4 rounded-md border border-dashed border-gray-200 px-3 py-3 dark:border-slate-800">
-                        <div className="text-[11px] uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">
+                      <div className="mt-6">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">
                           Manual override
                         </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
                           <input
                             type="number"
                             value={manualBpm || bpmModalData.fullData?.bpmManual || ''}
                             onChange={(e) => setManualBpm(e.target.value)}
                             placeholder="Enter BPM"
-                            className="w-28 rounded border border-gray-200 px-2 py-1 text-sm text-gray-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                            className="w-28 rounded-[12px] border border-transparent bg-black/5 px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 dark:bg-white/5 dark:text-slate-100"
                             min="1"
                             max="300"
                           />
@@ -4310,7 +4326,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                               setManualBpm('')
                             }}
                             disabled={isUpdatingSelection || (!manualBpm && !bpmModalData.fullData?.bpmManual)}
-                            className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-600 hover:border-gray-300 hover:text-gray-800 disabled:text-gray-400 dark:border-slate-700 dark:text-slate-300"
+                            className="rounded-full px-3 py-2 text-[11px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-black/5 disabled:text-gray-400 dark:text-slate-300 dark:hover:text-white dark:hover:bg-white/10"
                           >
                             Save manual
                           </button>
@@ -4326,14 +4342,28 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 )}
               </section>
 
-              <section className="rounded-lg border border-gray-200 p-4 dark:border-slate-800">
-                <div className="text-[11px] uppercase tracking-[0.2em] text-gray-400 dark:text-slate-500">
+              <section>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400 dark:text-slate-500">
                   Key & Scale
                 </div>
-                <div className="mt-2 text-xl font-semibold text-gray-900 dark:text-slate-100">
+                <div className="mt-3 flex items-center gap-2 text-3xl font-semibold text-gray-900 dark:text-slate-100">
                   {bpmModalSummary.currentKey || bpmModalSummary.currentScale
                     ? `${bpmModalSummary.currentKey || ''} ${bpmModalSummary.currentScale || ''}`.trim()
                     : '—'}
+                  {(bpmModalSummary.currentKey || bpmModalSummary.currentScale) && (
+                    <svg
+                      className="h-5 w-5 text-emerald-500 dark:text-emerald-300"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M16.704 5.292a1 1 0 010 1.416l-7.1 7.1a1 1 0 01-1.416 0l-3.392-3.392a1 1 0 111.416-1.416l2.684 2.684 6.392-6.392a1 1 0 011.416 0z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  )}
                 </div>
                 <div className="mt-1 text-xs text-gray-500 dark:text-slate-400">
                   Algo: {bpmModalSummary.keySelectedLabel}
@@ -4345,13 +4375,13 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 </div>
 
                 {bpmModalSummary.keyCandidates.length > 0 ? (
-                  <div className="mt-4 space-y-2">
+                  <div className="mt-6 space-y-2">
                     {bpmModalSummary.keyCandidates.map((candidate) => {
                       const isSelected = bpmModalData.keySelected === candidate.id
                       return (
                         <div
                           key={candidate.id}
-                          className="flex items-center justify-between rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700 dark:border-slate-800 dark:text-slate-300"
+                          className="flex items-center justify-between rounded-[12px] px-3 py-2 text-sm text-gray-700 dark:text-slate-300"
                         >
                           <div>
                             <div className="text-[11px] uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">
@@ -4380,7 +4410,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                                 })
                               }
                               disabled={isUpdatingSelection}
-                              className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-600 hover:border-gray-300 hover:text-gray-800 disabled:text-gray-400 dark:border-slate-700 dark:text-slate-300"
+                              className="rounded-full px-3 py-1 text-[11px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-black/5 disabled:text-gray-400 dark:text-slate-300 dark:hover:text-white dark:hover:bg-white/10"
                             >
                               Use this
                             </button>
@@ -4396,15 +4426,15 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 )}
 
                 {isAdmin && (
-                  <div className="mt-4 rounded-md border border-dashed border-gray-200 px-3 py-3 dark:border-slate-800">
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">
+                  <div className="mt-6">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">
                       Manual override
                     </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
                       <select
                         value={manualKey || bpmModalData.fullData?.keyManual || ''}
                         onChange={(e) => setManualKey(e.target.value)}
-                        className="rounded border border-gray-200 px-2 py-1 text-sm text-gray-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                        className="rounded-[12px] border border-transparent bg-black/5 px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 dark:bg-white/5 dark:text-slate-100"
                       >
                         <option value="">Select Key</option>
                         {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].map(k => (
@@ -4414,7 +4444,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                       <select
                         value={manualScale || bpmModalData.fullData?.scaleManual || 'major'}
                         onChange={(e) => setManualScale(e.target.value)}
-                        className="rounded border border-gray-200 px-2 py-1 text-sm text-gray-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                        className="rounded-[12px] border border-transparent bg-black/5 px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 dark:bg-white/5 dark:text-slate-100"
                       >
                         <option value="major">Major</option>
                         <option value="minor">Minor</option>
@@ -4437,7 +4467,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                           setManualScale('major')
                         }}
                         disabled={isUpdatingSelection || (!manualKey && !bpmModalData.fullData?.keyManual)}
-                        className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-600 hover:border-gray-300 hover:text-gray-800 disabled:text-gray-400 dark:border-slate-700 dark:text-slate-300"
+                        className="rounded-full px-3 py-2 text-[11px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-black/5 disabled:text-gray-400 dark:text-slate-300 dark:hover:text-white dark:hover:bg-white/10"
                       >
                         Save manual
                       </button>
@@ -4451,29 +4481,50 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                 )}
               </section>
 
-              <section className="rounded-lg border border-gray-200 p-4 dark:border-slate-800">
-                <div className="text-[11px] uppercase tracking-[0.2em] text-gray-400 dark:text-slate-500">
+              <section>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400 dark:text-slate-500">
                   Recalculate
                 </div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                <div className="mt-4 inline-flex rounded-full border border-gray-200 bg-transparent p-1 dark:border-slate-800">
                   <button
-                    onClick={() => recalcTrackWithOptions(selectedBpmTrack)}
+                    onClick={() => {
+                      setRecalcMode('standard')
+                      recalcTrackWithOptions(selectedBpmTrack)
+                    }}
                     disabled={recalcStatus?.loading}
-                    className="rounded-full border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:border-gray-300 disabled:text-gray-400 dark:border-slate-700 dark:text-slate-200"
+                    className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
+                      recalcMode === 'standard'
+                        ? 'bg-black/5 text-gray-900 dark:bg-white/10 dark:text-white'
+                        : 'text-gray-600 hover:bg-black/5 hover:text-gray-900 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white'
+                    }`}
                   >
                     {recalcStatus?.loading ? 'Recalculating...' : 'Standard'}
                   </button>
                   <button
-                    onClick={() => recalcTrackWithOptions(selectedBpmTrack, { fallbackOverride: 'always' })}
+                    onClick={() => {
+                      setRecalcMode('force')
+                      recalcTrackWithOptions(selectedBpmTrack, { fallbackOverride: 'always' })
+                    }}
                     disabled={recalcStatus?.loading}
-                    className="rounded-full border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:border-gray-300 disabled:text-gray-400 dark:border-slate-700 dark:text-slate-200"
+                    className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
+                      recalcMode === 'force'
+                        ? 'bg-black/5 text-gray-900 dark:bg-white/10 dark:text-white'
+                        : 'text-gray-600 hover:bg-black/5 hover:text-gray-900 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white'
+                    }`}
                   >
                     Force fallback
                   </button>
                   <button
-                    onClick={() => recalcTrackWithOptions(selectedBpmTrack, { fallbackOverride: 'always' })}
+                    onClick={() => {
+                      setRecalcMode('fallback')
+                      recalcTrackWithOptions(selectedBpmTrack, { fallbackOverride: 'always' })
+                    }}
                     disabled={recalcStatus?.loading}
-                    className="rounded-full border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:border-gray-300 disabled:text-gray-400 dark:border-slate-700 dark:text-slate-200"
+                    className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
+                      recalcMode === 'fallback'
+                        ? 'bg-black/5 text-gray-900 dark:bg-white/10 dark:text-white'
+                        : 'text-gray-600 hover:bg-black/5 hover:text-gray-900 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white'
+                    }`}
                   >
                     Fallback only
                   </button>
@@ -4484,23 +4535,13 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               </section>
 
               {isAdmin && (
-                <section className="rounded-lg border border-gray-200 p-4 dark:border-slate-800">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-[11px] uppercase tracking-[0.2em] text-gray-400 dark:text-slate-500">
-                        Debug
-                      </div>
-                      <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
-                        Live logs appear as calculations stream.
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setShowBpmModalDebug(prev => !prev)}
-                      className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-600 hover:border-gray-300 dark:border-slate-700 dark:text-slate-300"
-                    >
-                      {showBpmModalDebug ? 'Hide' : 'Show'}
-                    </button>
-                  </div>
+                <section>
+                  <button
+                    onClick={() => setShowBpmModalDebug(prev => !prev)}
+                    className="text-xs font-semibold text-gray-500 hover:text-gray-900 dark:text-slate-400 dark:hover:text-white"
+                  >
+                    {showBpmModalDebug ? 'Hide Debug Logs' : 'View Debug Logs'}
+                  </button>
 
                   {showBpmModalDebug && (
                     <div className="mt-4 space-y-4 text-xs text-gray-600 dark:text-slate-300">
@@ -4513,7 +4554,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             id="modal-bpm-debug-level"
                             value={bpmDebugLevel}
                             onChange={(e) => setBpmDebugLevel(e.target.value)}
-                            className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                            className="w-full rounded-[12px] border border-transparent bg-black/5 px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 dark:bg-white/5 dark:text-slate-100"
                           >
                             <option value="minimal">Minimal</option>
                             <option value="normal">Normal</option>
@@ -4531,7 +4572,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                             step="0.01"
                             value={bpmConfidenceThreshold}
                             onChange={(e) => setBpmConfidenceThreshold(e.target.value)}
-                            className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                            className="w-full rounded-[12px] border border-transparent bg-black/5 px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 dark:bg-white/5 dark:text-slate-100"
                           />
                         </div>
                       </div>
@@ -4539,7 +4580,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         <div className="text-[11px] uppercase tracking-[0.2em] text-gray-400 dark:text-slate-500">
                           Live logs
                         </div>
-                        <pre className="mt-2 max-h-40 overflow-auto rounded-md border border-gray-200 bg-gray-50 p-3 text-[11px] text-gray-700 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-200">
+                        <pre className="mt-2 max-h-40 overflow-auto rounded-[12px] bg-black/5 p-3 text-[11px] text-gray-700 dark:bg-white/5 dark:text-slate-200">
                           {bpmModalData.fullData?.debugTxt || 'No live logs yet.'}
                         </pre>
                       </div>
@@ -4547,7 +4588,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                         <div className="text-[11px] uppercase tracking-[0.2em] text-gray-400 dark:text-slate-500">
                           Last payload
                         </div>
-                        <pre className="mt-2 max-h-40 overflow-auto rounded-md border border-gray-200 bg-gray-50 p-3 text-[11px] text-gray-700 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-200">
+                        <pre className="mt-2 max-h-40 overflow-auto rounded-[12px] bg-black/5 p-3 text-[11px] text-gray-700 dark:bg-white/5 dark:text-slate-200">
                           {bpmDebugInfo[bpmModalData.trackId]
                             ? JSON.stringify(bpmDebugInfo[bpmModalData.trackId], null, 2)
                             : 'No previous payloads yet.'}
@@ -4560,12 +4601,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
               {retryStatus && (
                 <div
-                  className={`rounded-md border px-3 py-2 text-xs ${
+                  className={`rounded-[12px] px-3 py-2 text-xs ${
                     retryStatus.loading
-                      ? 'border-blue-100 bg-blue-50 text-blue-700'
+                      ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-200'
                       : retryStatus.success
-                        ? 'border-green-100 bg-green-50 text-green-700'
-                        : 'border-red-100 bg-red-50 text-red-700'
+                        ? 'bg-green-50 text-green-700 dark:bg-emerald-500/10 dark:text-emerald-200'
+                        : 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-200'
                   }`}
                 >
                   {retryStatus.loading && 'Retrying...'}
@@ -4575,7 +4616,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
               )}
 
               {isUpdatingSelection && (
-                <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                <div className="rounded-[12px] bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:bg-blue-500/10 dark:text-blue-200">
                   Updating selection...
                 </div>
               )}
@@ -4584,7 +4625,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             <div className="mt-6 flex justify-end">
               <button
                 onClick={closeBpmModal}
-                className="rounded-full border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-700 hover:border-gray-300 dark:border-slate-700 dark:text-slate-200"
+                className="rounded-full bg-black/5 px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-black/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
               >
                 Close
               </button>
