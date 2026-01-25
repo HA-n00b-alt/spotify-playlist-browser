@@ -172,10 +172,22 @@ export function useAudioPlayer({
     }
   }
 
-  const handleTrackClick = async (track: Track, event?: MouseEvent) => {
-    if (event?.target instanceof HTMLElement) {
-      if (event.target.closest('a') || event.target.closest('button')) {
-        return
+  const handleTrackInteraction = async (
+    track: Track,
+    event?: MouseEvent<Element>,
+    options?: { preventDefault?: boolean; stopPropagation?: boolean }
+  ) => {
+    if (event) {
+      if (options?.preventDefault) {
+        event.preventDefault()
+      }
+      if (options?.stopPropagation) {
+        event.stopPropagation()
+      }
+      if (event.target instanceof HTMLElement) {
+        if (event.target.closest('a') || event.target.closest('button')) {
+          return
+        }
       }
     }
 
@@ -213,10 +225,12 @@ export function useAudioPlayer({
     }
   }
 
+  const handleTrackClick = async (track: Track, event?: MouseEvent) => {
+    await handleTrackInteraction(track, event)
+  }
+
   const handleTrackTitleClick = async (event: MouseEvent<Element>, track: Track) => {
-    event.preventDefault()
-    event.stopPropagation()
-    await handleTrackClick(track)
+    await handleTrackInteraction(track, event, { preventDefault: true, stopPropagation: true })
   }
 
   useEffect(() => {

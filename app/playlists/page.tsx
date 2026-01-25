@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { Suspense } from 'react'
 import { getPlaylistsWithMetadata } from '@/lib/playlists'
 import PlaylistsTable from './PlaylistsTable'
 import PageHeader from '../components/PageHeader'
@@ -40,7 +41,72 @@ interface Playlist {
   cached_at?: string | null
 }
 
-export default async function PlaylistsPage() {
+const playlistsFooter = (
+  <footer className="mt-auto py-6 sm:py-8 text-center text-xs sm:text-sm text-gray-500 border-t border-gray-200">
+    Created by{' '}
+    <a href="mailto:delman@delman.it" className="text-green-600 hover:text-green-700 hover:underline">
+      delman@delman.it
+    </a>
+    . Powered by{' '}
+    <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
+      Spotify
+    </a>
+    ,{' '}
+    <a href="https://muso.ai" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
+      Muso.ai
+    </a>{' '}
+    and{' '}
+    <a href="https://musicbrainz.org" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
+      MusicBrainz
+    </a>
+    .
+  </footer>
+)
+
+function PlaylistsTableSkeleton() {
+  return (
+    <div className="mt-6 space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="h-10 w-56 animate-pulse rounded-lg bg-gray-200" />
+        <div className="h-10 w-32 animate-pulse rounded-lg bg-gray-200" />
+      </div>
+      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+        <div className="divide-y divide-gray-200">
+          {Array.from({ length: 8 }).map((_, index) => (
+            <div key={index} className="flex items-center gap-4 px-4 py-3">
+              <div className="h-12 w-12 animate-pulse rounded bg-gray-200" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-2/3 animate-pulse rounded bg-gray-200" />
+                <div className="h-3 w-1/3 animate-pulse rounded bg-gray-200" />
+              </div>
+              <div className="h-4 w-16 animate-pulse rounded bg-gray-200" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PlaylistsPageFallback() {
+  return (
+    <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-transparent">
+      <div className="max-w-7xl mx-auto flex-1 w-full">
+        <PageHeader
+          subtitle=""
+          breadcrumbs={[
+            { label: 'Home', href: '/' },
+            { label: '[user] playlists' },
+          ]}
+        />
+        <PlaylistsTableSkeleton />
+      </div>
+      {playlistsFooter}
+    </div>
+  )
+}
+
+async function PlaylistsPageContent() {
   const cookieStore = await cookies()
   const hasAccessToken = Boolean(cookieStore.get('access_token')?.value)
   const hasRefreshToken = Boolean(cookieStore.get('refresh_token')?.value)
@@ -196,25 +262,7 @@ export default async function PlaylistsPage() {
           </div>
         </div>
         
-        <footer className="mt-auto py-6 sm:py-8 text-center text-xs sm:text-sm text-gray-500 border-t border-gray-200">
-          Created by{' '}
-          <a href="mailto:delman@delman.it" className="text-green-600 hover:text-green-700 hover:underline">
-            delman@delman.it
-          </a>
-          . Powered by{' '}
-          <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
-            Spotify
-          </a>
-          ,{' '}
-          <a href="https://muso.ai" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
-            Muso.ai
-          </a>{' '}
-          and{' '}
-          <a href="https://musicbrainz.org" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
-            MusicBrainz
-          </a>
-          .
-        </footer>
+        {playlistsFooter}
       </div>
     )
   }
@@ -287,25 +335,15 @@ export default async function PlaylistsPage() {
         )}
       </div>
       
-      <footer className="mt-auto py-6 sm:py-8 text-center text-xs sm:text-sm text-gray-500 border-t border-gray-200">
-        Created by{' '}
-        <a href="mailto:delman@delman.it" className="text-green-600 hover:text-green-700 hover:underline">
-          delman@delman.it
-        </a>
-        . Powered by{' '}
-        <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
-          Spotify
-        </a>
-        ,{' '}
-        <a href="https://muso.ai" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
-          Muso.ai
-        </a>{' '}
-        and{' '}
-        <a href="https://musicbrainz.org" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
-          MusicBrainz
-        </a>
-        .
-      </footer>
+      {playlistsFooter}
     </div>
+  )
+}
+
+export default function PlaylistsPage() {
+  return (
+    <Suspense fallback={<PlaylistsPageFallback />}>
+      <PlaylistsPageContent />
+    </Suspense>
   )
 }

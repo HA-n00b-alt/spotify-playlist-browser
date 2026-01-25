@@ -781,15 +781,124 @@ export function useBpmAnalysis(tracks: Track[]) {
     keyManual?: string | null
     scaleManual?: string | null
   }) => {
+    const trackId = payload.spotifyTrackId
+    const previousBpm = trackBpms[trackId]
+    const previousKey = trackKeys[trackId]
+    const previousScale = trackScales[trackId]
+    const previousFullData = bpmFullData[trackId]
+    const optimisticFullData: BpmFullDataEntry = {
+      ...(previousFullData || {}),
+      ...(payload.bpmSelected ? { bpmSelected: payload.bpmSelected } : {}),
+      ...(payload.keySelected ? { keySelected: payload.keySelected } : {}),
+      ...(payload.bpmManual !== undefined ? { bpmManual: payload.bpmManual } : {}),
+      ...(payload.keyManual !== undefined ? { keyManual: payload.keyManual } : {}),
+      ...(payload.scaleManual !== undefined ? { scaleManual: payload.scaleManual } : {}),
+    }
+    const nextBpmSelection = optimisticFullData.bpmSelected
+    const nextKeySelection = optimisticFullData.keySelected
+    const resolveBpmValue = (
+      selection: BpmFullDataEntry['bpmSelected'] | undefined,
+      fullData: BpmFullDataEntry
+    ) => {
+      if (!selection) return undefined
+      if (selection === 'manual') {
+        if (payload.bpmManual !== undefined) return payload.bpmManual
+        return fullData.bpmManual ?? null
+      }
+      if (selection === 'essentia') return fullData.bpmEssentia ?? null
+      if (selection === 'librosa') return fullData.bpmLibrosa ?? null
+      return undefined
+    }
+    const resolveKeyValue = (
+      selection: BpmFullDataEntry['keySelected'] | undefined,
+      fullData: BpmFullDataEntry
+    ) => {
+      if (!selection) return { key: undefined, scale: undefined }
+      if (selection === 'manual') {
+        const key = payload.keyManual !== undefined ? payload.keyManual : fullData.keyManual
+        const scale = payload.scaleManual !== undefined ? payload.scaleManual : fullData.scaleManual
+        return { key: key ?? null, scale: scale ?? null }
+      }
+      if (selection === 'essentia') {
+        return { key: fullData.keyEssentia ?? null, scale: fullData.scaleEssentia ?? null }
+      }
+      if (selection === 'librosa') {
+        return { key: fullData.keyLibrosa ?? null, scale: fullData.scaleLibrosa ?? null }
+      }
+      return { key: undefined, scale: undefined }
+    }
+    const nextBpmValue = resolveBpmValue(nextBpmSelection, optimisticFullData)
+    const { key: nextKeyValue, scale: nextScaleValue } = resolveKeyValue(nextKeySelection, optimisticFullData)
+    const shouldUpdateBpm = payload.bpmSelected !== undefined || payload.bpmManual !== undefined
+    const shouldUpdateKey = payload.keySelected !== undefined || payload.keyManual !== undefined || payload.scaleManual !== undefined
+    const shouldUpdateFullData = shouldUpdateBpm || shouldUpdateKey
+
     setState('isUpdatingSelection', true)
+    if (shouldUpdateBpm && nextBpmValue !== undefined) {
+      setState('trackBpms', (prev) => ({ ...prev, [trackId]: nextBpmValue }))
+    }
+    if (shouldUpdateKey && nextKeyValue !== undefined) {
+      setState('trackKeys', (prev) => ({ ...prev, [trackId]: nextKeyValue }))
+    }
+    if (shouldUpdateKey && nextScaleValue !== undefined) {
+      setState('trackScales', (prev) => ({ ...prev, [trackId]: nextScaleValue }))
+    }
+    if (shouldUpdateFullData) {
+      setState('bpmFullData', (prev) => ({ ...prev, [trackId]: optimisticFullData }))
+    }
     try {
       const res = await fetch('/api/bpm/update-selection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
-      if (res.ok) {
-        await fetchBpmsBatch()
+      if (!res.ok) {
+        throw new Error('Failed to update BPM selection')
+      }
+      await fetchBpmsBatch()
+    } catch (error) {
+      if (shouldUpdateBpm) {
+        setState('trackBpms', (prev) => {
+          const next = { ...prev }
+          if (previousBpm === undefined) {
+            delete next[trackId]
+          } else {
+            next[trackId] = previousBpm
+          }
+          return next
+        })
+      }
+      if (shouldUpdateKey) {
+        setState('trackKeys', (prev) => {
+          const next = { ...prev }
+          if (previousKey === undefined) {
+            delete next[trackId]
+          } else {
+            next[trackId] = previousKey
+          }
+          return next
+        })
+        setState('trackScales', (prev) => {
+          const next = { ...prev }
+          if (previousScale === undefined) {
+            delete next[trackId]
+          } else {
+            next[trackId] = previousScale
+          }
+          return next
+        })
+      }
+      console.error('[BPM Client] Update selection error:', error)
+      if (shouldUpdateFullData) {
+        setState('bpmFullData', (prev) => {
+          const next = { ...prev }
+          if (previousFullData === undefined) {
+            delete next[trackId]
+          } else {
+            next[trackId] = previousFullData
+          }
+          return next
+        })
       }
     } finally {
       setState('isUpdatingSelection', false)
