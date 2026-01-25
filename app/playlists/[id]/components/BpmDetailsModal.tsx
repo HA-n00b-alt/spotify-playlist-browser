@@ -170,11 +170,6 @@ export default function BpmDetailsModal({
             <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">
               {selectedBpmTrack.name} · {(selectedBpmTrack.artists || []).map(a => a.name).filter(Boolean).join(', ') || 'Unknown artist'}
             </p>
-            {bpmStreamStatus[bpmModalData.trackId] === 'partial' && (
-              <div className="mt-2 inline-flex items-center text-[11px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-200">
-                Partial results streaming...
-              </div>
-            )}
           </div>
           <button
             onClick={onClose}
@@ -187,31 +182,29 @@ export default function BpmDetailsModal({
         <div className="mt-6 space-y-12">
           <div className="grid gap-12 lg:grid-cols-2">
           <section
-            className={`relative rounded-[12px] bg-slate-900 px-4 py-4 text-white ${
+            className={`relative rounded-[12px] bg-gray-100 dark:bg-slate-900 px-4 py-4 text-gray-900 dark:text-white ${
               typeof bpmModalSummary.currentBpm === 'number' ? 'pl-5' : ''
             }`}
           >
             {typeof bpmModalSummary.currentBpm === 'number' ? (
-              <span className="absolute left-0 top-2 bottom-2 w-[2px] bg-emerald-400" />
+              <span className="absolute left-0 top-2 bottom-2 w-[2px] bg-emerald-500 dark:bg-emerald-400" />
             ) : null}
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <div className="text-[10px] font-bold uppercase tracking-[0.05em] text-white/50">
-                  BPM
-                </div>
-                <div className="mt-3 flex items-center gap-2 text-4xl font-bold text-white">
-                  {typeof bpmModalSummary.currentBpm === 'number'
-                    ? `${Math.round(bpmModalSummary.currentBpm)} BPM`
-                    : '—'}
-                </div>
-                <div className="mt-1 text-[11px] text-white/50">
-                  Algo: {bpmModalSummary.bpmSelectedLabel}
-                  {' · '}
-                  Confidence:{' '}
-                  {bpmModalSummary.bpmSelectedConfidence != null
-                    ? `${Math.round(bpmModalSummary.bpmSelectedConfidence * 100)}%`
-                    : 'n/a'}
-                </div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.05em] text-gray-500 dark:text-white/50">
+              BPM
+            </div>
+            <div className="mt-3 flex items-center gap-2 text-4xl font-bold text-gray-900 dark:text-white">
+              {typeof bpmModalSummary.currentBpm === 'number'
+                ? `${Math.round(bpmModalSummary.currentBpm)} BPM`
+                : '—'}
+            </div>
+            <div className="mt-1 flex items-center justify-between gap-4">
+              <div className="text-[11px] text-gray-600 dark:text-white/50">
+                Algo: {bpmModalSummary.bpmSelectedLabel}
+                {' · '}
+                Confidence:{' '}
+                {bpmModalSummary.bpmSelectedConfidence != null
+                  ? `${Math.round(bpmModalSummary.bpmSelectedConfidence * 100)}%`
+                  : 'n/a'}
               </div>
               {isAdmin && typeof bpmModalSummary.currentBpm === 'number' && (
                 <div className="flex flex-wrap gap-2 text-xs">
@@ -227,7 +220,7 @@ export default function BpmDetailsModal({
                       })
                     }}
                     disabled={isUpdatingSelection}
-                    className="rounded-full px-3 py-1 text-white/60 hover:text-white hover:bg-white/10 disabled:text-white/30"
+                    className="rounded-full px-3 py-1 text-gray-600 hover:text-gray-900 hover:bg-gray-200 disabled:text-gray-400 dark:text-white/60 dark:hover:text-white dark:hover:bg-white/10 dark:disabled:text-white/30"
                   >
                     Store Half
                   </button>
@@ -243,7 +236,7 @@ export default function BpmDetailsModal({
                       })
                     }}
                     disabled={isUpdatingSelection}
-                    className="rounded-full px-3 py-1 text-white/60 hover:text-white hover:bg-white/10 disabled:text-white/30"
+                    className="rounded-full px-3 py-1 text-gray-600 hover:text-gray-900 hover:bg-gray-200 disabled:text-gray-400 dark:text-white/60 dark:hover:text-white dark:hover:bg-white/10 dark:disabled:text-white/30"
                   >
                     Store Double
                   </button>
@@ -252,14 +245,14 @@ export default function BpmDetailsModal({
             </div>
 
             {!bpmModalData.hasEssentiaBpm && !bpmModalData.hasLibrosaBpm && bpmModalData.currentBpm == null ? (
-              <div className="mt-4 space-y-3 text-sm text-white/70">
+              <div className="mt-4 space-y-3 text-sm text-gray-700 dark:text-white/70">
                 <p>BPM data is not available yet.</p>
                 {bpmDetails[bpmModalData.trackId]?.error ? (
-                  <div className="text-xs text-white/50">
+                  <div className="text-xs text-gray-600 dark:text-white/50">
                     Reason: {bpmDetails[bpmModalData.trackId].error}
                   </div>
                 ) : (
-                  <div className="text-xs text-white/50">
+                  <div className="text-xs text-gray-600 dark:text-white/50">
                     It may still be processing or no preview audio is available.
                   </div>
                 )}
@@ -271,25 +264,25 @@ export default function BpmDetailsModal({
                   </div>
                 )}
                 {isrcMismatchDetails && (
-                  <div className="rounded-[12px] bg-black/20 px-3 py-2 text-xs text-white/70">
-                    <div className="font-semibold text-white">Compare audio previews</div>
+                  <div className="rounded-[12px] bg-gray-200 dark:bg-black/20 px-3 py-2 text-xs text-gray-700 dark:text-white/70">
+                    <div className="font-semibold text-gray-900 dark:text-white">Compare audio previews</div>
                     <div className="mt-2 space-y-2">
                       <div>
-                        <div className="text-[11px] uppercase tracking-[0.08em] text-white/50">iTunes preview</div>
+                        <div className="text-[11px] uppercase tracking-[0.08em] text-gray-600 dark:text-white/50">iTunes preview</div>
                         {mismatchPreviewUrls.itunes ? (
                           <audio controls src={mismatchPreviewUrls.itunes} className="mt-1 w-full" />
                         ) : (
-                          <div className="text-xs text-white/50">No iTunes preview URL available.</div>
+                          <div className="text-xs text-gray-600 dark:text-white/50">No iTunes preview URL available.</div>
                         )}
                       </div>
                       <div>
-                        <div className="text-[11px] uppercase tracking-[0.08em] text-white/50">Spotify preview</div>
+                        <div className="text-[11px] uppercase tracking-[0.08em] text-gray-600 dark:text-white/50">Spotify preview</div>
                         {mismatchPreviewUrls.loading ? (
-                          <div className="text-xs text-white/50">Loading Spotify preview…</div>
+                          <div className="text-xs text-gray-600 dark:text-white/50">Loading Spotify preview…</div>
                         ) : mismatchPreviewUrls.spotify ? (
                           <audio controls src={mismatchPreviewUrls.spotify} className="mt-1 w-full" />
                         ) : (
-                          <div className="text-xs text-white/50">No Spotify preview URL available.</div>
+                          <div className="text-xs text-gray-600 dark:text-white/50">No Spotify preview URL available.</div>
                         )}
                       </div>
                     </div>
@@ -313,7 +306,7 @@ export default function BpmDetailsModal({
                   </div>
                 )}
                 {loadingBpmFields.has(bpmModalData.trackId) && trackBpms[bpmModalData.trackId] == null && (
-                  <div className="text-xs text-white/50">
+                  <div className="text-xs text-gray-600 dark:text-white/50">
                     Waiting for first partial result...
                   </div>
                 )}
@@ -321,7 +314,7 @@ export default function BpmDetailsModal({
                   <button
                     onClick={onRetryBpm}
                     disabled={retryStatus?.loading}
-                    className="rounded-full border border-blue-200 px-4 py-2 text-xs font-semibold text-blue-700 hover:border-blue-300 disabled:text-blue-300 dark:border-emerald-500/40 dark:text-emerald-200"
+                    className="rounded-full border border-blue-300 px-4 py-2 text-xs font-semibold text-blue-700 hover:border-blue-400 hover:bg-blue-50 disabled:text-blue-300 dark:border-emerald-500/40 dark:text-emerald-200 dark:hover:bg-emerald-500/10"
                   >
                     {retryStatus?.loading ? 'Retrying...' : 'Retry'}
                   </button>
@@ -335,19 +328,19 @@ export default function BpmDetailsModal({
                     return (
                       <div
                         key={candidate.id}
-                        className="flex items-center justify-between rounded-[12px] bg-black/20 px-3 py-2 text-sm text-white/80"
+                        className="flex items-center justify-between rounded-[12px] bg-gray-200 dark:bg-black/20 px-3 py-2 text-sm text-gray-800 dark:text-white/80"
                       >
                         <div>
-                          <div className="text-[10px] font-bold uppercase tracking-[0.05em] text-white/50">
+                          <div className="text-[10px] font-bold uppercase tracking-[0.05em] text-gray-600 dark:text-white/50">
                             {candidate.label}
                           </div>
-                          <div className="text-sm font-semibold text-white">
+                          <div className="text-sm font-semibold text-gray-900 dark:text-white">
                             {Math.round(candidate.value)} BPM
                             {typeof candidate.raw === 'number' && candidate.raw !== candidate.value ? (
-                              <span className="ml-2 text-xs text-white/40">raw {candidate.raw.toFixed(1)}</span>
+                              <span className="ml-2 text-xs text-gray-500 dark:text-white/40">raw {candidate.raw.toFixed(1)}</span>
                             ) : null}
                           </div>
-                          <div className="text-[11px] text-white/50">
+                          <div className="text-[11px] text-gray-600 dark:text-white/50">
                             Confidence:{' '}
                             {candidate.confidence != null
                               ? `${Math.round(candidate.confidence * 100)}%`
@@ -363,7 +356,7 @@ export default function BpmDetailsModal({
                               })
                             }
                             disabled={isUpdatingSelection}
-                            className="rounded-full px-3 py-1 text-[11px] font-semibold text-white/60 hover:text-white hover:bg-white/10 disabled:text-white/30"
+                            className="rounded-full px-3 py-1 text-[11px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-300 disabled:text-gray-400 dark:text-white/60 dark:hover:text-white dark:hover:bg-white/10 dark:disabled:text-white/30"
                           >
                             Use this
                           </button>
@@ -375,7 +368,7 @@ export default function BpmDetailsModal({
 
                 {isAdmin && (
                   <div className="mt-6">
-                    <div className="text-[10px] font-bold uppercase tracking-[0.05em] text-white/50">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.05em] text-gray-600 dark:text-white/50">
                       Manual override
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -384,7 +377,7 @@ export default function BpmDetailsModal({
                         value={manualBpm || bpmModalData.fullData?.bpmManual || ''}
                         onChange={(e) => onSetManualBpm(e.target.value)}
                         placeholder="Enter BPM"
-                        className="w-28 rounded-[4px] bg-black/20 px-3 py-2 text-sm text-white/90 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                        className="w-28 rounded-[4px] bg-gray-200 dark:bg-black/20 px-3 py-2 text-sm text-gray-900 dark:text-white/90 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
                         min="1"
                         max="300"
                       />
@@ -404,13 +397,13 @@ export default function BpmDetailsModal({
                             onSetManualBpm('')
                           }}
                           disabled={isUpdatingSelection}
-                          className="text-[11px] font-semibold text-emerald-300 hover:text-emerald-200 disabled:text-emerald-300/40"
+                          className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 disabled:text-emerald-300 dark:text-emerald-300 dark:hover:text-emerald-200 dark:disabled:text-emerald-300/40"
                         >
                           Save
                         </button>
                       ) : null}
                       {bpmModalData.bpmSelected === 'manual' && bpmModalData.fullData?.bpmManual != null && (
-                        <span className="text-[11px] text-white/40">
+                        <span className="text-[11px] text-gray-500 dark:text-white/40">
                           Selected: {Math.round(bpmModalData.fullData.bpmManual)}
                         </span>
                       )}
@@ -422,28 +415,30 @@ export default function BpmDetailsModal({
           </section>
 
           <section
-            className={`relative rounded-[12px] bg-slate-900 px-4 py-4 text-white ${
+            className={`relative rounded-[12px] bg-gray-100 dark:bg-slate-900 px-4 py-4 text-gray-900 dark:text-white ${
               bpmModalSummary.currentKey || bpmModalSummary.currentScale ? 'pl-5' : ''
             }`}
           >
             {bpmModalSummary.currentKey || bpmModalSummary.currentScale ? (
-              <span className="absolute left-0 top-2 bottom-2 w-[2px] bg-emerald-400" />
+              <span className="absolute left-0 top-2 bottom-2 w-[2px] bg-emerald-500 dark:bg-emerald-400" />
             ) : null}
-            <div className="text-[10px] font-bold uppercase tracking-[0.05em] text-white/50">
+            <div className="text-[10px] font-bold uppercase tracking-[0.05em] text-gray-500 dark:text-white/50">
               Key & scale
             </div>
-            <div className="mt-3 flex items-center gap-2 text-4xl font-bold text-white">
+            <div className="mt-3 flex items-center gap-2 text-4xl font-bold text-gray-900 dark:text-white">
               {bpmModalSummary.currentKey || bpmModalSummary.currentScale
                 ? `${bpmModalSummary.currentKey || ''} ${bpmModalSummary.currentScale || ''}`.trim()
                 : '—'}
             </div>
-            <div className="mt-1 text-[11px] text-white/50">
-              Algo: {bpmModalSummary.keySelectedLabel}
-              {' · '}
-              Confidence:{' '}
-              {bpmModalSummary.keySelectedConfidence != null
-                ? `${Math.round(bpmModalSummary.keySelectedConfidence * 100)}%`
-                : 'n/a'}
+            <div className="mt-1 flex items-center justify-between gap-4">
+              <div className="text-[11px] text-gray-600 dark:text-white/50">
+                Algo: {bpmModalSummary.keySelectedLabel}
+                {' · '}
+                Confidence:{' '}
+                {bpmModalSummary.keySelectedConfidence != null
+                  ? `${Math.round(bpmModalSummary.keySelectedConfidence * 100)}%`
+                  : 'n/a'}
+              </div>
             </div>
 
             {bpmModalSummary.keyCandidates.length > 0 ? (
@@ -453,16 +448,16 @@ export default function BpmDetailsModal({
                   return (
                     <div
                       key={candidate.id}
-                      className="flex items-center justify-between rounded-[12px] bg-black/20 px-3 py-2 text-sm text-white/80"
+                      className="flex items-center justify-between rounded-[12px] bg-gray-200 dark:bg-black/20 px-3 py-2 text-sm text-gray-800 dark:text-white/80"
                     >
                       <div>
-                        <div className="text-[10px] font-bold uppercase tracking-[0.05em] text-white/50">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.05em] text-gray-600 dark:text-white/50">
                           {candidate.label}
                         </div>
-                        <div className="text-sm font-semibold text-white">
+                        <div className="text-sm font-semibold text-gray-900 dark:text-white">
                           {candidate.key || '—'} {candidate.scale || ''}
                         </div>
-                        <div className="text-[11px] text-white/50">
+                        <div className="text-[11px] text-gray-600 dark:text-white/50">
                           Confidence:{' '}
                           {candidate.confidence != null
                             ? `${Math.round(candidate.confidence * 100)}%`
@@ -478,7 +473,7 @@ export default function BpmDetailsModal({
                             })
                           }
                           disabled={isUpdatingSelection}
-                          className="rounded-full px-3 py-1 text-[11px] font-semibold text-white/60 hover:text-white hover:bg-white/10 disabled:text-white/30"
+                          className="rounded-full px-3 py-1 text-[11px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-300 disabled:text-gray-400 dark:text-white/60 dark:hover:text-white dark:hover:bg-white/10 dark:disabled:text-white/30"
                         >
                           Use this
                         </button>
@@ -488,21 +483,21 @@ export default function BpmDetailsModal({
                 })}
               </div>
             ) : (
-              <div className="mt-3 text-sm text-white/50">
+              <div className="mt-3 text-sm text-gray-700 dark:text-white/50">
                 Key data is not available yet.
               </div>
             )}
 
             {isAdmin && (
               <div className="mt-6">
-                <div className="text-[10px] font-bold uppercase tracking-[0.05em] text-white/50">
+                <div className="text-[10px] font-bold uppercase tracking-[0.05em] text-gray-600 dark:text-white/50">
                   Manual override
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <select
                     value={manualKey || bpmModalData.fullData?.keyManual || ''}
                     onChange={(e) => onSetManualKey(e.target.value)}
-                    className="rounded-[4px] bg-black/20 px-3 py-2 text-sm text-white/90 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                    className="rounded-[4px] bg-gray-200 dark:bg-black/20 px-3 py-2 text-sm text-gray-900 dark:text-white/90 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
                   >
                     <option value="">Select Key</option>
                     {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].map(k => (
@@ -512,7 +507,7 @@ export default function BpmDetailsModal({
                   <select
                     value={manualScale || bpmModalData.fullData?.scaleManual || 'major'}
                     onChange={(e) => onSetManualScale(e.target.value)}
-                    className="rounded-[4px] bg-black/20 px-3 py-2 text-sm text-white/90 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                    className="rounded-[4px] bg-gray-200 dark:bg-black/20 px-3 py-2 text-sm text-gray-900 dark:text-white/90 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
                   >
                     <option value="major">Major</option>
                     <option value="minor">Minor</option>
@@ -537,13 +532,13 @@ export default function BpmDetailsModal({
                         onSetManualScale('major')
                       }}
                       disabled={isUpdatingSelection}
-                      className="text-[11px] font-semibold text-emerald-300 hover:text-emerald-200 disabled:text-emerald-300/40"
+                      className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 disabled:text-emerald-300 dark:text-emerald-300 dark:hover:text-emerald-200 dark:disabled:text-emerald-300/40"
                     >
                       Save
                     </button>
                   ) : null}
                   {bpmModalData.keySelected === 'manual' && bpmModalData.fullData?.keyManual && (
-                    <span className="text-[11px] text-white/40">
+                    <span className="text-[11px] text-gray-500 dark:text-white/40">
                       Selected: {bpmModalData.fullData.keyManual} {bpmModalData.fullData.scaleManual}
                     </span>
                   )}

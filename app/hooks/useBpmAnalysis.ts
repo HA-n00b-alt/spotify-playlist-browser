@@ -411,11 +411,12 @@ export function useBpmAnalysis(tracks: Track[]) {
           }
         }
 
-        setState('bpmStreamStatus', (prev) => ({ ...prev, [trackId]: 'partial' }))
+        const isFinal = data.status === 'final' || (!data.status && (data.bpm_essentia != null || data.bpm_librosa != null))
 
-        if (data.final) {
+        setState('bpmStreamStatus', (prev) => ({ ...prev, [trackId]: isFinal ? 'final' : 'partial' }))
+
+        if (isFinal) {
           finalizedTracks.add(trackId)
-          setState('bpmStreamStatus', (prev) => ({ ...prev, [trackId]: 'final' }))
           setState('loadingBpmFields', (prev) => {
             const next = new Set(prev)
             next.delete(trackId)
@@ -1017,12 +1018,11 @@ export function useBpmAnalysis(tracks: Track[]) {
     const tracksProcessedFromSearch = tracks.filter(t =>
       tracksNeedingCalc.has(t.id) && !loadingTrackIds.has(t.id)
     ).length
-    const tracksRemainingToSearch = Math.max(0, tracksToSearch - tracksProcessedFromSearch)
+    const tracksRemainingToSearch = tracksLoading + Math.max(0, tracksToSearch - tracksProcessedFromSearch - tracksLoading)
     const tracksWithBpm = tracks.filter(t => trackBpms[t.id] != null && trackBpms[t.id] !== undefined).length
     const tracksWithNa = tracks.filter(t => trackBpms[t.id] === null).length
-    const isProcessing = tracksLoading > 0 || tracksRemainingToSearch > 0
-    const hasStartedProcessing = tracksProcessedFromSearch > 0 || tracksLoading > 0
-    const shouldShowProgress = tracksToSearch > 0 && (isProcessing || hasStartedProcessing || bpmProcessingStartTime !== null)
+    const isProcessing = tracksLoading > 0
+    const shouldShowProgress = isProcessing && tracksRemainingToSearch > 0
 
     return {
       totalTracks,
@@ -1034,7 +1034,7 @@ export function useBpmAnalysis(tracks: Track[]) {
       tracksWithNa,
       shouldShowProgress,
     }
-  }, [tracks, tracksNeedingCalc, loadingTrackIds, trackBpms, bpmProcessingStartTime])
+  }, [tracks, tracksNeedingCalc, loadingTrackIds, trackBpms])
 
   useEffect(() => {
     if (bpmSummary) {

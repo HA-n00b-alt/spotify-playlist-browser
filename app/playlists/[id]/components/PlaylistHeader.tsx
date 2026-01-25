@@ -205,10 +205,10 @@ export default function PlaylistHeader({
           </svg>
           <span>
             {bpmSummary.shouldShowProgress
-              ? `BPM processing (${bpmSummary.tracksRemainingToSearch} remaining).`
+              ? `BPM processing (${bpmSummary.tracksRemainingToSearch} remaining)`
               : bpmSummary.tracksWithNa > 0
-                ? `${bpmSummary.tracksWithNa} of ${bpmSummary.totalTracks} tracks missing BPM.`
-                : `All ${bpmSummary.totalTracks} tracks have BPM information.`}
+                ? `${bpmSummary.tracksWithNa} of ${bpmSummary.totalTracks} tracks missing BPM data`
+                : `All ${bpmSummary.totalTracks} tracks successfully processed`}
           </span>
           <button
             type="button"

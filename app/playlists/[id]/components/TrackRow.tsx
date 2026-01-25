@@ -186,9 +186,6 @@ export default function TrackRow({
               title={isAdmin ? 'Click for BPM details' : getPreviewTooltip(track.id)}
             >
               {Math.round(trackBpms[track.id]!)}
-              {bpmStreamStatus[track.id] === 'partial' && (
-                <span className="ml-1 text-[10px] text-blue-600 dark:text-emerald-300">partial</span>
-              )}
             </button>
           ) : (tracksNeedingBpm.has(track.id) || bpmStreamStatus[track.id] === 'error') ? (
             <button
