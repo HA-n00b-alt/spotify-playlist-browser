@@ -817,7 +817,7 @@ export function useBpmAnalysis(tracks: Track[]) {
       setState('bpmProcessingStartTime', Date.now())
       fetchBpmsBatch()
     }
-  }, [tracks.length])
+  }, [tracks.length, trackBpms, fetchBpmsBatch, setState])
 
   useEffect(() => {
     if (tracks.length > 0 && bpmProcessingStartTime && !bpmProcessingEndTime) {
@@ -830,7 +830,7 @@ export function useBpmAnalysis(tracks: Track[]) {
         setState('bpmProcessingEndTime', Date.now())
       }
     }
-  }, [trackBpms, loadingTrackIds, tracks.length, bpmProcessingStartTime, bpmProcessingEndTime])
+  }, [trackBpms, loadingTrackIds, tracks, bpmProcessingStartTime, bpmProcessingEndTime, setState])
 
   useEffect(() => {
     if (showBpmModal && selectedBpmTrack) {
@@ -849,11 +849,11 @@ export function useBpmAnalysis(tracks: Track[]) {
       setState('manualKey', '')
       setState('manualScale', 'major')
     }
-  }, [showBpmModal, selectedBpmTrack, bpmFullData])
+  }, [showBpmModal, selectedBpmTrack, bpmFullData, setState])
 
   useEffect(() => {
     setState('musoPreviewStatus', null)
-  }, [showBpmModal, selectedBpmTrack])
+  }, [showBpmModal, selectedBpmTrack, setState])
 
   useEffect(() => {
     return () => {
@@ -893,7 +893,7 @@ export function useBpmAnalysis(tracks: Track[]) {
     if (bpmSummary) {
       setState('showBpmNotice', true)
     }
-  }, [bpmSummary])
+  }, [bpmSummary, setState])
 
   return {
     state,

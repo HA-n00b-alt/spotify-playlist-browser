@@ -192,14 +192,14 @@ export function useAudioPlayer({
   }
 
   useEffect(() => {
+    const cache = audioCache.current
     const handleBeforeUnload = () => {
-      const currentCache = audioCache.current
-      currentCache.forEach((blobUrl) => {
+      cache.forEach((blobUrl) => {
         if (blobUrl.startsWith('blob:')) {
           URL.revokeObjectURL(blobUrl)
         }
       })
-      currentCache.clear()
+      cache.clear()
     }
 
     const handlePageHide = () => {
@@ -219,12 +219,12 @@ export function useAudioPlayer({
         audioRef.current.pause()
         audioRef.current = null
       }
-      audioCache.current.forEach((blobUrl) => {
+      cache.forEach((blobUrl) => {
         if (blobUrl.startsWith('blob:')) {
           URL.revokeObjectURL(blobUrl)
         }
       })
-      audioCache.current.clear()
+      cache.clear()
       window.removeEventListener('beforeunload', handleBeforeUnload)
       window.removeEventListener('pagehide', handlePageHide)
     }

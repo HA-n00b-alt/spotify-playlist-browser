@@ -468,7 +468,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [setCountryCode])
 
   useEffect(() => {
     fetch('/api/auth/status')
@@ -1226,7 +1226,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       }
     }
     void fetchSpotifyPreview()
-  }, [showBpmModal, selectedBpmTrack, isrcMismatchDetails, mismatchPreviewUrls.spotify, mismatchPreviewUrls.loading])
+  }, [showBpmModal, selectedBpmTrack, isrcMismatchDetails, mismatchPreviewUrls.spotify, mismatchPreviewUrls.loading, setMismatchPreviewUrls])
 
   const bpmAdminSettings = isAdmin ? (
     <>

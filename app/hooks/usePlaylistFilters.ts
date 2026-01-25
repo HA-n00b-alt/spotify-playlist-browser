@@ -19,11 +19,13 @@ type FiltersState = {
   includeHalfDoubleBpm: boolean
 }
 
-type SetAction<State, K extends keyof State = keyof State> = {
-  type: 'set'
-  key: K
-  value: State[K] | ((prev: State[K]) => State[K])
-}
+type SetAction<State> = {
+  [K in keyof State]: {
+    type: 'set'
+    key: K
+    value: State[K] | ((prev: State[K]) => State[K])
+  }
+}[keyof State]
 
 const filtersReducer = (state: FiltersState, action: SetAction<FiltersState>): FiltersState => {
   if (action.type !== 'set') return state
