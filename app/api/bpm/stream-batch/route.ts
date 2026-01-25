@@ -20,7 +20,15 @@ export const POST = withApiLogging(async (request: Request) => {
       ? Math.min(Math.max(rawMaxConfidence, 0), 1)
       : 0.65
     const rawFallbackOverride = typeof body.fallback_override === 'string' ? body.fallback_override : undefined
-    const allowedFallbackOverrides = new Set(['never', 'always', 'bpm_only', 'key_only'])
+    const allowedFallbackOverrides = new Set([
+      'never',
+      'always',
+      'bpm_only',
+      'key_only',
+      'fallback_only',
+      'fallback_only_bpm',
+      'fallback_only_key',
+    ])
     const fallbackOverride = rawFallbackOverride && allowedFallbackOverrides.has(rawFallbackOverride)
       ? rawFallbackOverride
       : undefined

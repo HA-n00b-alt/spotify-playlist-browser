@@ -4,7 +4,15 @@ import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react'
 import type { SpotifyTrack, PreviewUrlEntry } from '@/lib/types'
 
 type Track = SpotifyTrack
-export type BpmFallbackOverride = 'never' | 'always' | 'bpm_only' | 'key_only' | 'default'
+export type BpmFallbackOverride =
+  | 'never'
+  | 'always'
+  | 'bpm_only'
+  | 'key_only'
+  | 'fallback_only'
+  | 'fallback_only_bpm'
+  | 'fallback_only_key'
+  | 'default'
 
 type BpmFullDataEntry = {
   bpmEssentia?: number | null
@@ -50,7 +58,7 @@ export type BpmState = {
   bpmFullData: Record<string, BpmFullDataEntry>
   showBpmModal: boolean
   showBpmModalDebug: boolean
-  recalcMode: 'standard' | 'force' | 'fallback'
+  recalcMode: BpmFallbackOverride
   selectedBpmTrack: Track | null
   bpmProcessingStartTime: number | null
   bpmProcessingEndTime: number | null
@@ -113,7 +121,7 @@ const createInitialBpmState = (): BpmState => ({
   bpmFullData: {},
   showBpmModal: false,
   showBpmModalDebug: false,
-  recalcMode: 'standard',
+  recalcMode: 'default',
   selectedBpmTrack: null,
   bpmProcessingStartTime: null,
   bpmProcessingEndTime: null,
@@ -486,6 +494,13 @@ export function useBpmAnalysis(tracks: Track[]) {
   }, [getPreviewUrlFromMeta, selectBestBpm, selectBestKey, setState])
 
   const applyBatchResults = useCallback((results: Record<string, any>) => {
+    const toNumber = (value: unknown): number | null => {
+      if (value === null || value === undefined || value === '') {
+        return null
+      }
+      const parsed = typeof value === 'number' ? value : Number(value)
+      return Number.isFinite(parsed) ? parsed : null
+    }
     const newBpms: Record<string, number | null> = {}
     const newKeys: Record<string, string | null> = {}
     const newScales: Record<string, string | null> = {}
@@ -503,23 +518,43 @@ export function useBpmAnalysis(tracks: Track[]) {
         tracksToAdd.add(trackId)
       }
 
-      if (r.bpmEssentia || r.bpmLibrosa || r.keyEssentia || r.keyLibrosa || r.scaleEssentia || r.scaleLibrosa) {
+      const bpmEssentia = toNumber(r.bpmEssentia)
+      const bpmRawEssentia = toNumber(r.bpmRawEssentia)
+      const bpmConfidenceEssentia = toNumber(r.bpmConfidenceEssentia)
+      const bpmLibrosa = toNumber(r.bpmLibrosa)
+      const bpmRawLibrosa = toNumber(r.bpmRawLibrosa)
+      const bpmConfidenceLibrosa = toNumber(r.bpmConfidenceLibrosa)
+      const keyscaleConfidenceEssentia = toNumber(r.keyscaleConfidenceEssentia)
+      const keyscaleConfidenceLibrosa = toNumber(r.keyscaleConfidenceLibrosa)
+      const bpmManual = toNumber(r.bpmManual)
+      const hasFullData =
+        bpmEssentia != null
+        || bpmLibrosa != null
+        || r.keyEssentia != null
+        || r.keyLibrosa != null
+        || r.scaleEssentia != null
+        || r.scaleLibrosa != null
+        || bpmManual != null
+        || r.keyManual != null
+        || r.scaleManual != null
+
+      if (hasFullData) {
         newFullData[trackId] = {
-          bpmEssentia: r.bpmEssentia,
-          bpmRawEssentia: r.bpmRawEssentia,
-          bpmConfidenceEssentia: r.bpmConfidenceEssentia,
-          bpmLibrosa: r.bpmLibrosa,
-          bpmRawLibrosa: r.bpmRawLibrosa,
-          bpmConfidenceLibrosa: r.bpmConfidenceLibrosa,
+          bpmEssentia,
+          bpmRawEssentia,
+          bpmConfidenceEssentia,
+          bpmLibrosa,
+          bpmRawLibrosa,
+          bpmConfidenceLibrosa,
           keyEssentia: r.keyEssentia,
           scaleEssentia: r.scaleEssentia,
-          keyscaleConfidenceEssentia: r.keyscaleConfidenceEssentia,
+          keyscaleConfidenceEssentia,
           keyLibrosa: r.keyLibrosa,
           scaleLibrosa: r.scaleLibrosa,
-          keyscaleConfidenceLibrosa: r.keyscaleConfidenceLibrosa,
+          keyscaleConfidenceLibrosa,
           bpmSelected: r.bpmSelected,
           keySelected: r.keySelected,
-          bpmManual: r.bpmManual,
+          bpmManual,
           keyManual: r.keyManual,
           scaleManual: r.scaleManual,
           debugTxt: r.debugTxt,
@@ -527,7 +562,7 @@ export function useBpmAnalysis(tracks: Track[]) {
       }
 
       if (r.bpm != null) {
-        newBpms[trackId] = r.bpm
+        newBpms[trackId] = toNumber(r.bpm)
       } else if (r.bpm === null) {
         newBpms[trackId] = null
       } else if (newFullData[trackId]) {

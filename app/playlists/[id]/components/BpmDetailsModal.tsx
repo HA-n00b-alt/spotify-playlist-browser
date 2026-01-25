@@ -1,6 +1,7 @@
 'use client'
 
 import type { SpotifyTrack } from '@/lib/types'
+import type { BpmFallbackOverride } from '../../../hooks/useBpmAnalysis'
 
 type Track = SpotifyTrack
 
@@ -95,7 +96,7 @@ type BpmDetailsModalProps = {
   bpmDebugLevel: string
   bpmConfidenceThreshold: string
   bpmDebugInfo: Record<string, any>
-  recalcMode: 'standard' | 'force' | 'fallback'
+  recalcMode: BpmFallbackOverride
   recalcStatus: { loading: boolean; success?: boolean; error?: string } | null
   onClose: () => void
   onUpdateBpmSelection: (payload: UpdateBpmSelectionPayload) => Promise<void> | void
@@ -107,8 +108,8 @@ type BpmDetailsModalProps = {
   onSetShowBpmModalDebug: (value: boolean) => void
   onSetBpmDebugLevel: (value: string) => void
   onSetBpmConfidenceThreshold: (value: string) => void
-  onSetRecalcMode: (value: 'standard' | 'force' | 'fallback') => void
-  onRecalcTrack: (mode: 'standard' | 'force' | 'fallback') => void
+  onSetRecalcMode: (value: BpmFallbackOverride) => void
+  onRecalcTrack: (mode: BpmFallbackOverride) => void
 }
 
 export default function BpmDetailsModal({
@@ -152,6 +153,8 @@ export default function BpmDetailsModal({
   if (!isOpen || !bpmModalData || !bpmModalSummary || !selectedBpmTrack) {
     return null
   }
+  const manualFieldClass =
+    'h-10 rounded-[8px] bg-gray-200 dark:bg-black/20 px-3 py-2 text-sm text-gray-900 dark:text-white/90 focus:outline-none focus:ring-2 focus:ring-emerald-500/40'
 
   return (
     <div
@@ -377,7 +380,7 @@ export default function BpmDetailsModal({
                         value={manualBpm || bpmModalData.fullData?.bpmManual || ''}
                         onChange={(e) => onSetManualBpm(e.target.value)}
                         placeholder="Enter BPM"
-                        className="w-28 rounded-[4px] bg-gray-200 dark:bg-black/20 px-3 py-2 text-sm text-gray-900 dark:text-white/90 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                        className={`${manualFieldClass} w-32`}
                         min="1"
                         max="300"
                       />
@@ -497,7 +500,7 @@ export default function BpmDetailsModal({
                   <select
                     value={manualKey || bpmModalData.fullData?.keyManual || ''}
                     onChange={(e) => onSetManualKey(e.target.value)}
-                    className="rounded-[4px] bg-gray-200 dark:bg-black/20 px-3 py-2 text-sm text-gray-900 dark:text-white/90 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                    className={`${manualFieldClass} min-w-[120px]`}
                   >
                     <option value="">Select Key</option>
                     {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].map(k => (
@@ -507,7 +510,7 @@ export default function BpmDetailsModal({
                   <select
                     value={manualScale || bpmModalData.fullData?.scaleManual || 'major'}
                     onChange={(e) => onSetManualScale(e.target.value)}
-                    className="rounded-[4px] bg-gray-200 dark:bg-black/20 px-3 py-2 text-sm text-gray-900 dark:text-white/90 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                    className={`${manualFieldClass} min-w-[120px]`}
                   >
                     <option value="major">Major</option>
                     <option value="minor">Minor</option>
@@ -552,49 +555,32 @@ export default function BpmDetailsModal({
             <div className="text-[10px] font-bold uppercase tracking-[0.05em] text-gray-500/50 dark:text-white/50">
               Recalculate
             </div>
-            <div className="mt-4 inline-flex h-7 rounded-full border border-gray-200 bg-black/5 p-0.5 dark:border-slate-800 dark:bg-white/5">
-              <button
-                onClick={() => {
-                  onSetRecalcMode('standard')
-                  onRecalcTrack('standard')
-                }}
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <select
+                value={recalcMode}
+                onChange={(e) => onSetRecalcMode(e.target.value as BpmFallbackOverride)}
+                className={`${manualFieldClass} min-w-[220px]`}
                 disabled={recalcStatus?.loading}
-                className={`rounded-full px-3 text-[11px] font-semibold transition ${
-                  recalcMode === 'standard'
-                    ? 'bg-white/70 text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900 dark:text-slate-300 dark:hover:text-white'
-                }`}
               >
-                {recalcStatus?.loading ? 'Recalculating...' : 'Standard'}
-              </button>
+                <option value="default">Default (confidence-based)</option>
+                <option value="never">Never use fallback</option>
+                <option value="always">Always use fallback</option>
+                <option value="bpm_only">Force fallback for BPM only</option>
+                <option value="key_only">Force fallback for key only</option>
+                <option value="fallback_only">Fallback only (skip Essentia)</option>
+                <option value="fallback_only_bpm">Fallback only BPM</option>
+                <option value="fallback_only_key">Fallback only key</option>
+              </select>
               <button
-                onClick={() => {
-                  onSetRecalcMode('force')
-                  onRecalcTrack('force')
-                }}
+                onClick={() => onRecalcTrack(recalcMode)}
                 disabled={recalcStatus?.loading}
-                className={`rounded-full px-3 text-[11px] font-semibold transition ${
-                  recalcMode === 'force'
-                    ? 'bg-white/70 text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900 dark:text-slate-300 dark:hover:text-white'
-                }`}
+                className="h-10 rounded-full bg-white/70 px-4 text-[11px] font-semibold text-gray-900 shadow-sm transition hover:bg-white/90 disabled:opacity-60 dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
               >
-                Force fallback
+                {recalcStatus?.loading ? 'Recalculating...' : 'Recalculate'}
               </button>
-              <button
-                onClick={() => {
-                  onSetRecalcMode('fallback')
-                  onRecalcTrack('fallback')
-                }}
-                disabled={recalcStatus?.loading}
-                className={`rounded-full px-3 text-[11px] font-semibold transition ${
-                  recalcMode === 'fallback'
-                    ? 'bg-white/70 text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900 dark:text-slate-300 dark:hover:text-white'
-                }`}
-              >
-                Fallback only
-              </button>
+            </div>
+            <div className="mt-2 text-[11px] text-gray-500/80 dark:text-white/50">
+              Choose how fallback should be applied for this recalculation.
             </div>
             {recalcStatus?.error && (
               <div className="mt-2 text-xs text-red-600">{recalcStatus.error}</div>

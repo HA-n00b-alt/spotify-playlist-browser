@@ -618,7 +618,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     setBpmState('musoPreviewStatus', null)
     setBpmState('mismatchPreviewUrls', {})
     setBpmState('showBpmModalDebug', false)
-    setBpmState('recalcMode', 'standard')
+    setBpmState('recalcMode', 'default')
   }, [setBpmState])
 
   const closeCreditsModal = useCallback(() => {
@@ -1042,13 +1042,13 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     streamBpmsForTracks([selectedBpmTrack], targetIds, targetIds)
   }
 
-  const handleRecalcTrack = (mode: 'standard' | 'force' | 'fallback') => {
+  const handleRecalcTrack = (mode: BpmFallbackOverride) => {
     if (!selectedBpmTrack) return
-    if (mode === 'standard') {
+    if (mode === 'default') {
       recalcTrackWithOptions(selectedBpmTrack)
       return
     }
-    recalcTrackWithOptions(selectedBpmTrack, { fallbackOverride: 'always' })
+    recalcTrackWithOptions(selectedBpmTrack, { fallbackOverride: mode })
   }
 
   const formatDuration = (ms: number): string => {
@@ -1094,6 +1094,12 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const bpmModalSummary = useMemo(() => {
     if (!bpmModalData) return null
     const { fullData, bpmSelected, keySelected, currentBpm, currentKey, currentScale } = bpmModalData
+    const toNumber = (value: unknown): number | null => {
+      if (value === null || value === undefined || value === '') return null
+      const parsed = typeof value === 'number' ? value : Number(value)
+      return Number.isFinite(parsed) ? parsed : null
+    }
+
     const bpmCandidates: Array<{
       id: 'essentia' | 'librosa'
       label: string
@@ -1101,22 +1107,24 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       confidence?: number | null
       raw?: number | null
     }> = []
-    if (fullData.bpmEssentia != null) {
+    const essentiaValue = toNumber(fullData.bpmEssentia)
+    if (essentiaValue != null) {
       bpmCandidates.push({
         id: 'essentia',
         label: 'Essentia',
-        value: fullData.bpmEssentia,
-        confidence: fullData.bpmConfidenceEssentia ?? null,
-        raw: fullData.bpmRawEssentia ?? null,
+        value: essentiaValue,
+        confidence: toNumber(fullData.bpmConfidenceEssentia),
+        raw: toNumber(fullData.bpmRawEssentia),
       })
     }
-    if (fullData.bpmLibrosa != null) {
+    const librosaValue = toNumber(fullData.bpmLibrosa)
+    if (librosaValue != null) {
       bpmCandidates.push({
         id: 'librosa',
         label: 'Librosa',
-        value: fullData.bpmLibrosa,
-        confidence: fullData.bpmConfidenceLibrosa ?? null,
-        raw: fullData.bpmRawLibrosa ?? null,
+        value: librosaValue,
+        confidence: toNumber(fullData.bpmConfidenceLibrosa),
+        raw: toNumber(fullData.bpmRawLibrosa),
       })
     }
 
@@ -1153,10 +1161,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
     const bpmSelectedConfidence =
       bpmSelected === 'librosa'
-        ? fullData.bpmConfidenceLibrosa ?? null
+        ? toNumber(fullData.bpmConfidenceLibrosa)
         : bpmSelected === 'manual'
           ? null
-          : fullData.bpmConfidenceEssentia ?? null
+          : toNumber(fullData.bpmConfidenceEssentia)
     const keySelectedConfidence =
       keySelected === 'librosa'
         ? fullData.keyscaleConfidenceLibrosa ?? null
@@ -1171,10 +1179,10 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           ? bpmCandidates.find((c) => c.id === 'librosa')
           : null
     const resolvedCurrentBpm =
-      typeof currentBpm === 'number'
-        ? currentBpm
-        : bpmSelected === 'manual' && typeof fullData.bpmManual === 'number'
-          ? fullData.bpmManual
+      toNumber(currentBpm) != null
+        ? (toNumber(currentBpm) as number)
+        : bpmSelected === 'manual' && toNumber(fullData.bpmManual) != null
+          ? (toNumber(fullData.bpmManual) as number)
           : selectedCandidate?.value ?? bpmCandidates[0]?.value ?? null
 
     return {
@@ -1284,11 +1292,14 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           onChange={(e) => setBpmFallbackOverride(e.target.value as BpmFallbackOverride)}
           className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
         >
+          <option value="default">Confidence-based (default)</option>
           <option value="never">Never use fallback</option>
           <option value="always">Always use fallback</option>
-          <option value="bpm_only">BPM only</option>
-          <option value="key_only">Key only</option>
-          <option value="default">Confidence-based (legacy)</option>
+          <option value="bpm_only">Force fallback for BPM only</option>
+          <option value="key_only">Force fallback for key only</option>
+          <option value="fallback_only">Fallback only (skip Essentia)</option>
+          <option value="fallback_only_bpm">Fallback only BPM</option>
+          <option value="fallback_only_key">Fallback only key</option>
         </select>
       </div>
       <div className="space-y-1 text-sm text-gray-700">
