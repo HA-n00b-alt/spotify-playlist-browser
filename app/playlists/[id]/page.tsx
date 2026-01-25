@@ -4072,7 +4072,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
                   BPM and Key information
                 </h2>
                 <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">
-                  {selectedBpmTrack.name} · {selectedBpmTrack.artists.map(a => a.name).join(', ')}
+                  {selectedBpmTrack.name} · {(selectedBpmTrack.artists || []).map(a => a.name).filter(Boolean).join(', ') || 'Unknown artist'}
                 </p>
                 {bpmStreamStatus[bpmModalData.trackId] === 'partial' && (
                   <div className="mt-2 inline-flex items-center text-[11px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-200">
@@ -4615,7 +4615,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
             <div className="mb-4">
               <h3 className="font-semibold text-gray-900 dark:text-slate-100">{selectedCreditsTrack.name}</h3>
               <p className="text-sm text-gray-600 dark:text-slate-300">
-                {selectedCreditsTrack.artists.map(a => a.name).join(', ')}
+                {(selectedCreditsTrack.artists || []).map(a => a.name).filter(Boolean).join(', ') || 'Unknown artist'}
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-500 dark:text-slate-400">
                 <span>
