@@ -18,7 +18,7 @@ type PlaylistHeaderProps = {
   playlistInfo: SpotifyPlaylistInfo
   tracksCount: number
   isCached: boolean
-  cachedAt: string | null
+  cachedAt: string | Date | null
   isHeaderRefreshing: boolean
   bpmSummary: BpmSummary | null
   showBpmNotice: boolean

@@ -184,30 +184,21 @@ export default function BpmDetailsModal({
           </button>
         </div>
 
-        <div className="mt-6 space-y-8">
+        <div className="mt-6 space-y-12">
           <section>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400 dark:text-slate-500">
+                <div className="text-xs font-medium text-gray-500 dark:text-slate-400">
                   BPM
                 </div>
-                <div className="mt-3 flex items-center gap-2 text-4xl font-semibold text-gray-900 dark:text-slate-100">
+                <div className="mt-3 flex items-center gap-2 text-5xl font-bold text-gray-900 dark:text-white">
                   {typeof bpmModalSummary.currentBpm === 'number'
                     ? `${Math.round(bpmModalSummary.currentBpm)} BPM`
                     : '—'}
                   {typeof bpmModalSummary.currentBpm === 'number' && (
-                    <svg
-                      className="h-5 w-5 text-emerald-500 dark:text-emerald-300"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                      aria-hidden="true"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M16.704 5.292a1 1 0 010 1.416l-7.1 7.1a1 1 0 01-1.416 0l-3.392-3.392a1 1 0 111.416-1.416l2.684 2.684 6.392-6.392a1 1 0 011.416 0z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
+                    <span className="text-lg font-semibold text-emerald-400" aria-hidden="true">
+                      ✓
+                    </span>
                   )}
                 </div>
                 <div className="mt-1 text-xs text-gray-500 dark:text-slate-400">
@@ -344,12 +335,12 @@ export default function BpmDetailsModal({
                         className="flex items-center justify-between rounded-[12px] px-3 py-2 text-sm text-gray-700 dark:text-slate-300"
                       >
                         <div>
-                          <div className="text-[11px] uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">
-                            {candidate.label}
-                          </div>
-                          <div className="text-sm text-gray-900 dark:text-slate-100">
-                            {Math.round(candidate.value)} BPM
-                            {typeof candidate.raw === 'number' && candidate.raw !== candidate.value ? (
+                        <div className="text-[11px] font-medium text-gray-500 dark:text-slate-400">
+                          {candidate.label}
+                        </div>
+                        <div className="text-sm text-gray-900 dark:text-slate-100">
+                          {Math.round(candidate.value)} BPM
+                          {typeof candidate.raw === 'number' && candidate.raw !== candidate.value ? (
                               <span className="ml-2 text-xs text-gray-400">raw {candidate.raw.toFixed(1)}</span>
                             ) : null}
                           </div>
@@ -360,11 +351,7 @@ export default function BpmDetailsModal({
                               : 'n/a'}
                           </div>
                         </div>
-                        {isSelected ? (
-                          <span className="text-[11px] uppercase tracking-[0.2em] text-green-600 dark:text-emerald-300">
-                            Selected
-                          </span>
-                        ) : isAdmin ? (
+                        {isSelected ? null : isAdmin ? (
                           <button
                             onClick={() =>
                               onUpdateBpmSelection({
@@ -385,7 +372,7 @@ export default function BpmDetailsModal({
 
                 {isAdmin && (
                   <div className="mt-6">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">
+                    <div className="text-xs font-medium text-gray-500 dark:text-slate-400">
                       Manual override
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -394,7 +381,7 @@ export default function BpmDetailsModal({
                         value={manualBpm || bpmModalData.fullData?.bpmManual || ''}
                         onChange={(e) => onSetManualBpm(e.target.value)}
                         placeholder="Enter BPM"
-                        className="w-28 rounded-[12px] border border-transparent bg-black/5 px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 dark:bg-white/5 dark:text-slate-100"
+                        className="w-28 rounded-[12px] border border-gray-200 bg-transparent px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 dark:border-slate-700/70 dark:text-slate-100"
                         min="1"
                         max="300"
                       />
@@ -413,7 +400,7 @@ export default function BpmDetailsModal({
                           onSetManualBpm('')
                         }}
                         disabled={isUpdatingSelection || (!manualBpm && !bpmModalData.fullData?.bpmManual)}
-                        className="rounded-full px-3 py-2 text-[11px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-black/5 disabled:text-gray-400 dark:text-slate-300 dark:hover:text-white dark:hover:bg-white/10"
+                        className="rounded-full border border-gray-200 px-3 py-2 text-[11px] font-semibold text-gray-600 hover:border-gray-300 hover:text-gray-900 disabled:text-gray-400 dark:border-slate-700/70 dark:text-slate-300 dark:hover:border-slate-500/80 dark:hover:text-white"
                       >
                         Save manual
                       </button>
@@ -430,26 +417,17 @@ export default function BpmDetailsModal({
           </section>
 
           <section>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400 dark:text-slate-500">
-              Key & Scale
+            <div className="text-xs font-medium text-gray-500 dark:text-slate-400">
+              Key & scale
             </div>
-            <div className="mt-3 flex items-center gap-2 text-3xl font-semibold text-gray-900 dark:text-slate-100">
+            <div className="mt-3 flex items-center gap-2 text-4xl font-bold text-gray-900 dark:text-white">
               {bpmModalSummary.currentKey || bpmModalSummary.currentScale
                 ? `${bpmModalSummary.currentKey || ''} ${bpmModalSummary.currentScale || ''}`.trim()
                 : '—'}
               {(bpmModalSummary.currentKey || bpmModalSummary.currentScale) && (
-                <svg
-                  className="h-5 w-5 text-emerald-500 dark:text-emerald-300"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                  aria-hidden="true"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M16.704 5.292a1 1 0 010 1.416l-7.1 7.1a1 1 0 01-1.416 0l-3.392-3.392a1 1 0 111.416-1.416l2.684 2.684 6.392-6.392a1 1 0 011.416 0z"
-                    clipRule="evenodd"
-                  />
-                </svg>
+                <span className="text-lg font-semibold text-emerald-400" aria-hidden="true">
+                  ✓
+                </span>
               )}
             </div>
             <div className="mt-1 text-xs text-gray-500 dark:text-slate-400">
@@ -484,11 +462,7 @@ export default function BpmDetailsModal({
                             : 'n/a'}
                         </div>
                       </div>
-                      {isSelected ? (
-                        <span className="text-[11px] uppercase tracking-[0.2em] text-green-600 dark:text-emerald-300">
-                          Selected
-                        </span>
-                      ) : isAdmin ? (
+                      {isSelected ? null : isAdmin ? (
                         <button
                           onClick={() =>
                             onUpdateBpmSelection({
@@ -514,14 +488,14 @@ export default function BpmDetailsModal({
 
             {isAdmin && (
               <div className="mt-6">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">
+                <div className="text-xs font-medium text-gray-500 dark:text-slate-400">
                   Manual override
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <select
                     value={manualKey || bpmModalData.fullData?.keyManual || ''}
                     onChange={(e) => onSetManualKey(e.target.value)}
-                    className="rounded-[12px] border border-transparent bg-black/5 px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 dark:bg-white/5 dark:text-slate-100"
+                    className="rounded-[12px] border border-gray-200 bg-transparent px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 dark:border-slate-700/70 dark:text-slate-100"
                   >
                     <option value="">Select Key</option>
                     {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].map(k => (
@@ -531,7 +505,7 @@ export default function BpmDetailsModal({
                   <select
                     value={manualScale || bpmModalData.fullData?.scaleManual || 'major'}
                     onChange={(e) => onSetManualScale(e.target.value)}
-                    className="rounded-[12px] border border-transparent bg-black/5 px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 dark:bg-white/5 dark:text-slate-100"
+                    className="rounded-[12px] border border-gray-200 bg-transparent px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 dark:border-slate-700/70 dark:text-slate-100"
                   >
                     <option value="major">Major</option>
                     <option value="minor">Minor</option>
@@ -554,7 +528,7 @@ export default function BpmDetailsModal({
                       onSetManualScale('major')
                     }}
                     disabled={isUpdatingSelection || (!manualKey && !bpmModalData.fullData?.keyManual)}
-                    className="rounded-full px-3 py-2 text-[11px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-black/5 disabled:text-gray-400 dark:text-slate-300 dark:hover:text-white dark:hover:bg-white/10"
+                    className="rounded-full border border-gray-200 px-3 py-2 text-[11px] font-semibold text-gray-600 hover:border-gray-300 hover:text-gray-900 disabled:text-gray-400 dark:border-slate-700/70 dark:text-slate-300 dark:hover:border-slate-500/80 dark:hover:text-white"
                   >
                     Save manual
                   </button>
@@ -569,17 +543,17 @@ export default function BpmDetailsModal({
           </section>
 
           <section>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400 dark:text-slate-500">
+            <div className="text-xs font-medium text-gray-500 dark:text-slate-400">
               Recalculate
             </div>
-            <div className="mt-4 inline-flex rounded-full border border-gray-200 bg-transparent p-1 dark:border-slate-800">
+            <div className="mt-4 inline-flex rounded-full border border-gray-200 bg-transparent p-0.5 dark:border-slate-800">
               <button
                 onClick={() => {
                   onSetRecalcMode('standard')
                   onRecalcTrack('standard')
                 }}
                 disabled={recalcStatus?.loading}
-                className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
+                className={`rounded-full px-3 py-1 text-[11px] font-semibold transition ${
                   recalcMode === 'standard'
                     ? 'bg-black/5 text-gray-900 dark:bg-white/10 dark:text-white'
                     : 'text-gray-600 hover:bg-black/5 hover:text-gray-900 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white'
@@ -593,7 +567,7 @@ export default function BpmDetailsModal({
                   onRecalcTrack('force')
                 }}
                 disabled={recalcStatus?.loading}
-                className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
+                className={`rounded-full px-3 py-1 text-[11px] font-semibold transition ${
                   recalcMode === 'force'
                     ? 'bg-black/5 text-gray-900 dark:bg-white/10 dark:text-white'
                     : 'text-gray-600 hover:bg-black/5 hover:text-gray-900 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white'
@@ -607,7 +581,7 @@ export default function BpmDetailsModal({
                   onRecalcTrack('fallback')
                 }}
                 disabled={recalcStatus?.loading}
-                className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
+                className={`rounded-full px-3 py-1 text-[11px] font-semibold transition ${
                   recalcMode === 'fallback'
                     ? 'bg-black/5 text-gray-900 dark:bg-white/10 dark:text-white'
                     : 'text-gray-600 hover:bg-black/5 hover:text-gray-900 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white'
@@ -625,7 +599,7 @@ export default function BpmDetailsModal({
             <section>
               <button
                 onClick={() => onSetShowBpmModalDebug(!showBpmModalDebug)}
-                className="text-xs font-semibold text-gray-500 hover:text-gray-900 dark:text-slate-400 dark:hover:text-white"
+                className="text-xs font-medium text-gray-400 hover:text-gray-700 dark:text-slate-500 dark:hover:text-slate-200"
               >
                 {showBpmModalDebug ? 'Hide Debug Logs' : 'View Debug Logs'}
               </button>
@@ -712,7 +686,7 @@ export default function BpmDetailsModal({
         <div className="mt-6 flex justify-end">
           <button
             onClick={onClose}
-            className="rounded-full bg-black/5 px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-black/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+            className="rounded-full border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-600 hover:border-gray-300 hover:text-gray-900 dark:border-slate-700/70 dark:text-slate-300 dark:hover:border-slate-500/80 dark:hover:text-white"
           >
             Close
           </button>
