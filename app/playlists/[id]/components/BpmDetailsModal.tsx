@@ -152,9 +152,9 @@ export default function BpmDetailsModal({
   onRecalcTrack,
 }: BpmDetailsModalProps) {
   const ghostFieldClass =
-    'w-full bg-transparent border-b border-white/10 py-1 text-sm text-white/90 placeholder:text-white/10 focus:outline-none focus:border-emerald-500/30 transition-colors duration-300'
+    'w-full bg-transparent border-b border-white/5 py-1 text-sm text-white/90 placeholder:text-white/10 outline-none appearance-none [-moz-appearance:_textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
   const manualSelectClass =
-    'bg-transparent border-b border-white/10 px-0 py-1 text-sm text-white/90 focus:outline-none focus:border-emerald-500/30 transition-colors duration-300'
+    'bg-transparent border-b border-white/5 px-0 py-1 text-sm text-white/90 outline-none appearance-none'
   const recalcScopeForMode = (mode: BpmFallbackOverride): 'bpm' | 'key' | 'both' => {
     if (mode === 'bpm_only' || mode === 'fallback_only_bpm') return 'bpm'
     if (mode === 'key_only' || mode === 'fallback_only_key') return 'key'
@@ -377,10 +377,10 @@ export default function BpmDetailsModal({
                         {isSelected && (
                           <span className="absolute left-0 top-2 bottom-2 w-[2px] bg-emerald-400" />
                         )}
-                        <div className="text-[12px] font-semibold text-white/70 group-hover:text-white">
+                        <div className={`text-[12px] font-semibold ${isSelected ? 'text-white/60' : 'text-white/50 group-hover:text-white/70'}`}>
                           {candidate.label}
                         </div>
-                        <div className="text-[12px] text-white/70 group-hover:text-white">
+                        <div className={`text-[12px] ${isSelected ? 'text-white/60' : 'text-white/50 group-hover:text-white/70'}`}>
                           {Math.round(candidate.value)} ·{' '}
                           {candidate.confidence != null
                             ? `${Math.round(candidate.confidence * 100)}%`
@@ -410,7 +410,7 @@ export default function BpmDetailsModal({
                       </svg>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <div className="relative w-28">
+                      <div className="relative w-28 group/manual">
                         <input
                           type="number"
                           value={manualBpm || bpmModalData.fullData?.bpmManual || ''}
@@ -420,7 +420,7 @@ export default function BpmDetailsModal({
                           min="1"
                           max="300"
                         />
-                        <div className="absolute bottom-0 left-0 h-[1px] w-0 bg-emerald-500 transition-all duration-500 group-focus-within/input:w-full" />
+                        <div className="absolute bottom-0 left-0 h-[1px] w-0 bg-emerald-500/50 transition-all duration-500 group-focus-within/manual:w-full" />
                       </div>
                       {manualBpm && manualBpm !== String(bpmModalData.fullData?.bpmManual || '') ? (
                         <button
@@ -500,10 +500,10 @@ export default function BpmDetailsModal({
                       {isSelected && (
                         <span className="absolute left-0 top-2 bottom-2 w-[2px] bg-emerald-400" />
                       )}
-                      <div className="text-[12px] font-semibold text-white/70 group-hover:text-white">
+                      <div className={`text-[12px] font-semibold ${isSelected ? 'text-white/60' : 'text-white/50 group-hover:text-white/70'}`}>
                         {candidate.label}
                       </div>
-                      <div className="text-[12px] text-white/70 group-hover:text-white">
+                      <div className={`text-[12px] ${isSelected ? 'text-white/60' : 'text-white/50 group-hover:text-white/70'}`}>
                         {candidate.key || '—'} ·{' '}
                         {candidate.confidence != null
                           ? `${Math.round(candidate.confidence * 100)}%`
@@ -542,25 +542,25 @@ export default function BpmDetailsModal({
                     <select
                       value={manualKey || bpmModalData.fullData?.keyManual || ''}
                       onChange={(e) => onSetManualKey(e.target.value)}
-                      className={`${manualSelectClass} min-w-[120px]`}
+                      className={`${manualSelectClass} no-chevron min-w-[120px]`}
                     >
                       <option value="">Select Key</option>
                       {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].map(k => (
                         <option key={k} value={k}>{k}</option>
                       ))}
                     </select>
-                    <div className="absolute bottom-0 left-0 h-[1px] w-0 bg-emerald-500 transition-all duration-500 group-focus-within/select:w-full" />
+                    <div className="absolute bottom-0 left-0 h-[1px] w-0 bg-emerald-500/50 transition-all duration-500 group-focus-within/select:w-full" />
                   </div>
                   <div className="relative group/select min-w-[120px]">
                     <select
                       value={manualScale || bpmModalData.fullData?.scaleManual || 'major'}
                       onChange={(e) => onSetManualScale(e.target.value)}
-                      className={`${manualSelectClass} min-w-[120px]`}
+                      className={`${manualSelectClass} no-chevron min-w-[120px]`}
                     >
                       <option value="major">Major</option>
                       <option value="minor">Minor</option>
                     </select>
-                    <div className="absolute bottom-0 left-0 h-[1px] w-0 bg-emerald-500 transition-all duration-500 group-focus-within/select:w-full" />
+                    <div className="absolute bottom-0 left-0 h-[1px] w-0 bg-emerald-500/50 transition-all duration-500 group-focus-within/select:w-full" />
                   </div>
                   {(manualKey && manualKey !== (bpmModalData.fullData?.keyManual || ''))
                     || (manualScale && manualScale !== (bpmModalData.fullData?.scaleManual || 'major')) ? (
@@ -600,45 +600,55 @@ export default function BpmDetailsModal({
 
           <section className="pl-5">
             <div className="flex flex-col gap-3 rounded-[14px] border border-white/10 bg-white/[0.04] px-3 py-2 sm:flex-row sm:items-center">
-              <div className="flex items-center gap-3 sm:flex-1">
-                <div className="flex items-center gap-1">
-                  {(['bpm', 'key', 'both'] as const).map((scope) => (
-                    <button
-                      key={scope}
-                      onClick={() => {
-                        setRecalcScope(scope)
-                        onSetRecalcMode(toMode(scope, recalcStrategy))
-                      }}
-                      disabled={recalcStatus?.loading}
-                      className={`rounded-[8px] px-3 py-1 text-[11px] font-semibold transition ${
-                        recalcScope === scope
-                          ? 'bg-white/10 text-white'
-                          : 'text-white/60 hover:bg-white/5 hover:text-white'
-                      }`}
-                    >
-                      {scope === 'bpm' ? 'BPM' : scope === 'key' ? 'Key' : 'Both'}
-                    </button>
-                  ))}
+              <div className="flex items-stretch gap-3 sm:flex-1">
+                <div className="flex flex-col gap-1">
+                  <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-white/40">
+                    Scope
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {(['bpm', 'key', 'both'] as const).map((scope) => (
+                      <button
+                        key={scope}
+                        onClick={() => {
+                          setRecalcScope(scope)
+                          onSetRecalcMode(toMode(scope, recalcStrategy))
+                        }}
+                        disabled={recalcStatus?.loading}
+                        className={`rounded-[8px] px-3 py-1 text-[11px] font-semibold transition ${
+                          recalcScope === scope
+                            ? 'bg-white/10 text-white'
+                            : 'text-white/60 hover:bg-white/5 hover:text-white'
+                        }`}
+                      >
+                        {scope === 'bpm' ? 'BPM' : scope === 'key' ? 'Key' : 'Both'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <span className="h-6 w-px bg-white/10" />
-                <div className="flex flex-1 items-center gap-1 sm:justify-center">
-                  {(['standard', 'fallback', 'both'] as const).map((strategy) => (
-                    <button
-                      key={strategy}
-                      onClick={() => {
-                        setRecalcStrategy(strategy)
-                        onSetRecalcMode(toMode(recalcScope, strategy))
-                      }}
-                      disabled={recalcStatus?.loading}
-                      className={`rounded-[8px] px-3 py-1 text-[11px] font-semibold transition ${
-                        recalcStrategy === strategy
-                          ? 'bg-white/10 text-white'
-                          : 'text-white/60 hover:bg-white/5 hover:text-white'
-                      }`}
-                    >
-                      {strategy === 'standard' ? 'Standard' : strategy === 'fallback' ? 'Fallback' : 'Both'}
-                    </button>
-                  ))}
+                <span className="hidden w-px bg-white/10 sm:block sm:self-stretch" />
+                <div className="flex flex-1 flex-col gap-1 sm:items-center">
+                  <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-white/40">
+                    Algorithm
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {(['standard', 'fallback', 'both'] as const).map((strategy) => (
+                      <button
+                        key={strategy}
+                        onClick={() => {
+                          setRecalcStrategy(strategy)
+                          onSetRecalcMode(toMode(recalcScope, strategy))
+                        }}
+                        disabled={recalcStatus?.loading}
+                        className={`rounded-[8px] px-3 py-1 text-[11px] font-semibold transition ${
+                          recalcStrategy === strategy
+                            ? 'bg-white/10 text-white'
+                            : 'text-white/60 hover:bg-white/5 hover:text-white'
+                        }`}
+                      >
+                        {strategy === 'standard' ? 'Standard' : strategy === 'fallback' ? 'Fallback' : 'Both'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
               <button
