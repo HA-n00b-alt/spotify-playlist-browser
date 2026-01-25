@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { SpotifyTrack } from '@/lib/types'
 import type { BpmFallbackOverride } from '../../../hooks/useBpmAnalysis'
 
@@ -178,6 +178,12 @@ export default function BpmDetailsModal({
   }
   const [recalcScope, setRecalcScope] = useState<'bpm' | 'key' | 'both'>(() => recalcScopeForMode(recalcMode))
   const [recalcStrategy, setRecalcStrategy] = useState<'standard' | 'fallback' | 'both'>(() => recalcStrategyForMode(recalcMode))
+  const [debugBaseline, setDebugBaseline] = useState('')
+
+  useEffect(() => {
+    if (!isOpen || !bpmModalData) return
+    setDebugBaseline(bpmModalData.fullData?.debugTxt || '')
+  }, [isOpen, bpmModalData?.trackId, bpmModalData?.fullData?.debugTxt])
 
   useEffect(() => {
     setRecalcScope(recalcScopeForMode(recalcMode))
@@ -187,6 +193,24 @@ export default function BpmDetailsModal({
   if (!isOpen || !bpmModalData || !bpmModalSummary || !selectedBpmTrack) {
     return null
   }
+
+  const formattedDebugPayload = useMemo(() => {
+    const payload = bpmDebugInfo[bpmModalData.trackId]
+    if (!payload) return null
+    if (typeof payload === 'string') {
+      try {
+        return JSON.stringify(JSON.parse(payload), null, 2)
+      } catch {
+        return payload
+      }
+    }
+    return JSON.stringify(payload, null, 2)
+  }, [bpmDebugInfo, bpmModalData.trackId])
+
+  const liveDebugTxt = bpmModalData.fullData?.debugTxt || ''
+  const scopedDebugTxt = liveDebugTxt.startsWith(debugBaseline)
+    ? liveDebugTxt.slice(debugBaseline.length).trim()
+    : liveDebugTxt.trim()
 
   return (
     <div
@@ -357,10 +381,16 @@ export default function BpmDetailsModal({
                 <div className="mt-6 space-y-2">
                   {bpmModalSummary.bpmCandidates.map((candidate) => {
                     const isSelected = bpmModalData.bpmSelected === candidate.id
+                    const isUnavailable = candidate.value == null
                     return (
                       <button
                         key={candidate.id}
                         onClick={() => {
+                          if (isUnavailable) {
+                            const mode = toMode('bpm', candidate.id === 'essentia' ? 'standard' : 'fallback')
+                            onRecalcTrack(mode)
+                            return
+                          }
                           if (!isAdmin || isSelected) return
                           onUpdateBpmSelection({
                             spotifyTrackId: bpmModalData.trackId,
@@ -381,10 +411,13 @@ export default function BpmDetailsModal({
                           {candidate.label}
                         </div>
                         <div className={`text-[12px] ${isSelected ? 'text-slate-600 dark:text-white/60' : 'text-slate-500 group-hover:text-slate-700 dark:text-white/50 dark:group-hover:text-white/70'}`}>
-                          {candidate.value != null ? Math.round(candidate.value) : 'N/A'} ·{' '}
-                          {candidate.value != null && candidate.confidence != null
-                            ? `${Math.round(candidate.confidence * 100)}%`
-                            : 'n/a'}
+                          {candidate.value != null
+                            ? `${Math.round(candidate.value)} · ${
+                                candidate.confidence != null
+                                  ? `${Math.round(candidate.confidence * 100)}%`
+                                  : 'n/a'
+                              }`
+                            : 'Not calculated'}
                         </div>
                       </button>
                     )
@@ -480,10 +513,16 @@ export default function BpmDetailsModal({
               <div className="mt-6 space-y-2">
                 {bpmModalSummary.keyCandidates.map((candidate) => {
                   const isSelected = bpmModalData.keySelected === candidate.id
+                  const isUnavailable = candidate.key == null && candidate.scale == null
                   return (
                     <button
                       key={candidate.id}
                       onClick={() => {
+                        if (isUnavailable) {
+                          const mode = toMode('key', candidate.id === 'essentia' ? 'standard' : 'fallback')
+                          onRecalcTrack(mode)
+                          return
+                        }
                         if (!isAdmin || isSelected) return
                         onUpdateBpmSelection({
                           spotifyTrackId: bpmModalData.trackId,
@@ -504,10 +543,13 @@ export default function BpmDetailsModal({
                         {candidate.label}
                       </div>
                       <div className={`text-[12px] ${isSelected ? 'text-slate-600 dark:text-white/60' : 'text-slate-500 group-hover:text-slate-700 dark:text-white/50 dark:group-hover:text-white/70'}`}>
-                        {candidate.key ?? 'N/A'} ·{' '}
-                        {candidate.key != null && candidate.confidence != null
-                          ? `${Math.round(candidate.confidence * 100)}%`
-                          : 'n/a'}
+                        {candidate.key != null
+                          ? `${candidate.key} · ${
+                              candidate.confidence != null
+                                ? `${Math.round(candidate.confidence * 100)}%`
+                                : 'n/a'
+                            }`
+                          : 'Not calculated'}
                       </div>
                     </button>
                   )
@@ -726,7 +768,7 @@ export default function BpmDetailsModal({
                       Live logs
                     </div>
                     <pre className="mt-2 max-h-40 overflow-auto rounded-[12px] border border-slate-200 bg-gray-100 p-3 font-mono text-[10px] text-slate-600 shadow-sm dark:border-white/10 dark:bg-black/60 dark:text-white/70 dark:shadow-inner">
-                      {bpmModalData.fullData?.debugTxt || 'No live logs yet.'}
+                      {scopedDebugTxt || 'No live logs yet.'}
                     </pre>
                   </div>
                   <div className="mt-4">
@@ -734,9 +776,7 @@ export default function BpmDetailsModal({
                       Last payload
                     </div>
                     <pre className="mt-2 max-h-40 overflow-auto rounded-[12px] border border-slate-200 bg-gray-100 p-3 font-mono text-[10px] text-slate-600 shadow-sm dark:border-white/10 dark:bg-black/60 dark:text-white/70 dark:shadow-inner">
-                      {bpmDebugInfo[bpmModalData.trackId]
-                        ? JSON.stringify(bpmDebugInfo[bpmModalData.trackId], null, 2)
-                        : 'No previous payloads yet.'}
+                      {formattedDebugPayload || 'No previous payloads yet.'}
                     </pre>
                   </div>
                 </div>
