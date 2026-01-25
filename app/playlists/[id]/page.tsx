@@ -14,7 +14,7 @@ import CreditsModal from './components/CreditsModal'
 import { usePlaylist, useRefreshPlaylist } from '../../hooks/usePlaylist'
 import { usePlaylistTracks, useRefreshPlaylistTracks } from '../../hooks/usePlaylistTracks'
 import { usePlaylistFilters } from '../../hooks/usePlaylistFilters'
-import { useBpmAnalysis, type BpmFallbackOverride } from '../../hooks/useBpmAnalysis'
+import { useBpmAnalysis, type BpmFallbackOverride, type BpmState } from '../../hooks/useBpmAnalysis'
 import { useAudioPlayer } from '../../hooks/useAudioPlayer'
 import { useQueryClient } from '@tanstack/react-query'
 import type { 
@@ -255,21 +255,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   } = usePlaylistFilters(tracks, trackBpms)
 
   const {
-    playingTrackId,
-    handleTrackClick,
-    handleTrackTitleClick,
-    getPreviewTooltip,
-  } = useAudioPlayer({
-    previewUrls,
-    setPreviewUrls,
-    loadingPreviewIds,
-    setLoadingPreviewIds,
-    fetchPreviewMeta: fetchBpmForTrack,
-    getPreviewUrlFromMeta,
-    countryCode,
-  })
-
-  const {
     isAdmin,
     loggedInUserName,
     isHeaderRefreshing,
@@ -340,6 +325,20 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   const setPreviewUrls = (value: BpmState['previewUrls'] | ((prev: BpmState['previewUrls']) => BpmState['previewUrls'])) => {
     setBpmState('previewUrls', value)
   }
+  const {
+    playingTrackId,
+    handleTrackClick,
+    handleTrackTitleClick,
+    getPreviewTooltip,
+  } = useAudioPlayer({
+    previewUrls,
+    setPreviewUrls,
+    loadingPreviewIds,
+    setLoadingPreviewIds,
+    fetchPreviewMeta: fetchBpmForTrack,
+    getPreviewUrlFromMeta,
+    countryCode,
+  })
   const setBpmFullData = (value: BpmState['bpmFullData'] | ((prev: BpmState['bpmFullData']) => BpmState['bpmFullData'])) => {
     setBpmState('bpmFullData', value)
   }
@@ -873,82 +872,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       return
     }
     await triggerRecalculateTracks(tracks.map(t => t.id))
-  }
-
-  /**
-   * Fetch preview URL from Deezer API (via our proxy to avoid CORS)
-   */
-  const fetchDeezerPreviewUrl = async (apiUrl: string): Promise<string | null> => {
-    try {
-      console.log('[Preview Debug] Fetching Deezer API via proxy to get preview URL:', apiUrl)
-      const proxyUrl = `/api/deezer-preview?url=${encodeURIComponent(apiUrl)}`
-      const response = await fetch(proxyUrl)
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('[Preview Debug] Deezer API proxy fetch failed:', response.status, errorText)
-        return null
-      }
-      const data = await response.json()
-      console.log('[Preview Debug] Deezer API proxy response:', data)
-      
-      if (data.previewUrl) {
-        console.log('[Preview Debug] Found Deezer preview URL:', data.previewUrl)
-        return data.previewUrl
-      }
-      
-      console.log('[Preview Debug] No preview URL found in Deezer API response')
-      return null
-    } catch (error) {
-      console.error('[Preview Debug] Error fetching Deezer API:', error)
-      return null
-    }
-  }
-  
-  /**
-   * Load audio with CORS support and caching
-   */
-  const refreshPreviewForTrack = async (trackId: string): Promise<string | null> => {
-    try {
-      const res = await fetch(`/api/bpm/preview-refresh?spotifyTrackId=${trackId}&country=${countryCode}`)
-      if (!res.ok) {
-        return null
-      }
-      const data = await res.json()
-      const previewUrl = getPreviewUrlFromMeta({ urls: data.urls })
-      if (previewUrl) {
-        setPreviewUrls(prev => ({ ...prev, [trackId]: previewUrl }))
-      }
-      return previewUrl
-    } catch {
-      return null
-    }
-  }
-
-  const handleMusoPreviewBpm = async (trackId: string) => {
-    setMusoPreviewStatus({ loading: true })
-    try {
-      const res = await fetch('/api/bpm/muso-preview', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ spotifyTrackId: trackId }),
-      })
-      const payload = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(payload?.error || 'Failed to calculate BPM from Muso preview')
-      }
-      const previewUrl = getPreviewUrlFromMeta({ urls: payload.urls })
-      if (previewUrl) {
-        setPreviewUrls((prev) => ({ ...prev, [trackId]: previewUrl }))
-      }
-      await fetchBpmsBatch()
-      setMusoPreviewStatus({ loading: false, success: true })
-    } catch (error) {
-      setMusoPreviewStatus({
-        loading: false,
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to calculate BPM from Muso preview',
-      })
-    }
   }
 
   const fetchCreditsForTrack = async (track: Track) => {

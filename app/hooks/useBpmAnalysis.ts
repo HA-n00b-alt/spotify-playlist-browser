@@ -27,7 +27,7 @@ type BpmFullDataEntry = {
   debugTxt?: string | null
 }
 
-type BpmState = {
+export type BpmState = {
   trackBpms: Record<string, number | null>
   trackKeys: Record<string, string | null>
   trackScales: Record<string, string | null>
