@@ -29,6 +29,20 @@ export function useAudioPlayer({
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const audioCache = useRef<Map<string, string>>(new Map())
 
+  const toDeezerApiUrl = (url: string, track: Track): string => {
+    if (!url) return url
+    if (url.includes('api.deezer.com')) return url
+    const isDeezerTimed =
+      url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('e-cdn-preview')
+    if (isDeezerTimed) {
+      const isrc = track.external_ids?.isrc
+      if (isrc) {
+        return `https://api.deezer.com/track/isrc:${encodeURIComponent(isrc)}`
+      }
+    }
+    return url
+  }
+
   const loadAudioWithCache = async (url: string, trackId: string): Promise<string> => {
     if (!url) return url
     if (audioCache.current.has(url)) {
@@ -139,7 +153,11 @@ export function useAudioPlayer({
     setPlayingTrackId(track.id)
 
     try {
-      const audioUrl = await loadAudioWithCache(previewUrl, track.id)
+      const normalizedUrl = toDeezerApiUrl(previewUrl, track)
+      if (normalizedUrl !== previewUrl) {
+        setPreviewUrls((prev) => ({ ...prev, [track.id]: normalizedUrl }))
+      }
+      const audioUrl = await loadAudioWithCache(normalizedUrl, track.id)
       const audio = new Audio(audioUrl)
       audio.volume = 0.5
       audio.crossOrigin = 'anonymous'
@@ -198,10 +216,10 @@ export function useAudioPlayer({
         const data = await fetchPreviewMeta(track.id, countryCode)
         const previewUrlFromMeta = getPreviewUrlFromMeta({ urls: data.urls })
         if (previewUrlFromMeta) {
-          previewUrl = previewUrlFromMeta
+          previewUrl = toDeezerApiUrl(previewUrlFromMeta, track)
           setPreviewUrls((prev) => ({
             ...prev,
-            [track.id]: previewUrlFromMeta,
+            [track.id]: previewUrl,
           }))
         }
       } finally {

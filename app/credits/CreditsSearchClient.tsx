@@ -208,7 +208,34 @@ export default function CreditsSearchClient() {
     }, 300)
   }, [results])
 
-  const handleTogglePreview = (track: SearchResult) => {
+  const resolvePreviewUrl = async (track: SearchResult): Promise<string | null> => {
+    if (!track.previewUrl) return null
+    let url = track.previewUrl
+    const isDeezerTimed =
+      url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('e-cdn-preview')
+    if (isDeezerTimed && track.isrc) {
+      url = `https://api.deezer.com/track/isrc:${encodeURIComponent(track.isrc)}`
+    }
+    if (url.includes('api.deezer.com')) {
+      const response = await fetch(`/api/deezer-preview?url=${encodeURIComponent(url)}`)
+      if (!response.ok) {
+        return null
+      }
+      const data = await response.json()
+      if (!data?.previewUrl) {
+        return null
+      }
+      url = data.previewUrl
+    }
+    const isDeezerLike =
+      url.includes('deezer.com') || url.includes('cdn-preview') || url.includes('cdnt-preview') || url.includes('e-cdn-preview')
+    if (isDeezerLike) {
+      return `/api/audio-proxy?url=${encodeURIComponent(url)}`
+    }
+    return url
+  }
+
+  const handleTogglePreview = async (track: SearchResult) => {
     if (!track.previewUrl) return
     if (!audioRef.current) {
       audioRef.current = new Audio()
@@ -224,7 +251,12 @@ export default function CreditsSearchClient() {
     }
 
     audio.pause()
-    audio.src = track.previewUrl
+    const resolvedUrl = await resolvePreviewUrl(track)
+    if (!resolvedUrl) {
+      setPlayingId(null)
+      return
+    }
+    audio.src = resolvedUrl
     audio.currentTime = 0
     audio.play().then(() => {
       setPlayingId(track.id)

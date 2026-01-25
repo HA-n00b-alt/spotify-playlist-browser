@@ -1164,6 +1164,19 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           ? null
           : fullData.keyscaleConfidenceEssentia ?? null
 
+    const selectedCandidate =
+      bpmSelected === 'essentia'
+        ? bpmCandidates.find((c) => c.id === 'essentia')
+        : bpmSelected === 'librosa'
+          ? bpmCandidates.find((c) => c.id === 'librosa')
+          : null
+    const resolvedCurrentBpm =
+      typeof currentBpm === 'number'
+        ? currentBpm
+        : bpmSelected === 'manual' && typeof fullData.bpmManual === 'number'
+          ? fullData.bpmManual
+          : selectedCandidate?.value ?? bpmCandidates[0]?.value ?? null
+
     return {
       bpmCandidates,
       keyCandidates,
@@ -1171,7 +1184,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       keySelectedLabel,
       bpmSelectedConfidence,
       keySelectedConfidence,
-      currentBpm,
+      currentBpm: resolvedCurrentBpm,
       currentKey,
       currentScale,
     }
