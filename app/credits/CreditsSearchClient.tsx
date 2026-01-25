@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { formatDuration } from '@/lib/musicbrainz'
 
 type RoleOption = 'producer' | 'songwriter' | 'mixer' | 'engineer' | 'artist'
@@ -43,6 +43,9 @@ const ROLE_OPTIONS: Array<{ value: RoleOption; label: string }> = [
   { value: 'engineer', label: 'Engineer' },
   { value: 'artist', label: 'Artist' },
 ]
+
+const cacheKeyFor = (searchName: string, searchRole: string, startDate: string, endDate: string) =>
+  `credits_cache_${searchRole}_${searchName.toLowerCase()}_${startDate || 'any'}_${endDate || 'any'}`
 
 export default function CreditsSearchClient() {
   const [name, setName] = useState('')
@@ -90,9 +93,6 @@ export default function CreditsSearchClient() {
   const limit = Math.min(pageSize, 50)
   const historyKey = 'creditsSearchHistory'
   const pageSizeKey = 'credits_rows_per_page'
-  const cacheKeyFor = (searchName: string, searchRole: string, startDate: string, endDate: string) =>
-    `credits_cache_${searchRole}_${searchName.toLowerCase()}_${startDate || 'any'}_${endDate || 'any'}`
-
   useEffect(() => {
     if (typeof window === 'undefined') return
     const storedPageSize = window.localStorage.getItem(pageSizeKey)
@@ -236,7 +236,7 @@ export default function CreditsSearchClient() {
     }
   }
 
-  const fetchResultsStream = async (
+  const fetchResultsStream = useCallback(async (
     searchName: string,
     offset = 0,
     append = false,
@@ -400,7 +400,7 @@ export default function CreditsSearchClient() {
       source.close()
       streamRef.current = null
     }
-  }
+  }, [limit, releaseDateEnd, releaseDateStart, role])
 
   useEffect(() => {
     if (autoSearchRef.current) return

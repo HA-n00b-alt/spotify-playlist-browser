@@ -3,20 +3,21 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import type { MouseEvent } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import PageHeader from '../../components/PageHeader'
-import { ErrorBoundary } from '../../components/ErrorBoundary'
-import { TrackTableSkeleton, SkeletonLoader } from '../../components/SkeletonLoader'
+import { TrackTableSkeleton } from '../../components/SkeletonLoader'
+import PlaylistHeader from './components/PlaylistHeader'
+import FilterControls from './components/FilterControls'
+import TrackTable from './components/TrackTable'
+import TrackCardList from './components/TrackCardList'
+import BpmDetailsModal from './components/BpmDetailsModal'
+import CreditsModal from './components/CreditsModal'
 import { usePlaylist, useRefreshPlaylist } from '../../hooks/usePlaylist'
 import { usePlaylistTracks, useRefreshPlaylistTracks } from '../../hooks/usePlaylistTracks'
 import { useQueryClient } from '@tanstack/react-query'
 import type { 
   SpotifyTrack, 
-  SpotifyPlaylistInfo, 
   SortField, 
   SortDirection,
-  BpmResult,
-  BpmDetails,
   PreviewUrlEntry
 } from '@/lib/types'
 import { 
@@ -28,7 +29,6 @@ import {
 
 // Use shared types
 type Track = SpotifyTrack
-type PlaylistInfo = SpotifyPlaylistInfo
 type BpmFallbackOverride = 'never' | 'always' | 'bpm_only' | 'key_only' | 'default'
 
 interface PlaylistTracksPageProps {
@@ -2281,6 +2281,31 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     }
   }
 
+  const openBpmModalForTrack = useCallback((track: Track) => {
+    setSelectedBpmTrack(track)
+    setRetryStatus(null)
+    setRetryAttempted(false)
+    setShowBpmModal(true)
+  }, [])
+
+  const handleRetryBpmForTrack = () => {
+    if (!selectedBpmTrack || !bpmModalData) return
+    setRetryStatus({ loading: true })
+    setRetryAttempted(true)
+    setRetryTrackId(bpmModalData.trackId)
+    const targetIds = new Set([bpmModalData.trackId])
+    streamBpmsForTracks([selectedBpmTrack], targetIds, targetIds)
+  }
+
+  const handleRecalcTrack = (mode: 'standard' | 'force' | 'fallback') => {
+    if (!selectedBpmTrack) return
+    if (mode === 'standard') {
+      recalcTrackWithOptions(selectedBpmTrack)
+      return
+    }
+    recalcTrackWithOptions(selectedBpmTrack, { fallbackOverride: 'always' })
+  }
+
   const formatDuration = (ms: number): string => {
     const minutes = Math.floor(ms / 60000)
     const seconds = Math.floor((ms % 60000) / 1000)
@@ -2670,21 +2695,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     window.localStorage.setItem('playlistPageSize', String(pageSize))
   }, [pageSize])
 
-  const SortIcon = ({ field }: { field: SortField }) => {
-    if (sortField !== field) {
-      return (
-        <span className="ml-1 text-gray-300 text-[10px]">
-          ↕
-        </span>
-      )
-    }
-    return (
-      <span className="ml-1 text-gray-700 text-[10px]">
-        {sortDirection === 'asc' ? '↑' : '↓'}
-      </span>
-    )
-  }
-
   const bpmAdminSettings = isAdmin ? (
     <>
       <div className="flex items-center justify-between text-sm text-gray-700">
@@ -2841,20 +2851,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     )
   }
 
-  function stripHtmlTags(text: string): string {
-    if (typeof document === 'undefined') {
-      // Server-side fallback: basic regex removal
-      return text.replace(/<[^>]*>/g, '').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'")
-    }
-    const textarea = document.createElement('textarea')
-    textarea.innerHTML = text
-    const decoded = textarea.value
-    // Remove any remaining HTML tags
-    const div = document.createElement('div')
-    div.innerHTML = decoded
-    return div.textContent || div.innerText || ''
-  }
-
   return (
     <div className="min-h-screen flex flex-col p-4 sm:p-8 bg-transparent">
       <div className="max-w-7xl mx-auto flex-1 w-full">
@@ -3006,944 +3002,119 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         )}
 
         {playlistInfo && (
-          <div className="relative mb-6 rounded-2xl bg-white p-4 shadow-[0_4px_24px_rgba(0,0,0,0.06)] border-t border-gray-100 sm:p-5">
-            <div className="absolute right-4 top-4 flex items-center gap-2">
-              {isCached && cachedAt && (
-                <button
-                  onClick={() => setShowCacheModal(true)}
-                  className="group relative inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-200 text-[11px] font-semibold text-blue-700"
-                  aria-label="Using cached data"
-                >
-                  C
-                  <span className="pointer-events-none absolute right-0 top-8 whitespace-nowrap rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 opacity-0 shadow-sm transition-opacity duration-0 group-hover:opacity-100">
-                    Using cached data
-                  </span>
-                </button>
-              )}
-              <button
-                onClick={handleHeaderRefresh}
-                className="group relative inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200"
-                aria-label="Refresh playlist"
-                disabled={isHeaderRefreshing}
-              >
-                {isHeaderRefreshing ? (
-                  <svg className="h-3.5 w-3.5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                ) : (
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                )}
-                <span className="pointer-events-none absolute right-0 top-8 whitespace-nowrap rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 opacity-0 shadow-sm transition-opacity duration-0 group-hover:opacity-100">
-                  Refresh playlist
-                </span>
-              </button>
-            </div>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-              {playlistInfo.images && playlistInfo.images[0] && (
-                <Image
-                  src={playlistInfo.images[0].url}
-                  alt={playlistInfo.name}
-                  width={150}
-                  height={150}
-                  className="h-[150px] w-[150px] rounded-xl object-cover shadow-[0_6px_18px_rgba(0,0,0,0.16)]"
-                />
-              )}
-              <div className="flex-1 min-w-0">
-                <div className="space-y-2">
-                  {playlistInfo.external_urls?.spotify ? (
-                    <a
-                      href={playlistInfo.external_urls.spotify}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 hover:text-emerald-600"
-                      onClick={(e) => {
-                        e.preventDefault()
-                        const spotifyUri = `spotify:playlist:${playlistInfo.id}`
-                        window.location.href = spotifyUri
-                        setTimeout(() => {
-                          window.open(playlistInfo.external_urls.spotify, '_blank', 'noopener,noreferrer')
-                        }, 500)
-                      }}
-                    >
-                      {playlistInfo.name}
-                    </a>
-                  ) : (
-                    <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-                      {playlistInfo.name}
-                    </h1>
-                  )}
-                  {playlistInfo.description && (
-                    <p className="text-sm text-gray-600">
-                      {stripHtmlTags(playlistInfo.description)}
-                    </p>
-                  )}
-                  <div className="flex flex-wrap items-center gap-2 text-sm text-gray-500 dark:text-slate-400">
-                    {playlistInfo.owner.external_urls?.spotify ? (
-                      <>
-                        <span>By </span>
-                        <a
-                          href={playlistInfo.owner.external_urls.spotify}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-emerald-600 hover:text-emerald-700 hover:underline"
-                          onClick={(e) => {
-                            e.preventDefault()
-                            const ownerId = playlistInfo.owner.external_urls?.spotify.split('/').pop()
-                            if (ownerId) {
-                              const spotifyUri = `spotify:user:${ownerId}`
-                              window.location.href = spotifyUri
-                              setTimeout(() => {
-                                window.open(playlistInfo.owner.external_urls?.spotify, '_blank', 'noopener,noreferrer')
-                              }, 500)
-                            }
-                          }}
-                        >
-                          {playlistInfo.owner.display_name}
-                        </a>
-                        <span>|</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>By {playlistInfo.owner.display_name}</span>
-                        <span>|</span>
-                      </>
-                    )}
-                    <span>{playlistInfo.tracks?.total ?? tracks.length} tracks</span>
-                  </div>
-                  {playlistInfo.external_urls?.spotify && (
-                    <div className="flex flex-col items-start gap-2">
-                      <a
-                        href={playlistInfo.external_urls.spotify}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex w-fit items-center rounded-full bg-[#1DB954] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#179e49]"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          const spotifyUri = `spotify:playlist:${playlistInfo.id}`
-                          window.location.href = spotifyUri
-                          setTimeout(() => {
-                            window.open(playlistInfo.external_urls.spotify, '_blank', 'noopener,noreferrer')
-                          }, 500)
-                        }}
-                      >
-                        Open in Spotify
-                      </a>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-            {bpmSummary && showBpmNotice && (
-              <div className="mt-4 inline-flex items-start gap-2 text-[11px] text-amber-600">
-                <svg viewBox="0 0 20 20" aria-hidden="true" className="mt-0.5 h-3.5 w-3.5">
-                  <path
-                    d="M10 2.5 18.5 17H1.5L10 2.5Z"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.2"
-                    strokeLinejoin="round"
-                  />
-                  <path d="M10 7.5v4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-                  <circle cx="10" cy="14.5" r="0.8" fill="currentColor" />
-                </svg>
-                <span>
-                  {bpmSummary.shouldShowProgress
-                    ? `BPM processing (${bpmSummary.tracksRemainingToSearch} remaining).`
-                    : bpmSummary.tracksWithNa > 0
-                      ? `${bpmSummary.tracksWithNa} of ${bpmSummary.totalTracks} tracks missing BPM.`
-                      : `All ${bpmSummary.totalTracks} tracks have BPM information.`}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setShowBpmMoreInfo(true)}
-                  className="text-amber-600 underline-offset-2 hover:text-amber-800 hover:underline"
-                >
-                  Details
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowBpmNotice(false)}
-                  className="text-amber-600 hover:text-amber-800"
-                  aria-label="Dismiss notice"
-                >
-                  ×
-                </button>
-              </div>
-            )}
-          </div>
+          <PlaylistHeader
+            playlistInfo={playlistInfo}
+            tracksCount={tracks.length}
+            isCached={isCached}
+            cachedAt={cachedAt}
+            isHeaderRefreshing={isHeaderRefreshing}
+            bpmSummary={bpmSummary}
+            showBpmNotice={showBpmNotice}
+            onHeaderRefresh={handleHeaderRefresh}
+            onShowCacheModal={() => setShowCacheModal(true)}
+            onShowBpmMoreInfo={() => setShowBpmMoreInfo(true)}
+            onDismissBpmNotice={() => setShowBpmNotice(false)}
+          />
         )}
 
-        <div className="mb-4 sm:mb-6 space-y-3 sm:space-y-4">
-          <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-300">
-              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="11" cy="11" r="7" />
-                <path d="M20 20l-3.5-3.5" strokeLinecap="round" />
-              </svg>
-            </span>
-            <input
-              type="text"
-              placeholder="Search tracks... (Cmd/Ctrl+F)"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              ref={searchInputRef}
-              className="w-full bg-transparent py-3 pl-10 pr-11 text-sm text-gray-900 placeholder-gray-500 border-b border-gray-300 focus:outline-none focus:border-gray-500"
-            />
-            <button
-              type="button"
-              onClick={() => setShowAdvanced((prev) => !prev)}
-              className={`absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-200 ${
-                showAdvanced ? 'bg-gray-100 text-gray-700' : 'bg-white'
-              }`}
-              title={showAdvanced ? 'Hide advanced search' : 'Show advanced search'}
-              aria-label={showAdvanced ? 'Hide advanced filters' : 'Show advanced filters'}
-            >
-              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10 6h10M4 6h2M10 12h10M4 12h2M10 18h10M4 18h2" />
-              </svg>
-            </button>
-          </div>
-
-          {showAdvanced && (
-            <div className="mt-3 sm:mt-4 p-5 sm:p-6 bg-gray-100 rounded-lg border border-gray-200">
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 max-w-4xl">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    Year Range
-                  </label>
-                  <div className="flex gap-3 items-center">
-                    <input
-                      type="number"
-                      placeholder="From"
-                      value={yearFrom}
-                      onChange={(e) => setYearFrom(e.target.value)}
-                      className="w-24 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    />
-                    <span className="text-gray-500 dark:text-slate-400 text-sm whitespace-nowrap">to</span>
-                    <input
-                      type="number"
-                      placeholder="To"
-                      value={yearTo}
-                      onChange={(e) => setYearTo(e.target.value)}
-                      className="w-24 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    BPM Range
-                  </label>
-                  <div className="flex gap-3 items-center mb-3">
-                    <input
-                      type="number"
-                      placeholder="From"
-                      value={bpmFrom}
-                      onChange={(e) => setBpmFrom(e.target.value)}
-                      className="w-24 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    />
-                    <span className="text-gray-500 dark:text-slate-400 text-sm whitespace-nowrap">to</span>
-                    <input
-                      type="number"
-                      placeholder="To"
-                      value={bpmTo}
-                      onChange={(e) => setBpmTo(e.target.value)}
-                      className="w-24 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    />
-                  </div>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={includeHalfDoubleBpm}
-                      onChange={(e) => setIncludeHalfDoubleBpm(e.target.checked)}
-                      className="mr-2 w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                    />
-                    <span className="text-sm text-gray-700">
-                      Include tracks with half/double BPM
-                    </span>
-                  </label>
-                </div>
-              </div>
-              
-              {(yearFrom || yearTo || bpmFrom || bpmTo) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setYearFrom('')
-                    setYearTo('')
-                    setBpmFrom('')
-                    setBpmTo('')
-                    setIncludeHalfDoubleBpm(false)
-                  }}
-                  className="mt-4 text-sm text-red-600 hover:text-red-700 underline"
-                >
-                  Clear Filters
-                </button>
-              )}
-            </div>
-          )}
-
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="text-xs sm:text-sm text-gray-600">Per page</label>
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                const value = e.target.value
-                setPageSize(value === 'all' ? 'all' : Number(value))
-              }}
-              className="px-2 py-1 border border-gray-300 rounded text-gray-900 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-            >
-              <option value="10">10</option>
-              <option value="20">20</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
-              <option value="all">All</option>
-            </select>
-            {pageSize !== 'all' && (
-              <div
-                className={`flex items-center gap-2 ml-auto text-xs sm:text-sm text-gray-600 ${
-                  totalPages <= 1 ? 'opacity-50 pointer-events-none' : ''
-                }`}
-              >
-                <button
-                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                  disabled={safePage <= 1}
-                  className="px-2 py-1 border border-gray-300 rounded disabled:text-gray-400 dark:text-slate-500 disabled:border-gray-200"
-                >
-                  Prev
-                </button>
-                <span>
-                  Page {safePage} of {totalPages}
-                </span>
-                <button
-                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                  disabled={safePage >= totalPages}
-                  className="px-2 py-1 border border-gray-300 rounded disabled:text-gray-400 dark:text-slate-500 disabled:border-gray-200"
-                >
-                  Next
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+        <FilterControls
+          searchQuery={searchQuery}
+          showAdvanced={showAdvanced}
+          yearFrom={yearFrom}
+          yearTo={yearTo}
+          bpmFrom={bpmFrom}
+          bpmTo={bpmTo}
+          includeHalfDoubleBpm={includeHalfDoubleBpm}
+          pageSize={pageSize}
+          safePage={safePage}
+          totalPages={totalPages}
+          searchInputRef={searchInputRef}
+          onSearchQueryChange={setSearchQuery}
+          onToggleAdvanced={() => setShowAdvanced((prev) => !prev)}
+          onYearFromChange={setYearFrom}
+          onYearToChange={setYearTo}
+          onBpmFromChange={setBpmFrom}
+          onBpmToChange={setBpmTo}
+          onIncludeHalfDoubleBpmChange={setIncludeHalfDoubleBpm}
+          onClearFilters={() => {
+            setYearFrom('')
+            setYearTo('')
+            setBpmFrom('')
+            setBpmTo('')
+            setIncludeHalfDoubleBpm(false)
+          }}
+          onPageSizeChange={setPageSize}
+          onPrevPage={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+          onNextPage={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+        />
 
         {/* Cached Data Indicator moved to header */}
 
         {/* Mobile Card View */}
-        <div className="block sm:hidden space-y-3">
-          {paginatedTracks.map((track, index) => (
-            <div
-              key={track.id}
-              className={`bg-white rounded-2xl shadow-[0_4px_16px_rgba(0,0,0,0.06)] p-4 cursor-pointer transition-colors ${
-                playingTrackId === track.id
-                  ? 'bg-emerald-50'
-                  : 'hover:bg-[#F9FAFB] dark:hover:bg-slate-800/60'
-              }`}
-              onClick={(e) => {
-                // Only handle left click
-                if (e.button === 0 || !e.button) {
-                  handleTrackClick(track, e)
-                }
-              }}
-              onContextMenu={(e) => {
-                e.preventDefault()
-                handleTrackContextMenu(e, track)
-              }}
-              title={getPreviewTooltip(track.id)}
-            >
-              <div className="flex items-start gap-3">
-                <div className="flex flex-col items-center gap-2">
-                  <div className="text-gray-500 dark:text-slate-400 text-xs font-medium w-6 h-6 flex items-center justify-center">
-                    {playingTrackId === track.id ? (
-                      <svg className="w-4 h-4 text-green-600 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                      </svg>
-                    ) : (
-                      pageSize === 'all'
-                        ? index + 1
-                        : (safePage - 1) * (pageSize as number) + index + 1
-                    )}
-                  </div>
-                  {track.album.images && track.album.images[0] ? (
-                    <Image
-                      src={track.album.images[0].url}
-                      alt={track.album.name}
-                      width={56}
-                      height={56}
-                      className="w-14 h-14 object-cover rounded-xl flex-shrink-0"
-                    />
-                  ) : (
-                    <div className="w-14 h-14 bg-gray-200 rounded-xl flex-shrink-0 flex items-center justify-center">
-                      <span className="text-gray-400 dark:text-slate-500 text-[10px]">No image</span>
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <a
-                      href="#"
-                      className="block truncate text-sm font-semibold text-slate-900 dark:text-slate-100 hover:text-emerald-600 hover:underline"
-                      onClick={(e) => handleTrackTitleClick(e, track)}
-                      onContextMenu={(e) => handleTrackContextMenu(e, track)}
-                      title={getPreviewTooltip(track.id)}
-                    >
-                      {track.name}
-                      {track.explicit && (
-                        <span className="ml-1 text-[10px] bg-gray-200 text-gray-700 px-1 py-0.5 rounded">E</span>
-                      )}
-                    </a>
-                    <button
-                      type="button"
-                      onClick={(e) => handleTrackContextMenu(e, track)}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-400 dark:text-slate-500 hover:bg-gray-100 hover:text-gray-600"
-                      aria-label="More options"
-                    >
-                      ...
-                    </button>
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-slate-400 mt-1 truncate">
-                    {track.artists.map((artist, index) => (
-                      <span key={artist.id || index}>
-                        {artist.external_urls?.spotify ? (
-                          <a
-                            href={artist.external_urls.spotify}
-                            className="text-emerald-600 hover:text-emerald-700"
-                            onClick={(e) => handleArtistClick(e, artist)}
-                            onContextMenu={(e) => handleArtistContextMenu(e, artist)}
-                          >
-                            {artist.name}
-                          </a>
-                        ) : (
-                          <span>{artist.name}</span>
-                        )}
-                        {index < track.artists.length - 1 && ', '}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-gray-400 dark:text-slate-500">
-                    <span className="truncate">
-                      {track.album.external_urls?.spotify ? (
-                        <a
-                          href={track.album.external_urls.spotify}
-                          className="text-emerald-600 hover:text-emerald-700"
-                          onClick={(e) => handleAlbumClick(e, track.album)}
-                          onContextMenu={(e) => handleAlbumContextMenu(e, track.album)}
-                        >
-                          {track.album.name}
-                        </a>
-                      ) : (
-                        <span>{track.album.name}</span>
-                      )}
-                    </span>
-                    <span aria-hidden="true">•</span>
-                    <span>{getYearString(track.album.release_date)}</span>
-                    <span aria-hidden="true">•</span>
-                    <span>{formatDuration(track.duration_ms)}</span>
-                  </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-slate-400">
-                    {loadingBpmFields.has(track.id) ? (
-                      <span className="inline-flex w-16 items-center justify-center text-gray-400 dark:text-slate-500">
-                        <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                      </span>
-                    ) : trackBpms[track.id] != null ? (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          if (isAdmin) {
-                            setSelectedBpmTrack(track)
-                            setRetryStatus(null)
-                            setRetryAttempted(false)
-                            setShowBpmModal(true)
-                          } else {
-                            handleTrackClick(track)
-                          }
-                        }}
-                        className="inline-flex w-16 items-center justify-center rounded-full border border-blue-200 bg-transparent px-2.5 py-0.5 text-[11px] font-medium text-blue-700"
-                      >
-                        {Math.round(trackBpms[track.id]!)}
-                      </button>
-                    ) : (tracksNeedingBpm.has(track.id) || bpmStreamStatus[track.id] === 'error') ? (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          if (isAdmin) {
-                            setSelectedBpmTrack(track)
-                            setRetryStatus(null)
-                            setRetryAttempted(false)
-                            setShowBpmModal(true)
-                          } else {
-                            handleTrackClick(track)
-                          }
-                        }}
-                        className="inline-flex w-16 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-0.5 text-[11px] font-medium text-amber-700"
-                      >
-                        N/A
-                      </button>
-                    ) : track.tempo != null ? (
-                      <span className="inline-flex w-16 items-center justify-center rounded-full border border-blue-200 bg-transparent px-2.5 py-0.5 text-[11px] font-medium text-blue-700">
-                        {Math.round(track.tempo)}
-                      </span>
-                    ) : (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          if (isAdmin) {
-                            setSelectedBpmTrack(track)
-                            setRetryStatus(null)
-                            setRetryAttempted(false)
-                            setShowBpmModal(true)
-                          } else {
-                            handleTrackClick(track)
-                          }
-                        }}
-                        className="inline-flex w-16 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-0.5 text-[11px] font-medium text-amber-700"
-                      >
-                        N/A
-                      </button>
-                    )}
-                    {(() => {
-                      if (loadingKeyFields.has(track.id)) {
-                        return (
-                          <span className="inline-flex w-24 items-center justify-center text-gray-400 dark:text-slate-500">
-                            <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                          </span>
-                        )
-                      }
-                      const key = trackKeys[track.id]
-                      const scale = trackScales[track.id]
-                      if (key || scale) {
-                        return (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              if (isAdmin) {
-                                setSelectedBpmTrack(track)
-                                setRetryStatus(null)
-                                setRetryAttempted(false)
-                                setShowBpmModal(true)
-                              } else {
-                                handleTrackClick(track)
-                              }
-                            }}
-                            className="inline-flex w-24 items-center justify-center rounded-full border border-slate-200 bg-transparent px-2.5 py-0.5 text-[11px] font-medium text-slate-700 whitespace-nowrap"
-                          >
-                            {key && scale ? `${key} ${scale}` : key || scale}
-                          </button>
-                        )
-                      }
-                        if (tracksNeedingKey.has(track.id) || bpmStreamStatus[track.id] === 'error') {
-                          return (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                if (isAdmin) {
-                                  setSelectedBpmTrack(track)
-                                  setRetryStatus(null)
-                                  setRetryAttempted(false)
-                                  setShowBpmModal(true)
-                                } else {
-                                  handleTrackClick(track)
-                                }
-                              }}
-                              className="inline-flex w-24 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-0.5 text-[11px] font-medium text-amber-700"
-                            >
-                              N/A
-                          </button>
-                        )
-                      }
-                      return (
-                        <span className="inline-flex w-24 items-center justify-center rounded-full border border-gray-200 bg-transparent px-2.5 py-0.5 text-[11px] font-medium text-gray-500 dark:text-slate-400">
-                          -
-                        </span>
-                      )
-                    })()}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+        <TrackCardList
+          tracks={paginatedTracks}
+          pageSize={pageSize}
+          safePage={safePage}
+          playingTrackId={playingTrackId}
+          isAdmin={isAdmin}
+          trackBpms={trackBpms}
+          trackKeys={trackKeys}
+          trackScales={trackScales}
+          loadingBpmFields={loadingBpmFields}
+          loadingKeyFields={loadingKeyFields}
+          tracksNeedingBpm={tracksNeedingBpm}
+          tracksNeedingKey={tracksNeedingKey}
+          bpmStreamStatus={bpmStreamStatus}
+          getPreviewTooltip={getPreviewTooltip}
+          formatDuration={formatDuration}
+          getYearString={getYearString}
+          onTrackClick={handleTrackClick}
+          onTrackContextMenu={handleTrackContextMenu}
+          onTrackTitleClick={handleTrackTitleClick}
+          onArtistClick={handleArtistClick}
+          onArtistContextMenu={handleArtistContextMenu}
+          onAlbumClick={handleAlbumClick}
+          onAlbumContextMenu={handleAlbumContextMenu}
+          onOpenBpmModal={openBpmModalForTrack}
+        />
 
         {/* Desktop Table View */}
-        <div className="hidden sm:block overflow-hidden rounded-2xl bg-white shadow-[0_4px_24px_rgba(0,0,0,0.06)] border-t border-gray-100 dark:border-slate-800 dark:bg-slate-900">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-white/70 dark:bg-slate-900/90">
-                <tr>
-                  <th className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 w-12">
-                    #
-                  </th>
-                  <th
-                    className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 w-12 lg:w-16"
-                    aria-label="Cover"
-                  >
-                  </th>
-                  <th
-                    className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 cursor-pointer hover:text-gray-700 dark:hover:text-slate-200 select-none"
-                    onClick={() => handleSort('name')}
-                  >
-                    <div className="flex items-center">
-                      Track
-                      <SortIcon field="name" />
-                    </div>
-                  </th>
-                  <th
-                    className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 cursor-pointer hover:text-gray-700 dark:hover:text-slate-200 select-none hidden md:table-cell max-w-[120px]"
-                    onClick={() => handleSort('artists')}
-                  >
-                    <div className="flex items-center">
-                      Artist
-                      <SortIcon field="artists" />
-                    </div>
-                  </th>
-                  <th
-                    className="px-3 lg:px-4 py-3 text-left text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 cursor-pointer hover:text-gray-700 dark:hover:text-slate-200 select-none hidden lg:table-cell max-w-[150px]"
-                    onClick={() => handleSort('album')}
-                  >
-                    <div className="flex items-center">
-                      Album
-                      <SortIcon field="album" />
-                    </div>
-                  </th>
-                  <th
-                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 cursor-pointer hover:text-gray-700 dark:hover:text-slate-200 select-none hidden md:table-cell"
-                    onClick={() => handleSort('duration')}
-                  >
-                    <div className="flex items-center justify-end">
-                      Duration
-                      <SortIcon field="duration" />
-                    </div>
-                  </th>
-                  <th
-                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 cursor-pointer hover:text-gray-700 dark:hover:text-slate-200 select-none hidden md:table-cell"
-                    onClick={() => handleSort('tempo')}
-                  >
-                    <div className="flex items-center justify-end">
-                      BPM
-                      <SortIcon field="tempo" />
-                    </div>
-                  </th>
-                  <th className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 hidden md:table-cell min-w-[96px]">
-                    Key
-                  </th>
-                  <th
-                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 cursor-pointer hover:text-gray-700 dark:hover:text-slate-200 select-none"
-                    onClick={() => handleSort('release_date')}
-                  >
-                    <div className="flex items-center justify-end">
-                      Year
-                      <SortIcon field="release_date" />
-                    </div>
-                  </th>
-                  <th
-                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 cursor-pointer hover:text-gray-700 dark:hover:text-slate-200 select-none hidden lg:table-cell"
-                    onClick={() => handleSort('popularity')}
-                  >
-                    <div className="flex items-center justify-end">
-                      Popularity
-                      <SortIcon field="popularity" />
-                    </div>
-                  </th>
-                  <th
-                    className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500 cursor-pointer hover:text-gray-700 dark:hover:text-slate-200 select-none hidden lg:table-cell"
-                    onClick={() => handleSort('added_at')}
-                  >
-                    <div className="flex items-center justify-end">
-                      Added
-                      <SortIcon field="added_at" />
-                    </div>
-                  </th>
-                  <th className="px-3 lg:px-4 py-3 text-right text-[11px] uppercase tracking-[0.05em] font-medium text-[#A0AEC0] dark:text-slate-500">
-                    <span className="sr-only">Options</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedTracks.length === 0 ? (
-                  <tr>
-                    <td colSpan={11} className="px-4 py-8 text-center text-gray-500 dark:text-slate-400">
-                      {(searchQuery || yearFrom || yearTo || bpmFrom || bpmTo) ? 'No tracks match your filters' : 'No tracks found'}
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedTracks.map((track, index) => (
-                    <tr 
-                      key={track.id} 
-                      className={`group transition-colors cursor-pointer ${
-                        playingTrackId === track.id
-                          ? 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20'
-                          : 'hover:bg-[#F9FAFB] dark:hover:bg-slate-800/60'
-                      }`}
-                      onClick={(e) => {
-                        // Only handle left click
-                        if (e.button === 0 || !e.button) {
-                          handleTrackClick(track, e)
-                        }
-                      }}
-                      onContextMenu={(e) => {
-                        e.preventDefault()
-                        handleTrackContextMenu(e, track)
-                      }}
-                      title={getPreviewTooltip(track.id)}
-                    >
-                      <td className="px-3 lg:px-4 py-4 text-gray-400 dark:text-slate-500 text-xs sm:text-sm">
-                        <div className="flex items-center justify-center">
-                          {playingTrackId === track.id ? (
-                            <svg className="w-4 h-4 text-green-600 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                            </svg>
-                          ) : (
-                            pageSize === 'all'
-                              ? index + 1
-                              : (safePage - 1) * (pageSize as number) + index + 1
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-3 lg:px-4 py-4">
-                        {track.album.images && track.album.images[0] ? (
-                          <Image
-                            src={track.album.images[0].url}
-                            alt={track.album.name}
-                            width={40}
-                            height={40}
-                            className="w-8 h-8 sm:w-10 sm:h-10 object-cover rounded-xl flex-shrink-0"
-                          />
-                        ) : (
-                          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 rounded-xl flex-shrink-0 flex items-center justify-center">
-                            <span className="text-gray-400 dark:text-slate-500 text-xs">No image</span>
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-3 lg:px-4 py-4">
-                        <div className="flex items-center gap-2">
-                          <a
-                            href="#"
-                            className="font-semibold text-slate-900 dark:text-slate-100 text-xs sm:text-sm hover:text-emerald-600 hover:underline"
-                            onClick={(e) => handleTrackTitleClick(e, track)}
-                            onContextMenu={(e) => handleTrackContextMenu(e, track)}
-                            title={getPreviewTooltip(track.id)}
-                          >
-                            {track.name}
-                          </a>
-                          {track.explicit && (
-                            <span className="ml-1 text-xs bg-gray-200 text-gray-700 px-1 py-0.5 rounded dark:bg-slate-800 dark:text-slate-200">E</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-3 lg:px-4 py-4 text-gray-500 dark:text-slate-400 text-xs sm:text-sm hidden md:table-cell max-w-[120px] truncate" title={track.artists.map(a => a.name).join(', ')}>
-                        {track.artists.map((artist, index) => (
-                          <span key={artist.id || index}>
-                            {artist.external_urls?.spotify ? (
-                              <a
-                                href={artist.external_urls.spotify}
-                                className="text-emerald-600 hover:text-emerald-700 hover:underline"
-                                onClick={(e) => handleArtistClick(e, artist)}
-                                onContextMenu={(e) => handleArtistContextMenu(e, artist)}
-                              >
-                                {artist.name}
-                              </a>
-                            ) : (
-                              <span>{artist.name}</span>
-                            )}
-                            {index < track.artists.length - 1 && ', '}
-                          </span>
-                        ))}
-                      </td>
-                      <td className="px-3 lg:px-4 py-4 text-gray-500 dark:text-slate-400 text-xs sm:text-sm hidden lg:table-cell max-w-[150px] truncate" title={track.album.name}>
-                        {track.album.external_urls?.spotify ? (
-                          <a
-                            href={track.album.external_urls.spotify}
-                            className="text-emerald-600 hover:text-emerald-700 hover:underline"
-                            onClick={(e) => handleAlbumClick(e, track.album)}
-                            onContextMenu={(e) => handleAlbumContextMenu(e, track.album)}
-                          >
-                            {track.album.name}
-                          </a>
-                        ) : (
-                          <span>{track.album.name}</span>
-                        )}
-                      </td>
-                      <td className="px-3 lg:px-4 py-4 text-gray-500 dark:text-slate-400 text-xs sm:text-sm hidden md:table-cell text-right">
-                        {formatDuration(track.duration_ms)}
-                      </td>
-                      <td className="px-3 lg:px-4 py-4 text-xs sm:text-sm hidden md:table-cell text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex justify-end">
-                          {loadingBpmFields.has(track.id) ? (
-                            <div className="flex w-16 items-center justify-end gap-1 text-gray-400 dark:text-slate-500">
-                              <svg className="animate-spin h-4 w-4 text-gray-400 dark:text-slate-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                              </svg>
-                              <span className="text-gray-400 dark:text-slate-500">...</span>
-                            </div>
-                          ) : trackBpms[track.id] != null
-                            ? (
-                              <button
-                                onClick={() => {
-                                  if (isAdmin) {
-                                    setSelectedBpmTrack(track)
-                                    setRetryStatus(null)
-                                    setRetryAttempted(false)
-                                    setShowBpmModal(true)
-                                  } else {
-                                    handleTrackClick(track)
-                                  }
-                                }}
-                                className="inline-flex w-16 items-center justify-center rounded-full border border-blue-200 bg-transparent px-2.5 py-1 text-xs font-medium text-blue-700 dark:border-emerald-500/40 dark:text-emerald-300"
-                                title={isAdmin ? 'Click for BPM details' : getPreviewTooltip(track.id)}
-                              >
-                                {Math.round(trackBpms[track.id]!)}
-                                {bpmStreamStatus[track.id] === 'partial' && (
-                                  <span className="ml-1 text-[10px] text-blue-600 dark:text-emerald-300">partial</span>
-                                )}
-                              </button>
-                            )
-                            : (tracksNeedingBpm.has(track.id) || bpmStreamStatus[track.id] === 'error')
-                              ? (
-                                <button
-                                  onClick={() => {
-                                    if (isAdmin) {
-                                      setSelectedBpmTrack(track)
-                                      setRetryStatus(null)
-                                      setRetryAttempted(false)
-                                      setShowBpmModal(true)
-                                    } else {
-                                      handleTrackClick(track)
-                                    }
-                                  }}
-                                  className="inline-flex w-16 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-1 text-xs font-medium text-amber-700 dark:border-amber-500/40 dark:text-amber-300"
-                                  title={isAdmin ? 'Click to see why BPM is not available' : getPreviewTooltip(track.id)}
-                                >
-                                  N/A
-                                </button>
-                              )
-                              : track.tempo != null
-                                ? (
-                                  <span className="inline-flex w-16 items-center justify-center rounded-full border border-blue-200 bg-transparent px-2.5 py-1 text-xs font-medium text-blue-700 dark:border-emerald-500/40 dark:text-emerald-300">
-                                    {Math.round(track.tempo)}
-                                  </span>
-                                )
-                                : (
-                                  <button
-                                    onClick={() => {
-                                      if (isAdmin) {
-                                        setSelectedBpmTrack(track)
-                                        setRetryStatus(null)
-                                        setRetryAttempted(false)
-                                        setShowBpmModal(true)
-                                      } else {
-                                        handleTrackClick(track)
-                                      }
-                                    }}
-                                    className="inline-flex w-16 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-1 text-xs font-medium text-amber-700 dark:border-amber-500/40 dark:text-amber-300"
-                                    title={isAdmin ? 'Click to see why BPM is not available' : getPreviewTooltip(track.id)}
-                                  >
-                                    N/A
-                                  </button>
-                                )}
-                        </div>
-                      </td>
-                      <td className="px-3 lg:px-4 py-4 text-xs sm:text-sm hidden md:table-cell whitespace-nowrap min-w-[96px] text-right">
-                        <div className="flex justify-end">
-                          {(() => {
-                            if (loadingKeyFields.has(track.id)) {
-                              return (
-                                <span className="inline-flex w-24 items-center justify-center gap-1 text-gray-400 dark:text-slate-500">
-                                  <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                  </svg>
-                                  <span>...</span>
-                                </span>
-                              )
-                            }
-                            const key = trackKeys[track.id]
-                            const scale = trackScales[track.id]
-                            if (key || scale) {
-                              return (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    if (isAdmin) {
-                                      setSelectedBpmTrack(track)
-                                      setRetryStatus(null)
-                                      setRetryAttempted(false)
-                                      setShowBpmModal(true)
-                                    } else {
-                                      handleTrackClick(track)
-                                    }
-                                  }}
-                                  className="inline-flex w-24 items-center justify-center rounded-full border border-slate-200 bg-transparent px-2.5 py-1 text-xs font-medium text-slate-700 whitespace-nowrap dark:border-slate-600 dark:text-slate-200"
-                                >
-                                  {key && scale ? `${key} ${scale}` : key || scale}
-                                </button>
-                              )
-                            }
-                            if (tracksNeedingKey.has(track.id) || bpmStreamStatus[track.id] === 'error') {
-                              return (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    if (isAdmin) {
-                                      setSelectedBpmTrack(track)
-                                      setRetryStatus(null)
-                                      setRetryAttempted(false)
-                                      setShowBpmModal(true)
-                                    } else {
-                                      handleTrackClick(track)
-                                    }
-                                  }}
-                                  className="inline-flex w-24 items-center justify-center rounded-full border border-amber-200 bg-transparent px-2.5 py-1 text-xs font-medium text-amber-700 dark:border-amber-500/40 dark:text-amber-300"
-                                >
-                                  N/A
-                                </button>
-                              )
-                            }
-                            return (
-                              <span className="inline-flex w-24 items-center justify-center rounded-full border border-gray-200 bg-transparent px-2.5 py-1 text-xs font-medium text-gray-500 dark:border-slate-600 dark:text-slate-400">
-                                -
-                              </span>
-                            )
-                          })()}
-                        </div>
-                      </td>
-                      <td className="px-3 lg:px-4 py-4 text-gray-500 dark:text-slate-400 text-xs sm:text-sm text-right">
-                        {getYearString(track.album.release_date)}
-                      </td>
-                      <td className="px-3 lg:px-4 py-4 text-gray-500 dark:text-slate-400 text-xs sm:text-sm text-right hidden lg:table-cell">
-                        {track.popularity != null ? track.popularity : (
-                          <span className="text-gray-400 dark:text-slate-500">N/A</span>
-                        )}
-                      </td>
-                      <td className="px-3 lg:px-4 py-4 text-gray-500 dark:text-slate-400 text-xs sm:text-sm text-right hidden lg:table-cell">
-                        {track.added_at ? formatDate(track.added_at) : 'N/A'}
-                      </td>
-                      <td className="px-3 lg:px-4 py-4 text-right">
-                        <button
-                          type="button"
-                          className="opacity-0 transition-opacity text-gray-400 dark:text-slate-500 hover:text-gray-600 group-hover:opacity-100"
-                          onClick={(e) => handleTrackContextMenu(e, track)}
-                          aria-label="More options"
-                        >
-                          ...
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <TrackTable
+          sortedTracks={sortedTracks}
+          paginatedTracks={paginatedTracks}
+          searchQuery={searchQuery}
+          yearFrom={yearFrom}
+          yearTo={yearTo}
+          bpmFrom={bpmFrom}
+          bpmTo={bpmTo}
+          sortField={sortField}
+          sortDirection={sortDirection}
+          pageSize={pageSize}
+          safePage={safePage}
+          playingTrackId={playingTrackId}
+          isAdmin={isAdmin}
+          trackBpms={trackBpms}
+          trackKeys={trackKeys}
+          trackScales={trackScales}
+          loadingBpmFields={loadingBpmFields}
+          loadingKeyFields={loadingKeyFields}
+          tracksNeedingBpm={tracksNeedingBpm}
+          tracksNeedingKey={tracksNeedingKey}
+          bpmStreamStatus={bpmStreamStatus}
+          getPreviewTooltip={getPreviewTooltip}
+          formatDuration={formatDuration}
+          formatDate={formatDate}
+          getYearString={getYearString}
+          onSort={handleSort}
+          onTrackClick={handleTrackClick}
+          onTrackContextMenu={handleTrackContextMenu}
+          onTrackTitleClick={handleTrackTitleClick}
+          onArtistClick={handleArtistClick}
+          onArtistContextMenu={handleArtistContextMenu}
+          onAlbumClick={handleAlbumClick}
+          onAlbumContextMenu={handleAlbumContextMenu}
+          onOpenBpmModal={openBpmModalForTrack}
+        />
         <div className="mt-4 text-xs sm:text-sm text-gray-600">
           Showing {paginatedTracks.length} of {tracks.length} tracks
         </div>
@@ -4059,688 +3230,58 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           )}
 
       {/* BPM Details Modal */}
-      {isAdmin && bpmModalData && bpmModalSummary && selectedBpmTrack && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-          onClick={closeBpmModal}
-        >
-          <div
-            className="bg-white rounded-[12px] shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto dark:bg-slate-900 dark:text-slate-100"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between pb-4">
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">
-                  BPM and Key information
-                </h2>
-                <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">
-                  {selectedBpmTrack.name} · {(selectedBpmTrack.artists || []).map(a => a.name).filter(Boolean).join(', ') || 'Unknown artist'}
-                </p>
-                {bpmStreamStatus[bpmModalData.trackId] === 'partial' && (
-                  <div className="mt-2 inline-flex items-center text-[11px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-200">
-                    Partial results streaming...
-                  </div>
-                )}
-              </div>
-              <button
-                onClick={closeBpmModal}
-                className="text-gray-500 hover:text-gray-700 dark:text-slate-200 dark:hover:text-white text-2xl"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="mt-6 space-y-8">
-              <section>
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400 dark:text-slate-500">
-                      BPM
-                    </div>
-                    <div className="mt-3 flex items-center gap-2 text-4xl font-semibold text-gray-900 dark:text-slate-100">
-                      {typeof bpmModalSummary.currentBpm === 'number'
-                        ? `${Math.round(bpmModalSummary.currentBpm)} BPM`
-                        : '—'}
-                      {typeof bpmModalSummary.currentBpm === 'number' && (
-                        <svg
-                          className="h-5 w-5 text-emerald-500 dark:text-emerald-300"
-                          viewBox="0 0 20 20"
-                          fill="currentColor"
-                          aria-hidden="true"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M16.704 5.292a1 1 0 010 1.416l-7.1 7.1a1 1 0 01-1.416 0l-3.392-3.392a1 1 0 111.416-1.416l2.684 2.684 6.392-6.392a1 1 0 011.416 0z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                      )}
-                    </div>
-                    <div className="mt-1 text-xs text-gray-500 dark:text-slate-400">
-                      Algo: {bpmModalSummary.bpmSelectedLabel}
-                      {' · '}
-                      Confidence:{' '}
-                      {bpmModalSummary.bpmSelectedConfidence != null
-                        ? `${Math.round(bpmModalSummary.bpmSelectedConfidence * 100)}%`
-                        : 'n/a'}
-                    </div>
-                  </div>
-                  {isAdmin && typeof bpmModalSummary.currentBpm === 'number' && (
-                    <div className="flex flex-wrap gap-2 text-xs">
-                      <button
-                        onClick={async () => {
-                          const currentBpm = bpmModalSummary.currentBpm
-                          if (typeof currentBpm !== 'number') return
-                          const bpmValue = Number((currentBpm / 2).toFixed(1))
-                          await updateBpmSelection({
-                            spotifyTrackId: bpmModalData.trackId,
-                            bpmSelected: 'manual',
-                            bpmManual: bpmValue,
-                          })
-                        }}
-                        disabled={isUpdatingSelection}
-                        className="rounded-full px-3 py-1 text-gray-600 hover:text-gray-900 hover:bg-black/5 disabled:text-gray-400 dark:text-slate-300 dark:hover:text-white dark:hover:bg-white/10"
-                      >
-                        Store Half
-                      </button>
-                      <button
-                        onClick={async () => {
-                          const currentBpm = bpmModalSummary.currentBpm
-                          if (typeof currentBpm !== 'number') return
-                          const bpmValue = Number((currentBpm * 2).toFixed(1))
-                          await updateBpmSelection({
-                            spotifyTrackId: bpmModalData.trackId,
-                            bpmSelected: 'manual',
-                            bpmManual: bpmValue,
-                          })
-                        }}
-                        disabled={isUpdatingSelection}
-                        className="rounded-full px-3 py-1 text-gray-600 hover:text-gray-900 hover:bg-black/5 disabled:text-gray-400 dark:text-slate-300 dark:hover:text-white dark:hover:bg-white/10"
-                      >
-                        Store Double
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {!bpmModalData.hasEssentiaBpm && !bpmModalData.hasLibrosaBpm && bpmModalData.currentBpm == null ? (
-                  <div className="mt-4 space-y-3 text-sm text-gray-600 dark:text-slate-300">
-                    <p>BPM data is not available yet.</p>
-                    {bpmDetails[bpmModalData.trackId]?.error ? (
-                      <div className="text-xs text-gray-500 dark:text-slate-400">
-                        Reason: {bpmDetails[bpmModalData.trackId].error}
-                      </div>
-                    ) : (
-                      <div className="text-xs text-gray-500 dark:text-slate-400">
-                        It may still be processing or no preview audio is available.
-                      </div>
-                    )}
-                    {isrcMismatchDetails && (
-                      <div className="rounded-[12px] bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
-                        <div className="font-semibold">ISRC mismatch details</div>
-                        <div>Spotify ISRC: {isrcMismatchDetails.spotifyIsrc || 'Unknown'}</div>
-                        <div>iTunes ISRC: {isrcMismatchDetails.previewIsrc || 'Unknown'}</div>
-                      </div>
-                    )}
-                    {isrcMismatchDetails && (
-                      <div className="rounded-[12px] bg-black/5 px-3 py-2 text-xs text-gray-700 dark:bg-white/5 dark:text-slate-300">
-                        <div className="font-semibold text-gray-800 dark:text-slate-100">Compare audio previews</div>
-                        <div className="mt-2 space-y-2">
-                          <div>
-                            <div className="text-[11px] uppercase tracking-[0.08em] text-gray-500 dark:text-slate-400">iTunes preview</div>
-                            {mismatchPreviewUrls.itunes ? (
-                              <audio controls src={mismatchPreviewUrls.itunes} className="mt-1 w-full" />
-                            ) : (
-                              <div className="text-xs text-gray-500 dark:text-slate-400">No iTunes preview URL available.</div>
-                            )}
-                          </div>
-                          <div>
-                            <div className="text-[11px] uppercase tracking-[0.08em] text-gray-500 dark:text-slate-400">Spotify preview</div>
-                            {mismatchPreviewUrls.loading ? (
-                              <div className="text-xs text-gray-500 dark:text-slate-400">Loading Spotify preview…</div>
-                            ) : mismatchPreviewUrls.spotify ? (
-                              <audio controls src={mismatchPreviewUrls.spotify} className="mt-1 w-full" />
-                            ) : (
-                              <div className="text-xs text-gray-500 dark:text-slate-400">No Spotify preview URL available.</div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    {isrcMismatchDetails && (
-                      <div>
-                        <button
-                          onClick={() => handleMusoPreviewBpm(bpmModalData.trackId)}
-                          disabled={musoPreviewStatus?.loading}
-                          className="rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:text-amber-400 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200"
-                        >
-                          {musoPreviewStatus?.loading ? 'Fetching Muso preview...' : 'Use Muso Spotify preview'}
-                        </button>
-                        {musoPreviewStatus?.error && (
-                          <div className="mt-1 text-xs text-red-600">{musoPreviewStatus.error}</div>
-                        )}
-                        {musoPreviewStatus?.success && (
-                          <div className="mt-1 text-xs text-green-600">BPM calculated from Muso preview.</div>
-                        )}
-                      </div>
-                    )}
-                    {loadingBpmFields.has(bpmModalData.trackId) && trackBpms[bpmModalData.trackId] == null && (
-                      <div className="text-xs text-gray-500 dark:text-slate-400">
-                        Waiting for first partial result...
-                      </div>
-                    )}
-                    {trackBpms[bpmModalData.trackId] == null && !retryAttempted && (
-                      <button
-                        onClick={() => {
-                          if (!selectedBpmTrack) return
-                          setRetryStatus({ loading: true })
-                          setRetryAttempted(true)
-                          setRetryTrackId(bpmModalData.trackId)
-                          const targetIds = new Set([bpmModalData.trackId])
-                          streamBpmsForTracks([selectedBpmTrack], targetIds, targetIds)
-                        }}
-                        disabled={retryStatus?.loading}
-                        className="rounded-full border border-blue-200 px-4 py-2 text-xs font-semibold text-blue-700 hover:border-blue-300 disabled:text-blue-300 dark:border-emerald-500/40 dark:text-emerald-200"
-                      >
-                        {retryStatus?.loading ? 'Retrying...' : 'Retry'}
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <>
-                    <div className="mt-6 space-y-2">
-                      {bpmModalSummary.bpmCandidates.map((candidate) => {
-                        const isSelected = bpmModalData.bpmSelected === candidate.id
-                        return (
-                          <div
-                            key={candidate.id}
-                            className="flex items-center justify-between rounded-[12px] px-3 py-2 text-sm text-gray-700 dark:text-slate-300"
-                          >
-                            <div>
-                              <div className="text-[11px] uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">
-                                {candidate.label}
-                              </div>
-                              <div className="text-sm text-gray-900 dark:text-slate-100">
-                                {Math.round(candidate.value)} BPM
-                                {typeof candidate.raw === 'number' && candidate.raw !== candidate.value ? (
-                                  <span className="ml-2 text-xs text-gray-400">raw {candidate.raw.toFixed(1)}</span>
-                                ) : null}
-                              </div>
-                              <div className="text-[11px] text-gray-500 dark:text-slate-400">
-                                Confidence:{' '}
-                                {candidate.confidence != null
-                                  ? `${Math.round(candidate.confidence * 100)}%`
-                                  : 'n/a'}
-                              </div>
-                            </div>
-                            {isSelected ? (
-                              <span className="text-[11px] uppercase tracking-[0.2em] text-green-600 dark:text-emerald-300">
-                                Selected
-                              </span>
-                            ) : isAdmin ? (
-                              <button
-                                onClick={() =>
-                                  updateBpmSelection({
-                                    spotifyTrackId: bpmModalData.trackId,
-                                    bpmSelected: candidate.id,
-                                  })
-                                }
-                                disabled={isUpdatingSelection}
-                                className="rounded-full px-3 py-1 text-[11px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-black/5 disabled:text-gray-400 dark:text-slate-300 dark:hover:text-white dark:hover:bg-white/10"
-                              >
-                                Use this
-                              </button>
-                            ) : null}
-                          </div>
-                        )
-                      })}
-                    </div>
-
-                    {isAdmin && (
-                      <div className="mt-6">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">
-                          Manual override
-                        </div>
-                        <div className="mt-3 flex flex-wrap items-center gap-2">
-                          <input
-                            type="number"
-                            value={manualBpm || bpmModalData.fullData?.bpmManual || ''}
-                            onChange={(e) => setManualBpm(e.target.value)}
-                            placeholder="Enter BPM"
-                            className="w-28 rounded-[12px] border border-transparent bg-black/5 px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 dark:bg-white/5 dark:text-slate-100"
-                            min="1"
-                            max="300"
-                          />
-                          <button
-                            onClick={async () => {
-                              const bpmValue = parseFloat(manualBpm || String(bpmModalData.fullData?.bpmManual || ''))
-                              if (isNaN(bpmValue) || bpmValue < 1 || bpmValue > 300) {
-                                alert('Please enter a valid BPM between 1 and 300')
-                                return
-                              }
-                              await updateBpmSelection({
-                                spotifyTrackId: bpmModalData.trackId,
-                                bpmSelected: 'manual',
-                                bpmManual: bpmValue,
-                              })
-                              setManualBpm('')
-                            }}
-                            disabled={isUpdatingSelection || (!manualBpm && !bpmModalData.fullData?.bpmManual)}
-                            className="rounded-full px-3 py-2 text-[11px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-black/5 disabled:text-gray-400 dark:text-slate-300 dark:hover:text-white dark:hover:bg-white/10"
-                          >
-                            Save manual
-                          </button>
-                          {bpmModalData.bpmSelected === 'manual' && bpmModalData.fullData?.bpmManual != null && (
-                            <span className="text-[11px] text-gray-500 dark:text-slate-400">
-                              Selected: {Math.round(bpmModalData.fullData.bpmManual)}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-              </section>
-
-              <section>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400 dark:text-slate-500">
-                  Key & Scale
-                </div>
-                <div className="mt-3 flex items-center gap-2 text-3xl font-semibold text-gray-900 dark:text-slate-100">
-                  {bpmModalSummary.currentKey || bpmModalSummary.currentScale
-                    ? `${bpmModalSummary.currentKey || ''} ${bpmModalSummary.currentScale || ''}`.trim()
-                    : '—'}
-                  {(bpmModalSummary.currentKey || bpmModalSummary.currentScale) && (
-                    <svg
-                      className="h-5 w-5 text-emerald-500 dark:text-emerald-300"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                      aria-hidden="true"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M16.704 5.292a1 1 0 010 1.416l-7.1 7.1a1 1 0 01-1.416 0l-3.392-3.392a1 1 0 111.416-1.416l2.684 2.684 6.392-6.392a1 1 0 011.416 0z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  )}
-                </div>
-                <div className="mt-1 text-xs text-gray-500 dark:text-slate-400">
-                  Algo: {bpmModalSummary.keySelectedLabel}
-                  {' · '}
-                  Confidence:{' '}
-                  {bpmModalSummary.keySelectedConfidence != null
-                    ? `${Math.round(bpmModalSummary.keySelectedConfidence * 100)}%`
-                    : 'n/a'}
-                </div>
-
-                {bpmModalSummary.keyCandidates.length > 0 ? (
-                  <div className="mt-6 space-y-2">
-                    {bpmModalSummary.keyCandidates.map((candidate) => {
-                      const isSelected = bpmModalData.keySelected === candidate.id
-                      return (
-                        <div
-                          key={candidate.id}
-                          className="flex items-center justify-between rounded-[12px] px-3 py-2 text-sm text-gray-700 dark:text-slate-300"
-                        >
-                          <div>
-                            <div className="text-[11px] uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">
-                              {candidate.label}
-                            </div>
-                            <div className="text-sm text-gray-900 dark:text-slate-100">
-                              {candidate.key || '—'} {candidate.scale || ''}
-                            </div>
-                            <div className="text-[11px] text-gray-500 dark:text-slate-400">
-                              Confidence:{' '}
-                              {candidate.confidence != null
-                                ? `${Math.round(candidate.confidence * 100)}%`
-                                : 'n/a'}
-                            </div>
-                          </div>
-                          {isSelected ? (
-                            <span className="text-[11px] uppercase tracking-[0.2em] text-green-600 dark:text-emerald-300">
-                              Selected
-                            </span>
-                          ) : isAdmin ? (
-                            <button
-                              onClick={() =>
-                                updateBpmSelection({
-                                  spotifyTrackId: bpmModalData.trackId,
-                                  keySelected: candidate.id,
-                                })
-                              }
-                              disabled={isUpdatingSelection}
-                              className="rounded-full px-3 py-1 text-[11px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-black/5 disabled:text-gray-400 dark:text-slate-300 dark:hover:text-white dark:hover:bg-white/10"
-                            >
-                              Use this
-                            </button>
-                          ) : null}
-                        </div>
-                      )
-                    })}
-                  </div>
-                ) : (
-                  <div className="mt-3 text-sm text-gray-500 dark:text-slate-400">
-                    Key data is not available yet.
-                  </div>
-                )}
-
-                {isAdmin && (
-                  <div className="mt-6">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">
-                      Manual override
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <select
-                        value={manualKey || bpmModalData.fullData?.keyManual || ''}
-                        onChange={(e) => setManualKey(e.target.value)}
-                        className="rounded-[12px] border border-transparent bg-black/5 px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 dark:bg-white/5 dark:text-slate-100"
-                      >
-                        <option value="">Select Key</option>
-                        {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].map(k => (
-                          <option key={k} value={k}>{k}</option>
-                        ))}
-                      </select>
-                      <select
-                        value={manualScale || bpmModalData.fullData?.scaleManual || 'major'}
-                        onChange={(e) => setManualScale(e.target.value)}
-                        className="rounded-[12px] border border-transparent bg-black/5 px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 dark:bg-white/5 dark:text-slate-100"
-                      >
-                        <option value="major">Major</option>
-                        <option value="minor">Minor</option>
-                      </select>
-                      <button
-                        onClick={async () => {
-                          const key = manualKey || bpmModalData.fullData?.keyManual
-                          const scale = manualScale || bpmModalData.fullData?.scaleManual || 'major'
-                          if (!key) {
-                            alert('Please select a key')
-                            return
-                          }
-                          await updateBpmSelection({
-                            spotifyTrackId: bpmModalData.trackId,
-                            keySelected: 'manual',
-                            keyManual: key,
-                            scaleManual: scale,
-                          })
-                          setManualKey('')
-                          setManualScale('major')
-                        }}
-                        disabled={isUpdatingSelection || (!manualKey && !bpmModalData.fullData?.keyManual)}
-                        className="rounded-full px-3 py-2 text-[11px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-black/5 disabled:text-gray-400 dark:text-slate-300 dark:hover:text-white dark:hover:bg-white/10"
-                      >
-                        Save manual
-                      </button>
-                      {bpmModalData.keySelected === 'manual' && bpmModalData.fullData?.keyManual && (
-                        <span className="text-[11px] text-gray-500 dark:text-slate-400">
-                          Selected: {bpmModalData.fullData.keyManual} {bpmModalData.fullData.scaleManual}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </section>
-
-              <section>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400 dark:text-slate-500">
-                  Recalculate
-                </div>
-                <div className="mt-4 inline-flex rounded-full border border-gray-200 bg-transparent p-1 dark:border-slate-800">
-                  <button
-                    onClick={() => {
-                      setRecalcMode('standard')
-                      recalcTrackWithOptions(selectedBpmTrack)
-                    }}
-                    disabled={recalcStatus?.loading}
-                    className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
-                      recalcMode === 'standard'
-                        ? 'bg-black/5 text-gray-900 dark:bg-white/10 dark:text-white'
-                        : 'text-gray-600 hover:bg-black/5 hover:text-gray-900 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white'
-                    }`}
-                  >
-                    {recalcStatus?.loading ? 'Recalculating...' : 'Standard'}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setRecalcMode('force')
-                      recalcTrackWithOptions(selectedBpmTrack, { fallbackOverride: 'always' })
-                    }}
-                    disabled={recalcStatus?.loading}
-                    className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
-                      recalcMode === 'force'
-                        ? 'bg-black/5 text-gray-900 dark:bg-white/10 dark:text-white'
-                        : 'text-gray-600 hover:bg-black/5 hover:text-gray-900 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white'
-                    }`}
-                  >
-                    Force fallback
-                  </button>
-                  <button
-                    onClick={() => {
-                      setRecalcMode('fallback')
-                      recalcTrackWithOptions(selectedBpmTrack, { fallbackOverride: 'always' })
-                    }}
-                    disabled={recalcStatus?.loading}
-                    className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
-                      recalcMode === 'fallback'
-                        ? 'bg-black/5 text-gray-900 dark:bg-white/10 dark:text-white'
-                        : 'text-gray-600 hover:bg-black/5 hover:text-gray-900 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white'
-                    }`}
-                  >
-                    Fallback only
-                  </button>
-                </div>
-                {recalcStatus?.error && (
-                  <div className="mt-2 text-xs text-red-600">{recalcStatus.error}</div>
-                )}
-              </section>
-
-              {isAdmin && (
-                <section>
-                  <button
-                    onClick={() => setShowBpmModalDebug(prev => !prev)}
-                    className="text-xs font-semibold text-gray-500 hover:text-gray-900 dark:text-slate-400 dark:hover:text-white"
-                  >
-                    {showBpmModalDebug ? 'Hide Debug Logs' : 'View Debug Logs'}
-                  </button>
-
-                  {showBpmModalDebug && (
-                    <div className="mt-4 space-y-4 text-xs text-gray-600 dark:text-slate-300">
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="space-y-1">
-                          <label className="block text-[11px] font-medium text-gray-500 dark:text-slate-400" htmlFor="modal-bpm-debug-level">
-                            Log level
-                          </label>
-                          <select
-                            id="modal-bpm-debug-level"
-                            value={bpmDebugLevel}
-                            onChange={(e) => setBpmDebugLevel(e.target.value)}
-                            className="w-full rounded-[12px] border border-transparent bg-black/5 px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 dark:bg-white/5 dark:text-slate-100"
-                          >
-                            <option value="minimal">Minimal</option>
-                            <option value="normal">Normal</option>
-                          </select>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="block text-[11px] font-medium text-gray-500 dark:text-slate-400" htmlFor="modal-bpm-confidence-threshold">
-                            Confidence threshold
-                          </label>
-                          <input
-                            id="modal-bpm-confidence-threshold"
-                            type="number"
-                            min="0"
-                            max="1"
-                            step="0.01"
-                            value={bpmConfidenceThreshold}
-                            onChange={(e) => setBpmConfidenceThreshold(e.target.value)}
-                            className="w-full rounded-[12px] border border-transparent bg-black/5 px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 dark:bg-white/5 dark:text-slate-100"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-[11px] uppercase tracking-[0.2em] text-gray-400 dark:text-slate-500">
-                          Live logs
-                        </div>
-                        <pre className="mt-2 max-h-40 overflow-auto rounded-[12px] bg-black/5 p-3 text-[11px] text-gray-700 dark:bg-white/5 dark:text-slate-200">
-                          {bpmModalData.fullData?.debugTxt || 'No live logs yet.'}
-                        </pre>
-                      </div>
-                      <div>
-                        <div className="text-[11px] uppercase tracking-[0.2em] text-gray-400 dark:text-slate-500">
-                          Last payload
-                        </div>
-                        <pre className="mt-2 max-h-40 overflow-auto rounded-[12px] bg-black/5 p-3 text-[11px] text-gray-700 dark:bg-white/5 dark:text-slate-200">
-                          {bpmDebugInfo[bpmModalData.trackId]
-                            ? JSON.stringify(bpmDebugInfo[bpmModalData.trackId], null, 2)
-                            : 'No previous payloads yet.'}
-                        </pre>
-                      </div>
-                    </div>
-                  )}
-                </section>
-              )}
-
-              {retryStatus && (
-                <div
-                  className={`rounded-[12px] px-3 py-2 text-xs ${
-                    retryStatus.loading
-                      ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-200'
-                      : retryStatus.success
-                        ? 'bg-green-50 text-green-700 dark:bg-emerald-500/10 dark:text-emerald-200'
-                        : 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-200'
-                  }`}
-                >
-                  {retryStatus.loading && 'Retrying...'}
-                  {!retryStatus.loading && retryStatus.success && 'BPM successfully calculated!'}
-                  {!retryStatus.loading && !retryStatus.success && retryStatus.error && `Error: ${retryStatus.error}`}
-                </div>
-              )}
-
-              {isUpdatingSelection && (
-                <div className="rounded-[12px] bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:bg-blue-500/10 dark:text-blue-200">
-                  Updating selection...
-                </div>
-              )}
-            </div>
-
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={closeBpmModal}
-                className="rounded-full bg-black/5 px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-black/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <BpmDetailsModal
+        isOpen={Boolean(isAdmin && bpmModalData && bpmModalSummary && selectedBpmTrack)}
+        isAdmin={isAdmin}
+        bpmModalData={bpmModalData}
+        bpmModalSummary={bpmModalSummary}
+        selectedBpmTrack={selectedBpmTrack}
+        bpmStreamStatus={bpmStreamStatus}
+        bpmDetails={bpmDetails}
+        isrcMismatchDetails={isrcMismatchDetails}
+        mismatchPreviewUrls={mismatchPreviewUrls}
+        musoPreviewStatus={musoPreviewStatus}
+        loadingBpmFields={loadingBpmFields}
+        trackBpms={trackBpms}
+        retryStatus={retryStatus}
+        retryAttempted={retryAttempted}
+        manualBpm={manualBpm}
+        manualKey={manualKey}
+        manualScale={manualScale}
+        isUpdatingSelection={isUpdatingSelection}
+        showBpmModalDebug={showBpmModalDebug}
+        bpmDebugLevel={bpmDebugLevel}
+        bpmConfidenceThreshold={bpmConfidenceThreshold}
+        bpmDebugInfo={bpmDebugInfo}
+        recalcMode={recalcMode}
+        recalcStatus={recalcStatus}
+        onClose={closeBpmModal}
+        onUpdateBpmSelection={updateBpmSelection}
+        onSetManualBpm={setManualBpm}
+        onSetManualKey={setManualKey}
+        onSetManualScale={setManualScale}
+        onRetryBpm={handleRetryBpmForTrack}
+        onFetchMusoPreview={handleMusoPreviewBpm}
+        onSetShowBpmModalDebug={setShowBpmModalDebug}
+        onSetBpmDebugLevel={setBpmDebugLevel}
+        onSetBpmConfidenceThreshold={setBpmConfidenceThreshold}
+        onSetRecalcMode={setRecalcMode}
+        onRecalcTrack={handleRecalcTrack}
+      />
 
       {/* Credits Modal */}
-      {showCreditsModal && selectedCreditsTrack && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-          onClick={closeCreditsModal}
-        >
-          <div
-            className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto dark:bg-slate-900 dark:text-slate-100"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100">Song Credits</h2>
-              <button
-                onClick={closeCreditsModal}
-                className="text-gray-500 hover:text-gray-700 dark:text-slate-200 dark:hover:text-white text-2xl"
-              >
-                ×
-              </button>
-            </div>
-            <div className="mb-4">
-              <h3 className="font-semibold text-gray-900 dark:text-slate-100">{selectedCreditsTrack.name}</h3>
-              <p className="text-sm text-gray-600 dark:text-slate-300">
-                {(selectedCreditsTrack.artists || []).map(a => a.name).filter(Boolean).join(', ') || 'Unknown artist'}
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-500 dark:text-slate-400">
-                <span>
-                  Retrieved on {formatRetrievedMonthYear(creditsByTrackId[selectedCreditsTrack.id]?.retrievedAt)}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => loadCreditsForTrack(selectedCreditsTrack, true)}
-                  disabled={creditsLoadingIds.has(selectedCreditsTrack.id)}
-                  className="rounded-full border border-gray-200 px-3 py-1 font-semibold text-gray-600 hover:border-gray-300 hover:text-gray-800 disabled:text-gray-400 dark:border-slate-700 dark:text-slate-300"
-                >
-                  {creditsLoadingIds.has(selectedCreditsTrack.id) ? 'Refreshing...' : 'Refresh credits'}
-                </button>
-              </div>
-              {creditsByTrackId[selectedCreditsTrack.id]?.releaseId && (
-                <a
-                  href={`https://musicbrainz.org/release/${encodeURIComponent(creditsByTrackId[selectedCreditsTrack.id].releaseId as string)}`}
-                  className="text-xs text-gray-500 dark:text-slate-400 hover:text-gray-600"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  View on MusicBrainz
-                </a>
-              )}
-            </div>
-            {creditsLoadingIds.has(selectedCreditsTrack.id) ? (
-              <div className="text-sm text-gray-600 dark:text-slate-300">Loading credits...</div>
-            ) : creditsErrorByTrackId[selectedCreditsTrack.id] ? (
-              <div className="text-sm text-red-600">{creditsErrorByTrackId[selectedCreditsTrack.id]}</div>
-            ) : (
-              <div className="space-y-4 text-sm text-gray-700 dark:text-slate-300">
-                <div>
-                  <div className="font-semibold text-gray-900 dark:text-slate-100">Performed by</div>
-                  {creditsByTrackId[selectedCreditsTrack.id]?.performedBy?.length ? (
-                    <div>{renderCreditLinks(creditsByTrackId[selectedCreditsTrack.id].performedBy, creditsRoleMap.performedBy)}</div>
-                  ) : (
-                    <div className="text-gray-400 dark:text-slate-500">Not available</div>
-                  )}
-                </div>
-                <div>
-                  <div className="font-semibold text-gray-900 dark:text-slate-100">Written by</div>
-                  {creditsByTrackId[selectedCreditsTrack.id]?.writtenBy?.length ? (
-                    <div>{renderCreditLinks(creditsByTrackId[selectedCreditsTrack.id].writtenBy, creditsRoleMap.writtenBy)}</div>
-                  ) : (
-                    <div className="text-gray-400 dark:text-slate-500">Not available</div>
-                  )}
-                </div>
-                <div>
-                  <div className="font-semibold text-gray-900 dark:text-slate-100">Produced by</div>
-                  {creditsByTrackId[selectedCreditsTrack.id]?.producedBy?.length ? (
-                    <div>{renderCreditLinks(creditsByTrackId[selectedCreditsTrack.id].producedBy, creditsRoleMap.producedBy)}</div>
-                  ) : (
-                    <div className="text-gray-400 dark:text-slate-500">Not available</div>
-                  )}
-                </div>
-                <div>
-                  <div className="font-semibold text-gray-900 dark:text-slate-100">Mixed by</div>
-                  {creditsByTrackId[selectedCreditsTrack.id]?.mixedBy?.length ? (
-                    <div>{renderCreditLinks(creditsByTrackId[selectedCreditsTrack.id].mixedBy, creditsRoleMap.mixedBy)}</div>
-                  ) : (
-                    <div className="text-gray-400 dark:text-slate-500">Not available</div>
-                  )}
-                </div>
-                <div>
-                  <div className="font-semibold text-gray-900 dark:text-slate-100">Mastered by</div>
-                  {creditsByTrackId[selectedCreditsTrack.id]?.masteredBy?.length ? (
-                    <div>{renderCreditLinks(creditsByTrackId[selectedCreditsTrack.id].masteredBy, creditsRoleMap.masteredBy)}</div>
-                  ) : (
-                    <div className="text-gray-400 dark:text-slate-500">Not available</div>
-                  )}
-                </div>
-              </div>
-            )}
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={closeCreditsModal}
-                className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded transition-colors dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CreditsModal
+        isOpen={showCreditsModal}
+        selectedTrack={selectedCreditsTrack}
+        creditsByTrackId={creditsByTrackId}
+        creditsLoadingIds={creditsLoadingIds}
+        creditsErrorByTrackId={creditsErrorByTrackId}
+        creditsRoleMap={creditsRoleMap}
+        formatRetrievedMonthYear={formatRetrievedMonthYear}
+        renderCreditLinks={renderCreditLinks}
+        onRefreshCredits={loadCreditsForTrack}
+        onClose={closeCreditsModal}
+      />
       
       {/* Cache Info Modal */}
       {showCacheModal && isCached && cachedAt && (
