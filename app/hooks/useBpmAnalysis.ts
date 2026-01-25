@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react'
+import { logError, logWarning } from '@/lib/logger'
 import type { SpotifyTrack, PreviewUrlEntry } from '@/lib/types'
 
 type Track = SpotifyTrack
@@ -518,6 +519,13 @@ export function useBpmAnalysis(tracks: Track[]) {
                 })
               } catch (error) {
                 console.warn('[BPM Client] Failed to ingest BPM result:', error)
+                logWarning('BPM ingest failed', {
+                  component: 'bpm.stream.ingest',
+                  trackId,
+                  batchId,
+                  metaSource: meta?.source,
+                  error: error instanceof Error ? error.message : String(error),
+                })
               }
             }
           }
@@ -572,6 +580,11 @@ export function useBpmAnalysis(tracks: Track[]) {
       }
     } catch (error) {
       console.error('[BPM Client] Stream error:', error)
+      logError(error, {
+        component: 'bpm.stream.results',
+        batchId,
+        trackCount: indexToTrackId.size,
+      })
       indexToTrackId.forEach((trackId) => {
         if (!finalizedTracks.has(trackId)) {
           setState('loadingBpmFields', (prev) => {
@@ -846,6 +859,14 @@ export function useBpmAnalysis(tracks: Track[]) {
 
         if (!res.ok) {
           console.error(`[BPM Client] Stream batch failed:`, res.status)
+          logError(new Error(`Stream batch failed: ${res.status}`), {
+            component: 'bpm.stream.batch',
+            trackIds,
+            status: res.status,
+            fallbackOverride: effectiveFallbackOverride || null,
+            debugLevel: bpmRequestSettings.debugLevel,
+            maxConfidence: bpmRequestSettings.maxConfidence,
+          })
           fetchBpmsForTracks(batch)
           continue
         }
@@ -923,6 +944,13 @@ export function useBpmAnalysis(tracks: Track[]) {
         }
       } catch (error) {
         console.error('[BPM Client] Stream batch error:', error)
+        logError(error, {
+          component: 'bpm.stream.batch',
+          trackIds,
+          fallbackOverride: effectiveFallbackOverride || null,
+          debugLevel: bpmRequestSettings.debugLevel,
+          maxConfidence: bpmRequestSettings.maxConfidence,
+        })
         fetchBpmsForTracks(batch)
       }
 
