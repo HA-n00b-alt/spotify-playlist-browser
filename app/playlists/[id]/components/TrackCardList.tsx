@@ -25,10 +25,10 @@ type TrackCardListProps = {
   getYearString: (value: string) => string
   onTrackClick: (track: Track, event?: MouseEvent) => void
   onTrackContextMenu: (event: MouseEvent, track: Track) => void
-  onTrackTitleClick: (event: MouseEvent, track: Track) => void
-  onArtistClick: (event: MouseEvent, artist: Track['artists'][number]) => void
+  onTrackTitleClick: (event: MouseEvent<HTMLAnchorElement>, track: Track) => void
+  onArtistClick: (event: MouseEvent<HTMLAnchorElement>, artist: Track['artists'][number]) => void
   onArtistContextMenu: (event: MouseEvent, artist: Track['artists'][number]) => void
-  onAlbumClick: (event: MouseEvent, album: Track['album']) => void
+  onAlbumClick: (event: MouseEvent<HTMLAnchorElement>, album: Track['album']) => void
   onAlbumContextMenu: (event: MouseEvent, album: Track['album']) => void
   onOpenBpmModal: (track: Track) => void
 }
