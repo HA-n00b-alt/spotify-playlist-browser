@@ -820,9 +820,10 @@ export function useBpmAnalysis(tracks: Track[]) {
         return next
       })
 
+      let effectiveFallbackOverride: BpmFallbackOverride | null = null
       try {
         const overrideFallback = options?.fallbackOverride
-        const effectiveFallbackOverride = overrideFallback && overrideFallback !== 'default'
+        effectiveFallbackOverride = overrideFallback && overrideFallback !== 'default'
           ? overrideFallback
           : bpmRequestSettings.fallbackOverride
         const bpmUpdateAlgo: 'essentia' | 'librosa' | 'both' = (
