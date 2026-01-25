@@ -476,6 +476,81 @@ export function useBpmAnalysis(tracks: Track[]) {
     }
   }, [getPreviewUrlFromMeta, selectBestBpm, selectBestKey, setState])
 
+  const applyBatchResults = useCallback((results: Record<string, any>) => {
+    const newBpms: Record<string, number | null> = {}
+    const newKeys: Record<string, string | null> = {}
+    const newScales: Record<string, string | null> = {}
+    const newDetails: Record<string, { source?: string; error?: string }> = {}
+    const newDebug: Record<string, any> = {}
+    const newFullData: Record<string, BpmFullDataEntry> = {}
+
+    const tracksToAdd = new Set<string>()
+    for (const [trackId, result] of Object.entries(results)) {
+      const r = result as any
+      newDetails[trackId] = { source: r.source, error: r.error }
+      newDebug[trackId] = r
+
+      if (r.source || r.error || r.bpmRaw !== undefined || r.cached === true) {
+        tracksToAdd.add(trackId)
+      }
+
+      if (r.bpm != null) {
+        newBpms[trackId] = r.bpm
+      } else if (r.bpm === null) {
+        newBpms[trackId] = null
+      }
+
+      if (r.key != null) {
+        newKeys[trackId] = r.key
+      } else if (r.key === null) {
+        newKeys[trackId] = null
+      }
+
+      if (r.scale != null) {
+        newScales[trackId] = r.scale
+      } else if (r.scale === null) {
+        newScales[trackId] = null
+      }
+
+      if (r.bpmEssentia || r.bpmLibrosa || r.keyEssentia || r.keyLibrosa || r.scaleEssentia || r.scaleLibrosa) {
+        newFullData[trackId] = {
+          bpmEssentia: r.bpmEssentia,
+          bpmRawEssentia: r.bpmRawEssentia,
+          bpmConfidenceEssentia: r.bpmConfidenceEssentia,
+          bpmLibrosa: r.bpmLibrosa,
+          bpmRawLibrosa: r.bpmRawLibrosa,
+          bpmConfidenceLibrosa: r.bpmConfidenceLibrosa,
+          keyEssentia: r.keyEssentia,
+          scaleEssentia: r.scaleEssentia,
+          keyscaleConfidenceEssentia: r.keyscaleConfidenceEssentia,
+          keyLibrosa: r.keyLibrosa,
+          scaleLibrosa: r.scaleLibrosa,
+          keyscaleConfidenceLibrosa: r.keyscaleConfidenceLibrosa,
+          bpmSelected: r.bpmSelected,
+          keySelected: r.keySelected,
+          bpmManual: r.bpmManual,
+          keyManual: r.keyManual,
+          scaleManual: r.scaleManual,
+          debugTxt: r.debugTxt,
+        }
+      }
+    }
+
+    setState('trackBpms', (prev) => ({ ...prev, ...newBpms }))
+    setState('trackKeys', (prev) => ({ ...prev, ...newKeys }))
+    setState('trackScales', (prev) => ({ ...prev, ...newScales }))
+    setState('bpmDetails', (prev) => ({ ...prev, ...newDetails }))
+    setState('bpmDebugInfo', (prev) => ({ ...prev, ...newDebug }))
+    setState('bpmFullData', (prev) => ({ ...prev, ...newFullData }))
+    if (tracksToAdd.size > 0) {
+      setState('tracksInDb', (prev) => {
+        const next = new Set(prev)
+        tracksToAdd.forEach((trackId) => next.add(trackId))
+        return next
+      })
+    }
+  }, [setState])
+
   const fetchBpmsForTracks = useCallback(async (tracksToFetch: Track[]) => {
     if (tracksToFetch.length === 0) return
 
@@ -658,81 +733,6 @@ export function useBpmAnalysis(tracks: Track[]) {
       }
     }
   }, [bpmRequestSettings, countryCode, fetchBpmsForTracks, getPreviewUrlFromMeta, retryTrackId, setState, streamBatchResults])
-
-  const applyBatchResults = useCallback((results: Record<string, any>) => {
-    const newBpms: Record<string, number | null> = {}
-    const newKeys: Record<string, string | null> = {}
-    const newScales: Record<string, string | null> = {}
-    const newDetails: Record<string, { source?: string; error?: string }> = {}
-    const newDebug: Record<string, any> = {}
-    const newFullData: Record<string, BpmFullDataEntry> = {}
-
-    const tracksToAdd = new Set<string>()
-    for (const [trackId, result] of Object.entries(results)) {
-      const r = result as any
-      newDetails[trackId] = { source: r.source, error: r.error }
-      newDebug[trackId] = r
-
-      if (r.source || r.error || r.bpmRaw !== undefined || r.cached === true) {
-        tracksToAdd.add(trackId)
-      }
-
-      if (r.bpm != null) {
-        newBpms[trackId] = r.bpm
-      } else if (r.bpm === null) {
-        newBpms[trackId] = null
-      }
-
-      if (r.key != null) {
-        newKeys[trackId] = r.key
-      } else if (r.key === null) {
-        newKeys[trackId] = null
-      }
-
-      if (r.scale != null) {
-        newScales[trackId] = r.scale
-      } else if (r.scale === null) {
-        newScales[trackId] = null
-      }
-
-      if (r.bpmEssentia || r.bpmLibrosa || r.keyEssentia || r.keyLibrosa || r.scaleEssentia || r.scaleLibrosa) {
-        newFullData[trackId] = {
-          bpmEssentia: r.bpmEssentia,
-          bpmRawEssentia: r.bpmRawEssentia,
-          bpmConfidenceEssentia: r.bpmConfidenceEssentia,
-          bpmLibrosa: r.bpmLibrosa,
-          bpmRawLibrosa: r.bpmRawLibrosa,
-          bpmConfidenceLibrosa: r.bpmConfidenceLibrosa,
-          keyEssentia: r.keyEssentia,
-          scaleEssentia: r.scaleEssentia,
-          keyscaleConfidenceEssentia: r.keyscaleConfidenceEssentia,
-          keyLibrosa: r.keyLibrosa,
-          scaleLibrosa: r.scaleLibrosa,
-          keyscaleConfidenceLibrosa: r.keyscaleConfidenceLibrosa,
-          bpmSelected: r.bpmSelected,
-          keySelected: r.keySelected,
-          bpmManual: r.bpmManual,
-          keyManual: r.keyManual,
-          scaleManual: r.scaleManual,
-          debugTxt: r.debugTxt,
-        }
-      }
-    }
-
-    setState('trackBpms', (prev) => ({ ...prev, ...newBpms }))
-    setState('trackKeys', (prev) => ({ ...prev, ...newKeys }))
-    setState('trackScales', (prev) => ({ ...prev, ...newScales }))
-    setState('bpmDetails', (prev) => ({ ...prev, ...newDetails }))
-    setState('bpmDebugInfo', (prev) => ({ ...prev, ...newDebug }))
-    setState('bpmFullData', (prev) => ({ ...prev, ...newFullData }))
-    if (tracksToAdd.size > 0) {
-      setState('tracksInDb', (prev) => {
-        const next = new Set(prev)
-        tracksToAdd.forEach((trackId) => next.add(trackId))
-        return next
-      })
-    }
-  }, [setState])
 
   const fetchBpmsBatch = useCallback(async () => {
     const trackIds = tracks.map(t => t.id)
