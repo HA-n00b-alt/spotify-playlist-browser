@@ -542,9 +542,11 @@ export default function BpmDetailsModal({
                     <select
                       value={manualKey || bpmModalData.fullData?.keyManual || ''}
                       onChange={(e) => onSetManualKey(e.target.value)}
-                      className={`${manualSelectClass} no-chevron min-w-[120px]`}
+                      className={`${manualSelectClass} no-chevron min-w-[120px] ${
+                        (manualKey || bpmModalData.fullData?.keyManual) ? 'text-white/90' : 'text-white/10'
+                      }`}
                     >
-                      <option value="">Select Key</option>
+                      <option value="">Enter Key</option>
                       {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].map(k => (
                         <option key={k} value={k}>{k}</option>
                       ))}
@@ -553,10 +555,13 @@ export default function BpmDetailsModal({
                   </div>
                   <div className="relative group/select min-w-[120px]">
                     <select
-                      value={manualScale || bpmModalData.fullData?.scaleManual || 'major'}
+                      value={manualScale || bpmModalData.fullData?.scaleManual || ''}
                       onChange={(e) => onSetManualScale(e.target.value)}
-                      className={`${manualSelectClass} no-chevron min-w-[120px]`}
+                      className={`${manualSelectClass} no-chevron min-w-[120px] ${
+                        (manualScale || bpmModalData.fullData?.scaleManual) ? 'text-white/90' : 'text-white/10'
+                      }`}
                     >
+                      <option value="">Scale</option>
                       <option value="major">Major</option>
                       <option value="minor">Minor</option>
                     </select>
@@ -600,8 +605,8 @@ export default function BpmDetailsModal({
 
           <section className="pl-5">
             <div className="flex flex-col gap-3 rounded-[14px] border border-white/10 bg-white/[0.04] px-3 py-2 sm:flex-row sm:items-center">
-              <div className="flex items-stretch gap-3 sm:flex-1">
-                <div className="flex flex-col gap-1">
+              <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+                <div className="flex flex-col items-start gap-1 sm:items-start">
                   <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-white/40">
                     Scope
                   </span>
@@ -625,8 +630,8 @@ export default function BpmDetailsModal({
                     ))}
                   </div>
                 </div>
-                <span className="hidden w-px bg-white/10 sm:block sm:self-stretch" />
-                <div className="flex flex-1 flex-col gap-1 sm:items-center">
+                <span className="hidden h-full w-px bg-white/10 sm:block" />
+                <div className="flex flex-col items-start gap-1 sm:items-start">
                   <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-white/40">
                     Algorithm
                   </span>
