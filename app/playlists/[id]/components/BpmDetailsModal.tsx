@@ -152,7 +152,7 @@ export default function BpmDetailsModal({
   onRecalcTrack,
 }: BpmDetailsModalProps) {
   const ghostFieldClass =
-    'h-10 w-full bg-transparent px-0 py-2 text-sm text-white/90 placeholder:text-white/20 focus:outline-none'
+    'w-full bg-transparent border-b border-white/10 py-1 text-sm text-white/90 placeholder:text-white/20 focus:outline-none focus:border-emerald-500 transition-colors duration-200'
   const manualSelectClass =
     'h-10 bg-transparent px-0 py-2 text-sm text-white/90 focus:outline-none'
   const recalcScopeForMode = (mode: BpmFallbackOverride): 'bpm' | 'key' | 'both' => {
@@ -226,7 +226,7 @@ export default function BpmDetailsModal({
                 ? `${Math.round(bpmModalSummary.currentBpm)} BPM`
                 : '—'}
               {isAdmin && typeof bpmModalSummary.currentBpm === 'number' && (
-                <div className="inline-flex h-[22px] items-center rounded-[4px] border border-white/20 text-[10px] font-semibold text-white/80">
+                <div className="inline-flex h-6 items-center rounded-[6px] border border-white/20 bg-white/[0.04] text-[11px] font-semibold text-white/80">
                   <button
                     onClick={async () => {
                       const currentBpm = bpmModalSummary.currentBpm
@@ -239,12 +239,12 @@ export default function BpmDetailsModal({
                       })
                     }}
                     disabled={isUpdatingSelection}
-                    className="px-2 hover:text-white disabled:text-white/40"
+                    className="px-3 leading-none hover:text-white disabled:text-white/40"
                     aria-label="Store half BPM"
                   >
                     ½
                   </button>
-                  <span className="h-3 w-px bg-white/20" />
+                  <span className="h-4 w-px bg-white/20" />
                   <button
                     onClick={async () => {
                       const currentBpm = bpmModalSummary.currentBpm
@@ -257,7 +257,7 @@ export default function BpmDetailsModal({
                       })
                     }}
                     disabled={isUpdatingSelection}
-                    className="px-2 hover:text-white disabled:text-white/40"
+                    className="px-3 leading-none hover:text-white disabled:text-white/40"
                     aria-label="Store double BPM"
                   >
                     2x
@@ -368,12 +368,15 @@ export default function BpmDetailsModal({
                           })
                         }}
                         disabled={isUpdatingSelection || (isSelected && !isAdmin)}
-                        className={`group -ml-5 flex w-full items-center justify-between px-3 py-2 pl-5 text-left text-sm transition ${
+                        className={`group relative -ml-5 flex w-full items-center justify-between px-3 py-2 pl-5 text-left text-sm transition ${
                           isSelected
-                            ? 'border-l-2 border-emerald-400 bg-white/[0.04] text-white'
-                            : 'border-l-2 border-transparent text-white/60 hover:text-white'
+                            ? 'bg-white/[0.04] text-white'
+                            : 'text-white/60 hover:text-white'
                         }`}
                       >
+                        {isSelected && (
+                          <span className="absolute left-0 top-2 bottom-2 w-[2px] bg-emerald-400" />
+                        )}
                         <div className="text-[12px] font-semibold text-white/70 group-hover:text-white">
                           {candidate.label}
                         </div>
@@ -417,7 +420,7 @@ export default function BpmDetailsModal({
                           min="1"
                           max="300"
                         />
-                        <div className="absolute bottom-0 left-0 h-px w-full bg-white/10 transition-colors group-focus-within:bg-emerald-500" />
+                        <div className="absolute bottom-0 left-0 h-[1px] w-0 bg-emerald-500 transition-all duration-300 group-focus-within:w-full" />
                       </div>
                       {manualBpm && manualBpm !== String(bpmModalData.fullData?.bpmManual || '') ? (
                         <button
@@ -488,12 +491,15 @@ export default function BpmDetailsModal({
                         })
                       }}
                       disabled={isUpdatingSelection || (isSelected && !isAdmin)}
-                      className={`group -ml-5 flex w-full items-center justify-between px-3 py-2 pl-5 text-left text-sm transition ${
+                      className={`group relative -ml-5 flex w-full items-center justify-between px-3 py-2 pl-5 text-left text-sm transition ${
                         isSelected
-                          ? 'border-l-2 border-emerald-400 bg-white/[0.04] text-white'
-                          : 'border-l-2 border-transparent text-white/60 hover:text-white'
+                          ? 'bg-white/[0.04] text-white'
+                          : 'text-white/60 hover:text-white'
                       }`}
                     >
+                      {isSelected && (
+                        <span className="absolute left-0 top-2 bottom-2 w-[2px] bg-emerald-400" />
+                      )}
                       <div className="text-[12px] font-semibold text-white/70 group-hover:text-white">
                         {candidate.label}
                       </div>
@@ -593,43 +599,47 @@ export default function BpmDetailsModal({
           </div>
 
           <section className="pl-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-1 py-1">
-                {(['bpm', 'key', 'both'] as const).map((scope) => (
-                  <button
-                    key={scope}
-                    onClick={() => {
-                      setRecalcScope(scope)
-                      onSetRecalcMode(toMode(scope, recalcStrategy))
-                    }}
-                    disabled={recalcStatus?.loading}
-                    className={`rounded-full px-3 py-1 text-[11px] font-semibold transition ${
-                      recalcScope === scope
-                        ? 'bg-white/10 text-white'
-                        : 'text-white/60 hover:text-white'
-                    }`}
-                  >
-                    {scope === 'bpm' ? 'BPM' : scope === 'key' ? 'Key' : 'Both'}
-                  </button>
-                ))}
-                <span className="mx-1 h-4 w-px bg-white/10" />
-                {(['standard', 'fallback', 'both'] as const).map((strategy) => (
-                  <button
-                    key={strategy}
-                    onClick={() => {
-                      setRecalcStrategy(strategy)
-                      onSetRecalcMode(toMode(recalcScope, strategy))
-                    }}
-                    disabled={recalcStatus?.loading}
-                    className={`rounded-full px-3 py-1 text-[11px] font-semibold transition ${
-                      recalcStrategy === strategy
-                        ? 'bg-white/10 text-white'
-                        : 'text-white/60 hover:text-white'
-                    }`}
-                  >
-                    {strategy === 'standard' ? 'Standard' : strategy === 'fallback' ? 'Fallback' : 'Both'}
-                  </button>
-                ))}
+            <div className="flex flex-col gap-3 rounded-[14px] border border-white/10 bg-white/[0.04] px-3 py-2 sm:flex-row sm:items-center">
+              <div className="flex items-center gap-3 sm:flex-1">
+                <div className="flex items-center gap-1">
+                  {(['bpm', 'key', 'both'] as const).map((scope) => (
+                    <button
+                      key={scope}
+                      onClick={() => {
+                        setRecalcScope(scope)
+                        onSetRecalcMode(toMode(scope, recalcStrategy))
+                      }}
+                      disabled={recalcStatus?.loading}
+                      className={`rounded-[8px] px-3 py-1 text-[11px] font-semibold transition ${
+                        recalcScope === scope
+                          ? 'bg-white/10 text-white'
+                          : 'text-white/60 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      {scope === 'bpm' ? 'BPM' : scope === 'key' ? 'Key' : 'Both'}
+                    </button>
+                  ))}
+                </div>
+                <span className="h-6 w-px bg-white/10" />
+                <div className="flex flex-1 items-center gap-1 sm:justify-center">
+                  {(['standard', 'fallback', 'both'] as const).map((strategy) => (
+                    <button
+                      key={strategy}
+                      onClick={() => {
+                        setRecalcStrategy(strategy)
+                        onSetRecalcMode(toMode(recalcScope, strategy))
+                      }}
+                      disabled={recalcStatus?.loading}
+                      className={`rounded-[8px] px-3 py-1 text-[11px] font-semibold transition ${
+                        recalcStrategy === strategy
+                          ? 'bg-white/10 text-white'
+                          : 'text-white/60 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      {strategy === 'standard' ? 'Standard' : strategy === 'fallback' ? 'Fallback' : 'Both'}
+                    </button>
+                  ))}
+                </div>
               </div>
               <button
                 onClick={() => {
@@ -638,7 +648,7 @@ export default function BpmDetailsModal({
                   onRecalcTrack(mode)
                 }}
                 disabled={recalcStatus?.loading}
-                className={`h-10 rounded-[12px] px-4 text-[11px] font-semibold text-white shadow-sm transition ${
+                className={`h-10 rounded-[12px] px-4 text-[11px] font-semibold text-white shadow-sm transition sm:ml-auto ${
                   recalcStatus?.loading ? 'bg-[#15803d]/60' : 'bg-[#15803d] hover:bg-[#166534]'
                 }`}
               >
