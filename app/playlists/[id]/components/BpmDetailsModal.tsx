@@ -151,9 +151,6 @@ export default function BpmDetailsModal({
   onSetRecalcMode,
   onRecalcTrack,
 }: BpmDetailsModalProps) {
-  if (!isOpen || !bpmModalData || !bpmModalSummary || !selectedBpmTrack) {
-    return null
-  }
   const ghostFieldClass =
     'h-10 w-full bg-transparent px-0 py-2 text-sm text-white/90 focus:outline-none border-b border-white/20 focus:border-emerald-400'
   const manualSelectClass =
@@ -186,6 +183,10 @@ export default function BpmDetailsModal({
     setRecalcScope(recalcScopeForMode(recalcMode))
     setRecalcStrategy(recalcStrategyForMode(recalcMode))
   }, [recalcMode])
+
+  if (!isOpen || !bpmModalData || !bpmModalSummary || !selectedBpmTrack) {
+    return null
+  }
 
   return (
     <div
