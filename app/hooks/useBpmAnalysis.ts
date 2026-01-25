@@ -503,24 +503,6 @@ export function useBpmAnalysis(tracks: Track[]) {
         tracksToAdd.add(trackId)
       }
 
-      if (r.bpm != null) {
-        newBpms[trackId] = r.bpm
-      } else if (r.bpm === null) {
-        newBpms[trackId] = null
-      }
-
-      if (r.key != null) {
-        newKeys[trackId] = r.key
-      } else if (r.key === null) {
-        newKeys[trackId] = null
-      }
-
-      if (r.scale != null) {
-        newScales[trackId] = r.scale
-      } else if (r.scale === null) {
-        newScales[trackId] = null
-      }
-
       if (r.bpmEssentia || r.bpmLibrosa || r.keyEssentia || r.keyLibrosa || r.scaleEssentia || r.scaleLibrosa) {
         newFullData[trackId] = {
           bpmEssentia: r.bpmEssentia,
@@ -541,6 +523,60 @@ export function useBpmAnalysis(tracks: Track[]) {
           keyManual: r.keyManual,
           scaleManual: r.scaleManual,
           debugTxt: r.debugTxt,
+        }
+      }
+
+      if (r.bpm != null) {
+        newBpms[trackId] = r.bpm
+      } else if (r.bpm === null) {
+        newBpms[trackId] = null
+      } else if (newFullData[trackId]) {
+        const fullData = newFullData[trackId]
+        const bpmSelection = fullData.bpmSelected || 'essentia'
+        if (bpmSelection === 'manual' && fullData.bpmManual != null) {
+          newBpms[trackId] = fullData.bpmManual
+        } else if (bpmSelection === 'librosa' && fullData.bpmLibrosa != null) {
+          newBpms[trackId] = fullData.bpmLibrosa
+        } else if (fullData.bpmEssentia != null) {
+          newBpms[trackId] = fullData.bpmEssentia
+        } else if (fullData.bpmLibrosa != null) {
+          newBpms[trackId] = fullData.bpmLibrosa
+        }
+      }
+
+      if (r.key != null) {
+        newKeys[trackId] = r.key
+      } else if (r.key === null) {
+        newKeys[trackId] = null
+      } else if (newFullData[trackId]) {
+        const fullData = newFullData[trackId]
+        const keySelection = fullData.keySelected || 'essentia'
+        if (keySelection === 'manual' && fullData.keyManual != null) {
+          newKeys[trackId] = fullData.keyManual
+        } else if (keySelection === 'librosa' && fullData.keyLibrosa != null) {
+          newKeys[trackId] = fullData.keyLibrosa
+        } else if (fullData.keyEssentia != null) {
+          newKeys[trackId] = fullData.keyEssentia
+        } else if (fullData.keyLibrosa != null) {
+          newKeys[trackId] = fullData.keyLibrosa
+        }
+      }
+
+      if (r.scale != null) {
+        newScales[trackId] = r.scale
+      } else if (r.scale === null) {
+        newScales[trackId] = null
+      } else if (newFullData[trackId]) {
+        const fullData = newFullData[trackId]
+        const keySelection = fullData.keySelected || 'essentia'
+        if (keySelection === 'manual' && fullData.scaleManual != null) {
+          newScales[trackId] = fullData.scaleManual
+        } else if (keySelection === 'librosa' && fullData.scaleLibrosa != null) {
+          newScales[trackId] = fullData.scaleLibrosa
+        } else if (fullData.scaleEssentia != null) {
+          newScales[trackId] = fullData.scaleEssentia
+        } else if (fullData.scaleLibrosa != null) {
+          newScales[trackId] = fullData.scaleLibrosa
         }
       }
     }
