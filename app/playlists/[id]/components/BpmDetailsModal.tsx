@@ -396,7 +396,7 @@ export default function BpmDetailsModal({
                     <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.05em] text-gray-600 dark:text-white/50">
                       Manual override
                       <svg
-                        className="h-3 w-3 text-white/50"
+                        className="h-2.5 w-2.5 text-white/50"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
@@ -521,13 +521,13 @@ export default function BpmDetailsModal({
 
             {isAdmin && (
               <div className="mt-6">
-                <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.05em] text-gray-600 dark:text-white/50">
-                  Manual override
-                  <svg
-                    className="h-3 w-3 text-white/50"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
+                    <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.05em] text-gray-600 dark:text-white/50">
+                      Manual override
+                      <svg
+                        className="h-2.5 w-2.5 text-white/50"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
