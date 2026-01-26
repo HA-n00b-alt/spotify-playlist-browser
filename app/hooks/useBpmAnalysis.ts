@@ -825,7 +825,7 @@ export function useBpmAnalysis(tracks: Track[]) {
         const overrideFallback = options?.fallbackOverride
         effectiveFallbackOverride = overrideFallback && overrideFallback !== 'default'
           ? overrideFallback
-          : bpmRequestSettings.fallbackOverride
+          : bpmRequestSettings.fallbackOverride || null
         const bpmUpdateAlgo: 'essentia' | 'librosa' | 'both' = (
           effectiveFallbackOverride === 'fallback_only' || effectiveFallbackOverride === 'fallback_only_bpm'
         )
