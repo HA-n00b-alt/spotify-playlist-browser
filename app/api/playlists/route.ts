@@ -4,6 +4,7 @@ import { trackApiRequest, getCurrentUserId } from '@/lib/analytics'
 import { logError, logInfo, withApiLogging } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 25
 
 export const GET = withApiLogging(async (request: Request) => {
   const userId = await getCurrentUserId()

@@ -53,8 +53,11 @@ export default function PageHeader({
   const [adminRequestEmail, setAdminRequestEmail] = useState('')
 
   useEffect(() => {
-    // Fetch user info for subtitle
-    fetch('/api/auth/status')
+    const AUTH_TIMEOUT_MS = 8_000
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS)
+
+    fetch('/api/auth/status', { signal: controller.signal })
       .then((res) => res.json())
       .then((data) => {
         if (data.authenticated && data.user) {
@@ -62,13 +65,16 @@ export default function PageHeader({
           setUserName(data.user.display_name || data.user.id || null)
           setAdminRequestName(data.user.display_name || data.user.id || '')
           setAdminRequestEmail(data.user.email || '')
-          fetch('/api/auth/is-admin')
+          const adminController = new AbortController()
+          const adminTimeoutId = setTimeout(() => adminController.abort(), AUTH_TIMEOUT_MS)
+          fetch('/api/auth/is-admin', { signal: adminController.signal })
             .then((res) => res.json())
             .then((adminData) => {
               setIsAdmin(Boolean(adminData?.isAdmin))
               setIsSuperAdmin(Boolean(adminData?.isSuperAdmin))
             })
             .catch(() => {})
+            .finally(() => clearTimeout(adminTimeoutId))
           return
         }
         setIsAuthenticated(false)
@@ -77,7 +83,12 @@ export default function PageHeader({
         setUserName(null)
       })
       .catch((err) => {
-        console.error('Error fetching user info:', err)
+        if (err?.name !== 'AbortError') {
+          console.error('Error fetching user info:', err)
+        }
+      })
+      .finally(() => {
+        clearTimeout(timeoutId)
       })
   }, [])
 
@@ -132,7 +143,9 @@ export default function PageHeader({
   useEffect(() => {
     if (!isSettingsOpen) return
     let isMounted = true
-    fetch('/api/health/services')
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 10_000)
+    fetch('/api/health/services', { signal: controller.signal })
       .then((res) => res.json())
       .then((data) => {
         if (!isMounted) return
@@ -150,8 +163,10 @@ export default function PageHeader({
           musicbrainz: { status: 'error', label: 'Unavailable' },
         })
       })
+      .finally(() => clearTimeout(timeoutId))
     return () => {
       isMounted = false
+      controller.abort()
     }
   }, [isSettingsOpen])
 
@@ -160,7 +175,9 @@ export default function PageHeader({
       return
     }
     let isMounted = true
-    fetch('/api/admin/request-summary')
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 8_000)
+    fetch('/api/admin/request-summary', { signal: controller.signal })
       .then((res) => res.json())
       .then((data) => {
         if (!isMounted) return
@@ -173,8 +190,10 @@ export default function PageHeader({
         if (!isMounted) return
         setRequestCounts({ admin: 0, spotify: 0 })
       })
+      .finally(() => clearTimeout(timeoutId))
     return () => {
       isMounted = false
+      controller.abort()
     }
   }, [isSettingsOpen, isAdmin, isSuperAdmin])
 
@@ -183,7 +202,9 @@ export default function PageHeader({
       return
     }
     let isMounted = true
-    fetch('/api/admin/observability-settings')
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 8_000)
+    fetch('/api/admin/observability-settings', { signal: controller.signal })
       .then((res) => res.json())
       .then((data) => {
         if (!isMounted) return
@@ -200,8 +221,10 @@ export default function PageHeader({
         if (!isMounted) return
         setSentryUrl(null)
       })
+      .finally(() => clearTimeout(timeoutId))
     return () => {
       isMounted = false
+      controller.abort()
     }
   }, [isSettingsOpen, isAdmin, isSuperAdmin])
 

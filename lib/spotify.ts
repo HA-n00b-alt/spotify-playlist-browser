@@ -126,6 +126,7 @@ async function refreshAccessToken(): Promise<string | null> {
     return null
   }
 
+  const REFRESH_TIMEOUT_MS = 15_000
   try {
     logInfo('Attempting token refresh', {
       component: 'spotify.refreshAccessToken',
@@ -133,8 +134,11 @@ async function refreshAccessToken(): Promise<string | null> {
     })
     
     const start = Date.now()
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), REFRESH_TIMEOUT_MS)
     const response = await fetch('https://accounts.spotify.com/api/token', {
       method: 'POST',
+      signal: controller.signal,
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
@@ -144,6 +148,7 @@ async function refreshAccessToken(): Promise<string | null> {
         refresh_token: refreshToken,
       }),
     })
+    clearTimeout(timeoutId)
     const durationMs = Date.now() - start
 
     logInfo('Token refresh response received', {
@@ -199,13 +204,23 @@ async function refreshAccessToken(): Promise<string | null> {
 
     return access_token
   } catch (error) {
-    logError(error, {
-      component: 'spotify.refreshAccessToken',
-      errorType: 'Exception',
-    })
+    const isTimeout = error instanceof Error && error.name === 'AbortError'
+    if (isTimeout) {
+      logWarning('Token refresh timed out', {
+        component: 'spotify.refreshAccessToken',
+        errorType: 'Timeout',
+      })
+    } else {
+      logError(error, {
+        component: 'spotify.refreshAccessToken',
+        errorType: 'Exception',
+      })
+    }
     return null
   }
 }
+
+const SPOTIFY_REQUEST_TIMEOUT_MS = 25_000
 
 export async function makeSpotifyRequest<T>(
   endpoint: string,
@@ -236,27 +251,52 @@ export async function makeSpotifyRequest<T>(
   
   const makeRequest = async (token: string): Promise<Response> => {
     const start = Date.now()
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    })
-    const durationMs = Date.now() - start
-    void incrementExternalApiUsage('spotify')
-    logInfo('Spotify API request completed', {
-      component: 'spotify.makeSpotifyRequest',
-      endpoint,
-      status: response.status,
-      durationMs,
-    })
-    return response
+    const controller = new AbortController()
+    const timeoutId = options.signal ? undefined : setTimeout(() => controller.abort(), SPOTIFY_REQUEST_TIMEOUT_MS)
+    const signal = options.signal ?? controller.signal
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+      })
+      if (timeoutId !== undefined) clearTimeout(timeoutId)
+      const durationMs = Date.now() - start
+      void incrementExternalApiUsage('spotify')
+      logInfo('Spotify API request completed', {
+        component: 'spotify.makeSpotifyRequest',
+        endpoint,
+        status: response.status,
+        durationMs,
+      })
+      return response
+    } finally {
+      if (timeoutId !== undefined) clearTimeout(timeoutId)
+    }
   }
 
-  let response = await makeRequest(accessToken)
-  
+  let response: Response
+  try {
+    response = await makeRequest(accessToken)
+  } catch (requestError) {
+    const isTimeout = requestError instanceof Error && requestError.name === 'AbortError'
+    if (isTimeout) {
+      logWarning('Spotify API request timed out', {
+        component: 'spotify.makeSpotifyRequest',
+        endpoint,
+      })
+      throw new NetworkError(
+        'Request to Spotify timed out. Please try again.',
+        requestError instanceof Error ? requestError : undefined
+      )
+    }
+    throw requestError
+  }
+
   // Handle rate limiting (429) - wait for Retry-After before retrying
   if (response.status === 429) {
     const retryAfter = response.headers.get('Retry-After')

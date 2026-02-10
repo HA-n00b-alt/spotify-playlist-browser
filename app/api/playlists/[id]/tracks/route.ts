@@ -5,6 +5,7 @@ import { AuthenticationError } from '@/lib/errors'
 import { logError, withApiLogging } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 25
 
 interface PlaylistCacheRecord {
   snapshot_id: string

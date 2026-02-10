@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import { logError, logInfo, logWarning, withApiLogging } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 15
 
 export const GET = withApiLogging(async () => {
   const cookieStore = await cookies()
@@ -16,6 +17,8 @@ export const GET = withApiLogging(async () => {
   // Try to get user info with current access token
   let tokenToUse = accessToken
   
+  const REQUEST_TIMEOUT_MS = 10_000
+
   // If no access token but we have refresh token, try to refresh
   if (!tokenToUse && refreshToken) {
     const clientId = process.env.SPOTIFY_CLIENT_ID
@@ -26,8 +29,11 @@ export const GET = withApiLogging(async () => {
         logInfo('Attempting token refresh from status endpoint', {
           component: 'auth.status',
         })
+        const refreshController = new AbortController()
+        const refreshTimeoutId = setTimeout(() => refreshController.abort(), REQUEST_TIMEOUT_MS)
         const refreshResponse = await fetch('https://accounts.spotify.com/api/token', {
           method: 'POST',
+          signal: refreshController.signal,
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
             Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
@@ -37,6 +43,7 @@ export const GET = withApiLogging(async () => {
             refresh_token: refreshToken,
           }),
         })
+        clearTimeout(refreshTimeoutId)
 
         if (refreshResponse.ok) {
           const data = await refreshResponse.json()
@@ -49,7 +56,12 @@ export const GET = withApiLogging(async () => {
           })
         }
       } catch (error) {
-        logError(error, { component: 'auth.status', errorType: 'refresh' })
+        const isTimeout = error instanceof Error && error.name === 'AbortError'
+        if (isTimeout) {
+          logWarning('Token refresh timed out', { component: 'auth.status', errorType: 'refresh' })
+        } else {
+          logError(error, { component: 'auth.status', errorType: 'refresh' })
+        }
       }
     }
   }
@@ -57,11 +69,15 @@ export const GET = withApiLogging(async () => {
   // Try to fetch user info
   if (tokenToUse) {
     try {
+      const meController = new AbortController()
+      const meTimeoutId = setTimeout(() => meController.abort(), REQUEST_TIMEOUT_MS)
       const response = await fetch('https://api.spotify.com/v1/me', {
+        signal: meController.signal,
         headers: {
           Authorization: `Bearer ${tokenToUse}`,
         },
       })
+      clearTimeout(meTimeoutId)
 
       if (response.ok) {
         const user = await response.json()
@@ -75,7 +91,12 @@ export const GET = withApiLogging(async () => {
         })
       }
     } catch (error) {
-      logError(error, { component: 'auth.status', errorType: 'profile' })
+      const isTimeout = error instanceof Error && error.name === 'AbortError'
+      if (isTimeout) {
+        logWarning('Spotify /me request timed out', { component: 'auth.status', errorType: 'profile' })
+      } else {
+        logError(error, { component: 'auth.status', errorType: 'profile' })
+      }
     }
   }
 

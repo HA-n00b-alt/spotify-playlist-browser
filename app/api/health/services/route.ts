@@ -13,6 +13,8 @@ type HealthEntry = {
   label: string
 }
 
+const HEALTH_REQUEST_TIMEOUT_MS = 8_000
+
 async function getSpotifyHealth(): Promise<HealthEntry> {
   const cookieStore = await cookies()
   const accessToken = cookieStore.get('access_token')?.value
@@ -24,7 +26,10 @@ async function getSpotifyHealth(): Promise<HealthEntry> {
     const clientSecret = process.env.SPOTIFY_CLIENT_SECRET
     if (clientId && clientSecret) {
       try {
+        const refreshController = new AbortController()
+        const refreshTimeoutId = setTimeout(() => refreshController.abort(), HEALTH_REQUEST_TIMEOUT_MS)
         const refreshResponse = await fetch('https://accounts.spotify.com/api/token', {
+          signal: refreshController.signal,
           method: 'POST',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
@@ -39,6 +44,7 @@ async function getSpotifyHealth(): Promise<HealthEntry> {
           const data = await refreshResponse.json()
           tokenToUse = data.access_token
         }
+        clearTimeout(refreshTimeoutId)
       } catch (error) {
         logError(error, { component: 'health.spotify', action: 'refresh' })
       }
@@ -50,9 +56,13 @@ async function getSpotifyHealth(): Promise<HealthEntry> {
   }
 
   try {
+    const meController = new AbortController()
+    const meTimeoutId = setTimeout(() => meController.abort(), HEALTH_REQUEST_TIMEOUT_MS)
     const response = await fetch('https://api.spotify.com/v1/me', {
+      signal: meController.signal,
       headers: { Authorization: `Bearer ${tokenToUse}` },
     })
+    clearTimeout(meTimeoutId)
     if (response.ok) {
       return { status: 'ok', label: 'OK' }
     }
@@ -86,9 +96,13 @@ async function getMusoHealth(): Promise<HealthEntry> {
 
 async function getMusicBrainzHealth(): Promise<HealthEntry> {
   try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), HEALTH_REQUEST_TIMEOUT_MS)
     const response = await fetch(`${MB_BASE_URL}/artist?query=artist:radiohead&limit=1&fmt=json`, {
+      signal: controller.signal,
       headers: { 'User-Agent': USER_AGENT },
     })
+    clearTimeout(timeoutId)
     if (response.ok) {
       return { status: 'ok', label: 'OK' }
     }

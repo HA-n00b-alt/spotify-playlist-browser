@@ -470,7 +470,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   }, [])
 
   useEffect(() => {
-    fetch('/api/auth/status')
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 8_000)
+    fetch('/api/auth/status', { signal: controller.signal })
       .then((res) => res.json())
       .then((data) => {
         if (data?.authenticated && data?.user) {
@@ -486,6 +488,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         }
       })
       .catch(() => {})
+      .finally(() => clearTimeout(timeoutId))
   }, [uiDispatch])
   
   // Close context menu on click outside or escape key
@@ -541,19 +544,17 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
   // Check admin status
   useEffect(() => {
-    async function checkAdmin() {
-      try {
-        const res = await fetch('/api/auth/is-admin')
-        if (res.ok) {
-          const data = await res.json()
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 8_000)
+    fetch('/api/auth/is-admin', { signal: controller.signal })
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (data != null) {
           uiDispatch({ type: 'set', key: 'isAdmin', value: data.isAdmin || false })
         }
-      } catch (e) {
-        console.error('Error checking admin status:', e)
-      }
-    }
-
-    checkAdmin()
+      })
+      .catch(() => {})
+      .finally(() => clearTimeout(timeoutId))
   }, [uiDispatch])
   
   // Function to refresh playlist data
@@ -668,18 +669,17 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
 
   // Fetch country code on mount
   useEffect(() => {
-    const fetchCountry = async () => {
-      try {
-        const res = await fetch('/api/country')
-        if (res.ok) {
-          const data = await res.json()
-          setCountryCode(data.countryCode || 'us')
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 8_000)
+    fetch('/api/country', { signal: controller.signal })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.countryCode) {
+          setCountryCode(data.countryCode)
         }
-      } catch (error) {
-        console.error('[BPM Client] Error fetching country:', error)
-      }
-    }
-    fetchCountry()
+      })
+      .catch(() => {})
+      .finally(() => clearTimeout(timeoutId))
   }, [setCountryCode])
 
   // Function to recalculate all BPM/key/scale for tracks in the playlist
