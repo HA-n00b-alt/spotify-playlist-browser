@@ -11,7 +11,6 @@ export async function trackPageview(spotifyUserId: string | null, path: string):
   }
 
   try {
-    // Update or insert user record
     await query(
       `INSERT INTO analytics_users (spotify_user_id, last_seen_at, total_pageviews)
        VALUES ($1, NOW(), 1)
@@ -22,14 +21,12 @@ export async function trackPageview(spotifyUserId: string | null, path: string):
       [spotifyUserId]
     )
 
-    // Insert pageview record
     await query(
       `INSERT INTO analytics_pageviews (spotify_user_id, path, created_at)
        VALUES ($1, $2, NOW())`,
       [spotifyUserId, path]
     )
   } catch (error) {
-    // Silently fail analytics tracking to avoid breaking the app
     logError(error, { component: 'analytics.trackPageview' })
   }
 }
@@ -46,7 +43,6 @@ export async function trackApiRequest(
 ): Promise<void> {
   try {
     if (spotifyUserId) {
-      // Update user's API request count
       await query(
         `INSERT INTO analytics_users (spotify_user_id, last_seen_at, total_api_requests)
          VALUES ($1, NOW(), 1)
@@ -58,14 +54,12 @@ export async function trackApiRequest(
       )
     }
 
-    // Insert API request record
     await query(
       `INSERT INTO analytics_api_requests (spotify_user_id, endpoint, method, status_code, created_at)
        VALUES ($1, $2, $3, $4, NOW())`,
       [spotifyUserId, endpoint, method, statusCode || null]
     )
   } catch (error) {
-    // Silently fail analytics tracking to avoid breaking the app
     logError(error, { component: 'analytics.trackApiRequest' })
   }
 }

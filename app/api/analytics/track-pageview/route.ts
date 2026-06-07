@@ -13,10 +13,8 @@ export const POST = withApiLogging(async (request: Request) => {
       return NextResponse.json({ error: 'Path is required' }, { status: 400 })
     }
 
-    // Get current user ID
     const userId = await getCurrentUserId()
 
-    // Track pageview asynchronously (fire and forget)
     trackPageview(userId, path).catch((error) => {
       logError(error, { component: 'analytics.track-pageview' })
     })
@@ -27,6 +25,3 @@ export const POST = withApiLogging(async (request: Request) => {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 })
-
-
-

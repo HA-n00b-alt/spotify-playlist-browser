@@ -315,9 +315,8 @@ async function makeSpotifyRequest<T>(endpoint: string, options: RequestInit = {}
 - `GET /api/bpm?spotifyTrackId=...` - Get BPM for single track
 - `POST /api/bpm/batch` - Get BPM for multiple tracks
 
-**Analytics Routes** (Admin only):
-- `GET /api/analytics/stats` - Usage statistics
-- `POST /api/analytics/track-pageview` - Track pageview
+**Analytics:**
+- Umami Cloud script-based pageview tracking is loaded in the root layout for all user-facing pages.
 
 **Utility Routes:**
 - `GET /api/country` - Get country code from IP/locale
@@ -443,7 +442,7 @@ Caches full playlist data to reduce Spotify API calls.
 The BPM detection is handled by an external microservice hosted on Google Cloud Run.
 
 **Service Details:**
-- **URL**: `https://bpm-service-340051416180.europe-west3.run.app`
+- **URL**: `https://bpm-service-7jlgdaerna-ey.a.run.app`
 - **Authentication**: Google Cloud IAM Identity Tokens
 - **Processing**: Essentia (RhythmExtractor2013) + ffmpeg
 - **Input**: Audio preview URL
@@ -617,9 +616,9 @@ app/
 │   ├── auth/         # Authentication endpoints
 │   ├── playlists/    # Playlist endpoints
 │   ├── bpm/          # BPM endpoints
-│   └── analytics/    # Analytics endpoints
+│   └── analytics/    # Reserved for analytics-related handlers
 ├── playlists/        # Playlist pages
-├── stats/            # Analytics dashboard
+├── stats/            # Admin handoff to Umami Cloud
 ├── components/       # Reusable components
 ├── hooks/            # Custom React hooks
 └── providers/        # Context providers
@@ -628,7 +627,7 @@ lib/
 ├── spotify.ts        # Spotify API client
 ├── bpm.ts            # BPM detection logic
 ├── db.ts             # Database utilities
-├── analytics.ts      # Analytics functions
+├── analytics.ts      # Auth helpers and legacy analytics compatibility shims
 ├── errors.ts         # Error classes
 ├── logger.ts         # Logging utilities
 ├── playlists.ts      # Playlist utilities

@@ -5,7 +5,7 @@ import { logError, logInfo, withApiLogging } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
-const BPM_SERVICE_URL = process.env.BPM_SERVICE_URL || 'https://bpm-service-340051416180.europe-west3.run.app'
+const BPM_SERVICE_URL = process.env.BPM_SERVICE_URL || 'https://bpm-service-7jlgdaerna-ey.a.run.app'
 
 export const POST = withApiLogging(async (request: Request) => {
   const userId = await getCurrentUserId()

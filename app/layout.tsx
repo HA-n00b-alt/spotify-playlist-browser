@@ -1,12 +1,12 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
-import { SpeedInsights } from '@vercel/speed-insights/next'
 import './globals.css'
-import PageViewTracker from './components/PageViewTracker'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { QueryProvider } from './providers/QueryProvider'
 import CookieBanner from './components/CookieBanner'
 import { ThemeProvider } from './components/ThemeProvider'
+import PageViewTracker from './components/PageViewTracker'
+import UmamiAnalytics from './components/UmamiAnalytics'
 
 export const metadata: Metadata = {
   title: 'Spotify Playlist Browser',
@@ -67,9 +67,9 @@ export default function RootLayout({
           <QueryProvider>
             <ThemeProvider>
               <PageViewTracker />
+              <UmamiAnalytics />
               {children}
               <CookieBanner />
-              <SpeedInsights />
             </ThemeProvider>
           </QueryProvider>
         </ErrorBoundary>

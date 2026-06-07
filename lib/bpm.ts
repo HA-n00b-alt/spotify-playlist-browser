@@ -692,7 +692,7 @@ async function computeBpmFromService(previewUrl: string): Promise<{
   keyscaleConfidenceLibrosa?: number | null
   debugTxt?: string
 }> {
-  const serviceUrl = process.env.BPM_SERVICE_URL || 'https://bpm-service-340051416180.europe-west3.run.app'
+  const serviceUrl = process.env.BPM_SERVICE_URL || 'https://bpm-service-7jlgdaerna-ey.a.run.app'
   
   // Get identity token for authentication
   const idToken = await getIdentityToken(serviceUrl)

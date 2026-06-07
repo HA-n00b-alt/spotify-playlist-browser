@@ -4,7 +4,7 @@ import { logError, logInfo, withApiLogging } from '@/lib/logger'
 
 export const GET = withApiLogging(async () => {
   const serviceUrl =
-    process.env.BPM_SERVICE_URL || 'https://bpm-service-340051416180.europe-west3.run.app'
+    process.env.BPM_SERVICE_URL || 'https://bpm-service-7jlgdaerna-ey.a.run.app'
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 30000)
 

@@ -30,6 +30,12 @@ const tools = [
     roles: ['admin', 'superadmin'],
   },
   {
+    title: 'External API Tester',
+    description: 'Send sample payloads to Spotify, Muso, MusicBrainz, Deezer, iTunes, and BPM integration routes.',
+    href: '/admin/api-tester',
+    roles: ['admin', 'superadmin'],
+  },
+  {
     title: 'Admin Users & Requests',
     description: 'Approve admin requests and manage admin access.',
     href: '/admin/users',
@@ -109,6 +115,10 @@ export default async function AdminPage() {
         and{' '}
         <a href="https://musicbrainz.org" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
           MusicBrainz
+        </a>
+        ,{' '}
+        <a href="https://www.apple.com/itunes/" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
+          iTunes
         </a>
         .
       </footer>

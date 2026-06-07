@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getIdentityToken } from '@/lib/bpm'
 import { logError, logInfo, withApiLogging } from '@/lib/logger'
 
-const BPM_SERVICE_URL = process.env.BPM_SERVICE_URL || 'https://bpm-service-340051416180.europe-west3.run.app'
+const BPM_SERVICE_URL = process.env.BPM_SERVICE_URL || 'https://bpm-service-7jlgdaerna-ey.a.run.app'
 
 export const dynamic = 'force-dynamic'
 

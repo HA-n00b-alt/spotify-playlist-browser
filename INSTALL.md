@@ -56,8 +56,12 @@ DATABASE_URL=postgresql://user:password@host/database?sslmode=require
 DATABASE_URL_UNPOOLED=postgresql://user:password@host/database?sslmode=require
 
 # BPM Service (Required)
-BPM_SERVICE_URL=https://bpm-service-340051416180.europe-west3.run.app
+BPM_SERVICE_URL=https://bpm-service-7jlgdaerna-ey.a.run.app
 GCP_SERVICE_ACCOUNT_KEY={"type":"service_account","project_id":"...","private_key_id":"...","private_key":"...","client_email":"...","client_id":"...","auth_uri":"...","token_uri":"...","auth_provider_x509_cert_url":"...","client_x509_cert_url":"..."}
+
+# Deploy manifest in Vercel Blob (Required for deploy:production)
+BLOB_READ_WRITE_TOKEN=your-vercel-blob-read-write-token
+DEPLOY_MANIFEST_BLOB_PATH=deployment-manifests/spotify-playlist-browser.json
 
 # Muso (Optional but Recommended for ISRC enrichment)
 MUSO_API_KEY=your_muso_api_key_here
@@ -101,20 +105,31 @@ DB_LOG_LEVEL=info
 
 ### Setting Up Google Cloud Service Account
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com)
-2. Create a new project or select an existing one
-3. Enable the Cloud Run API
-4. Create a service account:
+The BPM service runs on Cloud Run in the `delman-site` GCP project. Use the `vercel-bpm-invoker@delman-site.iam.gserviceaccount.com` service account (or create a key for it):
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com) and select the `delman-site` project
+2. Ensure the Cloud Run API is enabled
+3. Create or locate the service account:
    - Go to "IAM & Admin" → "Service Accounts"
-   - Click "Create Service Account"
-   - Give it a name and grant it the "Cloud Run Invoker" role
-5. Create a key:
+   - Use `vercel-bpm-invoker@delman-site.iam.gserviceaccount.com` (must have Cloud Run Invoker on `bpm-service`)
+4. Create a key:
    - Click on the service account
    - Go to "Keys" tab
    - Click "Add Key" → "Create new key"
    - Select JSON format
    - Download the key file
-6. Copy the entire JSON content and paste it as a single line in `GCP_SERVICE_ACCOUNT_KEY` (remove newlines)
+5. Copy the entire JSON content and paste it as a single line in `GCP_SERVICE_ACCOUNT_KEY` (remove newlines)
+
+### Setting Up Vercel Blob Deploy Manifest
+
+`pnpm run deploy:production` now requires a centralized manifest stored in Vercel Blob.
+
+1. Create a Blob store in the Vercel project or team
+2. Generate or copy a Blob read-write token
+3. Add `BLOB_READ_WRITE_TOKEN` to `.env.local`
+4. Optionally override `DEPLOY_MANIFEST_BLOB_PATH` if you want a different blob pathname
+
+The manifest pathname defaults to `deployment-manifests/spotify-playlist-browser.json`.
 
 ### Setting Up Sentry (Optional)
 
@@ -203,4 +218,5 @@ The application should now be running at [http://localhost:3000](http://localhos
 
 - Read the [README.md](README.md) for more information about features and usage
 - See [DEPLOYMENT.md](DEPLOYMENT.md) for production deployment instructions (if applicable)
-- Configure admin users in your database for analytics access
+- Configure admin users in your database for admin access
+- Set `NEXT_PUBLIC_UMAMI_WEBSITE_ID` for the Umami Cloud tracker

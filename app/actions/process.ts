@@ -2,7 +2,7 @@
 
 import { getIdentityToken } from '@/lib/bpm'
 
-const BPM_SERVICE_URL = process.env.BPM_SERVICE_URL || 'https://bpm-service-340051416180.europe-west3.run.app'
+const BPM_SERVICE_URL = process.env.BPM_SERVICE_URL || 'https://bpm-service-7jlgdaerna-ey.a.run.app'
 
 /**
  * Server Action to submit audio URL for BPM analysis

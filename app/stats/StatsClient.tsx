@@ -32,7 +32,6 @@ export default function StatsClient() {
   const [stats, setStats] = useState<StatsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [topUsers, setTopUsers] = useState<Array<{ display_name: string; email: string; session_count: number }> | null>(null)
   const [modalLoading, setModalLoading] = useState(false)
@@ -95,7 +94,6 @@ export default function StatsClient() {
 
   return (
     <div className="space-y-6">
-      {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Total Users"
@@ -106,36 +104,12 @@ export default function StatsClient() {
             fetchTopUsers()
           }}
         />
-        <StatCard
-          title="Total Pageviews"
-          value={stats.summary.totalPageviews.toLocaleString()}
-          description="All time"
-        />
-        <StatCard
-          title="Active Users (7d)"
-          value={stats.summary.activeUsers7d.toLocaleString()}
-          description="Last 7 days"
-        />
-        <StatCard
-          title="Active Users (30d)"
-          value={stats.summary.activeUsers30d.toLocaleString()}
-          description="Last 30 days"
-        />
-        <StatCard
-          title="Spotify API Calls"
-          value={stats.summary.spotifyApiRequests.toLocaleString()}
-          description="All time"
-        />
-        <StatCard
-          title="MusicBrainz API Calls"
-          value={stats.summary.musicbrainzApiRequests.toLocaleString()}
-          description="All time"
-        />
-        <StatCard
-          title="Muso API Calls"
-          value={stats.summary.musoApiRequests.toLocaleString()}
-          description="All time"
-        />
+        <StatCard title="Total Pageviews" value={stats.summary.totalPageviews.toLocaleString()} description="All time" />
+        <StatCard title="Active Users (7d)" value={stats.summary.activeUsers7d.toLocaleString()} description="Last 7 days" />
+        <StatCard title="Active Users (30d)" value={stats.summary.activeUsers30d.toLocaleString()} description="Last 30 days" />
+        <StatCard title="Spotify API Calls" value={stats.summary.spotifyApiRequests.toLocaleString()} description="All time" />
+        <StatCard title="MusicBrainz API Calls" value={stats.summary.musicbrainzApiRequests.toLocaleString()} description="All time" />
+        <StatCard title="Muso API Calls" value={stats.summary.musoApiRequests.toLocaleString()} description="All time" />
         <StatCard
           title="Muso API Used (Today)"
           value={stats.summary.musoDailyUsed.toLocaleString()}
@@ -143,7 +117,6 @@ export default function StatsClient() {
         />
       </div>
 
-      {/* Top Paths and Endpoints */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-xl font-bold mb-4">Top Pages</h2>
@@ -181,22 +154,18 @@ export default function StatsClient() {
         </div>
       </div>
 
-      {/* Requests by Status Code */}
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-xl font-bold mb-4">API Requests by Status Code</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4">
           {stats.requestsByStatus.map((item, index) => (
             <div key={index} className="text-center p-3 bg-gray-50 rounded">
               <div className="text-2xl font-bold text-gray-900">{item.count.toLocaleString()}</div>
-              <div className="text-sm text-gray-600 mt-1">
-                {item.statusCode !== null ? item.statusCode : 'N/A'}
-              </div>
+              <div className="text-sm text-gray-600 mt-1">{item.statusCode !== null ? item.statusCode : 'N/A'}</div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Time Series Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <TimeSeriesChart title="Pageviews Over Time (Last 30 Days)" data={stats.pageviewsOverTime} color="bg-green-500" />
         <TimeSeriesChart title="Spotify API Requests (Last 30 Days)" data={stats.apiRequestsOverTimeByProvider.spotify} color="bg-green-500" />
@@ -260,32 +229,31 @@ function TimeSeriesChart({ title, data, color }: { title: string; data: Array<{ 
       </div>
     )
   }
+
   return (
     <div className="bg-white rounded-lg shadow p-6">
       <h2 className="text-xl font-bold mb-4">{title}</h2>
       {data.length > 0 ? (
         <div className="space-y-1">
           {data.map((item, index) => {
-            // Handle date string - could be "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM:SS..."
             const dateStr = typeof item.date === 'string' ? item.date.split('T')[0] : item.date
-            const date = new Date(dateStr + 'T00:00:00') // Add time to avoid timezone issues
+            const date = new Date(dateStr + 'T00:00:00')
             const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+
             return (
-            <div key={index} className="flex items-center gap-2">
-              <span className="text-xs text-gray-500 w-20">{formattedDate}</span>
-              <div className="flex-1 bg-gray-200 rounded-full h-6 relative">
-                <div
-                  className={`${color} h-6 rounded-full flex items-center justify-end pr-2`}
-                  style={{
-                    width: `${
-                      (item.count / Math.max(...data.map((p) => p.count))) * 100
-                    }%`,
-                  }}
-                >
-                  <span className="text-xs text-white font-semibold">{item.count}</span>
+              <div key={index} className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 w-20">{formattedDate}</span>
+                <div className="flex-1 bg-gray-200 rounded-full h-6 relative">
+                  <div
+                    className={`${color} h-6 rounded-full flex items-center justify-end pr-2`}
+                    style={{
+                      width: `${(item.count / Math.max(...data.map((p) => p.count))) * 100}%`,
+                    }}
+                  >
+                    <span className="text-xs text-white font-semibold">{item.count}</span>
+                  </div>
                 </div>
               </div>
-            </div>
             )
           })}
         </div>
@@ -296,14 +264,11 @@ function TimeSeriesChart({ title, data, color }: { title: string; data: Array<{ 
   )
 }
 
-
-function StatCard({ title, value, description, onClick }: { title: string; value: string; description: string, onClick?: () => void }) {
+function StatCard({ title, value, description, onClick }: { title: string; value: string; description: string; onClick?: () => void }) {
   const isClickable = !!onClick
+
   return (
-    <div
-      className={`bg-white rounded-lg shadow p-6 ${isClickable ? 'cursor-pointer hover:shadow-md' : ''}`}
-      onClick={onClick}
-    >
+    <div className={`bg-white rounded-lg shadow p-6 ${isClickable ? 'cursor-pointer hover:shadow-md' : ''}`} onClick={onClick}>
       <div className="text-sm text-gray-500 mb-1">{title}</div>
       <div className="text-3xl font-bold text-gray-900 mb-1">{value}</div>
       <div className="text-xs text-gray-400">{description}</div>

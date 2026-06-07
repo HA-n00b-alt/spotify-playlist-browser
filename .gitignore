@@ -1,9 +1,8 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
 # dependencies
 /node_modules
 /.pnp
 .pnp.js
+.pnpm-store
 
 # testing
 /coverage
@@ -23,15 +22,25 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 
-# local env files
-.env*.local
+# local env files (never commit secrets)
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# service account keys and credential files
+vercel-bpm-invoker*.json
+*-service-account*.json
+*.credentials.json
 
 # vercel
 .vercel
+.vercel/output
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
+.env*
