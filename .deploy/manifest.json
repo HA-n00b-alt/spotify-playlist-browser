@@ -1,0 +1,11 @@
+{
+  "deployments": [
+    {
+      "timestamp": "2026-06-07T05:31:29.683Z",
+      "gitHash": "8ed1860cf70fcb27fa14ea900d89381a14af0af3",
+      "workingTreeHash": "0e8824bd6f41",
+      "platform": "vercel",
+      "productionUrl": "https://searchmyplaylist.delman.it"
+    }
+  ]
+}

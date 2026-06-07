@@ -1,0 +1,16 @@
+{
+  "applied": [
+    "add_admin_access_requests.sql",
+    "add_admin_settings.sql",
+    "add_admin_user_profile_fields.sql",
+    "add_admin_users.sql",
+    "add_credits_cache.sql",
+    "add_external_api_usage.sql",
+    "add_isrc_mismatch_reviews.sql",
+    "add_spotify_access_requests.sql",
+    "add_track_credits_cache.sql",
+    "backfill_bpm_selected.sql",
+    "drop_playlist_order.sql",
+    "update_credits_cache_filters.sql"
+  ]
+}
