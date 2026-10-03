@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import crypto from 'crypto'
 import { logError, logInfo, withApiLogging } from '@/lib/logger'
+import { REFRESH_TOKEN_MAX_AGE_SECONDS } from '@/lib/spotifyAuth'
 
 export const GET = withApiLogging(async (request: Request) => {
   const { searchParams } = new URL(request.url)
@@ -117,7 +118,7 @@ export const GET = withApiLogging(async (request: Request) => {
 
     if (refresh_token) {
       response.cookies.set('refresh_token', refresh_token, {
-        maxAge: 60 * 60 * 24 * 365, // 1 year
+        maxAge: REFRESH_TOKEN_MAX_AGE_SECONDS,
         httpOnly: true,
         sameSite: 'lax',
         secure: isProduction,

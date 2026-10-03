@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { withApiLogging, logError } from '@/lib/logger'
+import { withApiLogging, logError, logWarning } from '@/lib/logger'
+import { clearSpotifyAuthCookies, isInvalidGrant } from '@/lib/spotifyAuth'
 import { MB_BASE_URL, USER_AGENT } from '@/lib/musicbrainz'
 
 export const dynamic = 'force-dynamic'
@@ -42,6 +43,16 @@ async function getSpotifyHealth(): Promise<HealthEntry> {
         if (refreshResponse.ok) {
           const data = await refreshResponse.json()
           tokenToUse = data.access_token
+        } else {
+          const errorText = await refreshResponse.text().catch(() => '')
+          if (isInvalidGrant(refreshResponse.status, errorText)) {
+            // Expired or revoked refresh token: discard it, no retry.
+            clearSpotifyAuthCookies(cookieStore)
+            logWarning('Refresh token rejected (invalid_grant); cleared auth cookies', {
+              component: 'health.spotify',
+              action: 'refresh',
+            })
+          }
         }
         clearTimeout(refreshTimeoutId)
       } catch (error) {

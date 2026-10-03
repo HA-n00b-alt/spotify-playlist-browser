@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { logError, logInfo, logWarning, withApiLogging } from '@/lib/logger'
+import { clearSpotifyAuthCookies, isInvalidGrant } from '@/lib/spotifyAuth'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 15
@@ -49,6 +50,16 @@ export const GET = withApiLogging(async () => {
           const data = await refreshResponse.json()
           tokenToUse = data.access_token
         } else {
+          const errorText = await refreshResponse.text().catch(() => '')
+          if (isInvalidGrant(refreshResponse.status, errorText)) {
+            // Expired or revoked refresh token: discard it so the user is shown as signed out.
+            clearSpotifyAuthCookies(cookieStore)
+            logWarning('Refresh token rejected (invalid_grant); cleared auth cookies', {
+              component: 'auth.status',
+              status: refreshResponse.status,
+            })
+            return NextResponse.json({ authenticated: false })
+          }
           logWarning('Token refresh failed in status endpoint', {
             component: 'auth.status',
             status: refreshResponse.status,

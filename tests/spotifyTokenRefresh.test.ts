@@ -3,8 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const cookieJar = new Map<string, string>()
 const cookieStore = {
   get: (name: string) => (cookieJar.has(name) ? { value: cookieJar.get(name) } : undefined),
-  set: vi.fn((name: string, value: string) => {
+  set: vi.fn((name: string, value: string, _options?: { maxAge?: number }) => {
     cookieJar.set(name, value)
+  }),
+  delete: vi.fn((name: string) => {
+    cookieJar.delete(name)
   }),
 }
 
@@ -15,6 +18,8 @@ vi.mock('@/lib/externalApiUsage', () => ({ incrementExternalApiUsage: vi.fn() })
 
 import { makeSpotifyRequest } from '@/lib/spotify'
 import { AuthenticationError } from '@/lib/errors'
+import { logError, logWarning } from '@/lib/logger'
+import { REFRESH_TOKEN_MAX_AGE_SECONDS } from '@/lib/spotifyAuth'
 
 const TOKEN_URL = 'https://accounts.spotify.com/api/token'
 
@@ -28,6 +33,9 @@ describe('makeSpotifyRequest token refresh handling', () => {
   beforeEach(() => {
     cookieJar.clear()
     cookieStore.set.mockClear()
+    cookieStore.delete.mockClear()
+    vi.mocked(logError).mockClear()
+    vi.mocked(logWarning).mockClear()
     fetchMock.mockReset()
     vi.stubGlobal('fetch', fetchMock)
     vi.stubEnv('SPOTIFY_CLIENT_ID', 'client-id')
@@ -80,7 +88,54 @@ describe('makeSpotifyRequest token refresh handling', () => {
     expect(cookieJar.get('refresh_token')).toBe('refresh-1')
   })
 
-  it('throws an AuthenticationError when the refresh is rejected', async () => {
+  it('stores a rotated refresh token for about six months, not a year', async () => {
+    fetchMock
+      .mockResolvedValueOnce(json({}, 401))
+      .mockResolvedValueOnce(json({ access_token: 'new-access', expires_in: 3600, refresh_token: 'refresh-2' }))
+      .mockResolvedValueOnce(json({ id: 'me' }))
+
+    await makeSpotifyRequest('/me')
+
+    const refreshSet = cookieStore.set.mock.calls.find(([name]) => name === 'refresh_token')
+    expect(refreshSet?.[2]?.maxAge).toBe(REFRESH_TOKEN_MAX_AGE_SECONDS)
+    expect(REFRESH_TOKEN_MAX_AGE_SECONDS).toBeLessThanOrEqual(60 * 60 * 24 * 183)
+  })
+
+  it('discards both token cookies on invalid_grant, does not retry, and logs a warning', async () => {
+    fetchMock
+      .mockResolvedValueOnce(json({}, 401))
+      .mockResolvedValueOnce(json({ error: 'invalid_grant', error_description: 'Refresh token expired' }, 400))
+
+    await expect(makeSpotifyRequest('/me')).rejects.toBeInstanceOf(AuthenticationError)
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(cookieJar.has('refresh_token')).toBe(false)
+    expect(cookieJar.has('access_token')).toBe(false)
+    expect(logWarning).toHaveBeenCalledWith(
+      expect.stringContaining('invalid_grant'),
+      expect.objectContaining({ component: 'spotify.refreshAccessToken', cookiesCleared: true })
+    )
+    expect(logError).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ component: 'spotify.refreshAccessToken' })
+    )
+  })
+
+  it('keeps the cookies when a refresh fails for another reason', async () => {
+    fetchMock
+      .mockResolvedValueOnce(json({}, 401))
+      .mockResolvedValueOnce(json({ error: 'server_error' }, 500))
+
+    await expect(makeSpotifyRequest('/me')).rejects.toBeInstanceOf(AuthenticationError)
+
+    expect(cookieStore.delete).not.toHaveBeenCalled()
+    expect(cookieJar.get('refresh_token')).toBe('refresh-1')
+  })
+
+  it('still signs the user out on invalid_grant where cookies are read-only', async () => {
+    cookieStore.delete.mockImplementationOnce(() => {
+      throw new Error('Cookies can only be modified in a Server Action or Route Handler')
+    })
     fetchMock
       .mockResolvedValueOnce(json({}, 401))
       .mockResolvedValueOnce(json({ error: 'invalid_grant' }, 400))
@@ -88,7 +143,10 @@ describe('makeSpotifyRequest token refresh handling', () => {
     await expect(makeSpotifyRequest('/me')).rejects.toBeInstanceOf(AuthenticationError)
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(cookieJar.get('access_token')).toBe('old-access')
+    expect(logWarning).toHaveBeenCalledWith(
+      expect.stringContaining('invalid_grant'),
+      expect.objectContaining({ cookiesCleared: false })
+    )
   })
 
   it('throws an AuthenticationError when there is no access token and no refresh token', async () => {

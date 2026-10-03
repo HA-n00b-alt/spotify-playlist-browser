@@ -9,6 +9,7 @@ import {
 } from './errors'
 import { logError, logWarning, logInfo } from './logger'
 import { incrementExternalApiUsage } from './externalApiUsage'
+import { REFRESH_TOKEN_MAX_AGE_SECONDS, clearSpotifyAuthCookies, isInvalidGrant } from './spotifyAuth'
 
 interface SpotifyError {
   error: {
@@ -160,6 +161,16 @@ async function refreshAccessToken(): Promise<string | null> {
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unable to read error')
+      if (isInvalidGrant(response.status, errorText)) {
+        // Expired or revoked refresh token: discard it and send the user back to sign-in, no retry.
+        const cleared = clearSpotifyAuthCookies(cookieStore)
+        logWarning('Refresh token rejected (invalid_grant); user must sign in again', {
+          component: 'spotify.refreshAccessToken',
+          status: response.status,
+          cookiesCleared: cleared,
+        })
+        return null
+      }
       const error = new Error(`Token refresh failed: ${response.status} ${response.statusText}`)
       logError(error, {
         component: 'spotify.refreshAccessToken',
@@ -181,7 +192,6 @@ async function refreshAccessToken(): Promise<string | null> {
     })
 
     // Update the access token cookie
-    const cookieStore = await cookies()
     cookieStore.set('access_token', access_token, {
       maxAge: expires_in || 3600,
       httpOnly: true,
@@ -193,7 +203,7 @@ async function refreshAccessToken(): Promise<string | null> {
     // Update refresh token if a new one was provided
     if (newRefreshToken) {
       cookieStore.set('refresh_token', newRefreshToken, {
-        maxAge: 60 * 60 * 24 * 365, // 1 year
+        maxAge: REFRESH_TOKEN_MAX_AGE_SECONDS,
         httpOnly: true,
         sameSite: 'lax',
         secure: process.env.NODE_ENV === 'production',
