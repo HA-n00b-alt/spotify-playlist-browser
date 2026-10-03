@@ -49,7 +49,8 @@ Each step prints one PASS/FAIL line; the first failure stops the run and later s
    Vercel Blob. Nothing is written to the repository; the deploy never commits or pushes.
 10. **Post-deploy verify** (`scripts/post-deploy-verify.js`): production `/api/bpm/health` must
     answer `"ok": true`, and the BPM service's `/health` must answer when called with an identity
-    token minted from `GCP_SERVICE_ACCOUNT_KEY`.
+    token minted from `GCP_SERVICE_ACCOUNT_KEY`. Run the same check on its own, without deploying,
+    with `pnpm run verify:production`.
 
 ### Dry run
 

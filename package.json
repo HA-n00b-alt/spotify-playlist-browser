@@ -26,7 +26,8 @@
     "verify": "node ./scripts/verify.js",
     "hooks:install": "node ./scripts/git-hooks.js install",
     "pr": "node ./scripts/pr.js",
-    "deploy:production": "node ./scripts/deploy-production.js"
+    "deploy:production": "node ./scripts/deploy-production.js",
+    "verify:production": "node ./scripts/post-deploy-verify.js"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.9.0",
