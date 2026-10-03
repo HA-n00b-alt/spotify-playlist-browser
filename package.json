@@ -18,7 +18,7 @@
     "check:verify-steps-doc": "node ./scripts/generate-verify-steps-doc.js --check",
     "check:git-hooks": "node ./scripts/git-hooks.js check",
     "generate:verify-steps-doc": "node ./scripts/generate-verify-steps-doc.js",
-    "test": "node --test tests/**/*.test.js",
+    "test": "vitest run",
     "verify": "node ./scripts/verify.js",
     "hooks:install": "node ./scripts/git-hooks.js install",
     "pr": "node ./scripts/pr.js",
@@ -51,6 +51,7 @@
     "eslint-config-next": "^14.2.0",
     "postcss": "^8.4.0",
     "tailwindcss": "^3.4.0",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "vitest": "^5.0.3"
   }
 }

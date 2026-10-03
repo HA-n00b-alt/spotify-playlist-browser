@@ -186,7 +186,7 @@ deploy:production` runs the same steps first. The list is defined in
 6. **verify steps doc** (`pnpm run check:verify-steps-doc`): fails when the step list in `INSTALL.md` no longer matches this list. Fix it with `pnpm run generate:verify-steps-doc`.
 7. **typecheck** (`pnpm run typecheck`): runs `tsc --noEmit` over the whole project.
 8. **lint** (`pnpm run check:strict`): runs `next lint` with the `next/core-web-vitals` rules.
-9. **test** (`pnpm run test`): runs the `node --test` suite under `tests/`.
+9. **test** (`pnpm run test`): runs the Vitest suite under `tests/`.
 <!-- verify-steps:end -->
 
 ## Troubleshooting
