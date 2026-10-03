@@ -61,3 +61,24 @@ test('manifestEntry records the commit, timestamp and dirty: false', () => {
     }
   )
 })
+
+test('ipv4Lookup answers both the single-address and the `all` callback shapes', () => {
+  const { ipv4Lookup } = require('../scripts/lib/manifest')
+  const lookup = ipv4Lookup((_host, callback) => callback(null, ['192.0.2.1', '192.0.2.2']))
+  let single
+  lookup('blob.example', {}, (...args) => {
+    single = args
+  })
+  assert.deepEqual(single, [null, '192.0.2.1', 4])
+  let all
+  lookup('blob.example', { all: true }, (...args) => {
+    all = args
+  })
+  assert.deepEqual(all, [null, [{ address: '192.0.2.1', family: 4 }, { address: '192.0.2.2', family: 4 }]])
+  const failure = new Error('ENOTFOUND')
+  let failed
+  ipv4Lookup((_host, callback) => callback(failure))('blob.example', {}, (error) => {
+    failed = error
+  })
+  assert.equal(failed, failure)
+})
