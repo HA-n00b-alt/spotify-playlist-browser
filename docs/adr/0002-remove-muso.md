@@ -45,6 +45,6 @@ This has been live since the 2026-06-07 deploy and was committed as `09cac96` on
 - Credits come from MusicBrainz alone, so tracks MusicBrainz doesn't know have none.
 - One fewer secret, external dependency and failure mode in health checks.
 - `setup.sql` no longer creates `muso_track_cache`, `muso_album_cache` or
-  `idx_muso_track_cache_isrcs_gin`, but they still exist in the production database. Dropping them
-  is #15.
+  `idx_muso_track_cache_isrcs_gin`; `migrations/0001_drop_muso_cache.sql` drops them from existing
+  databases (#15).
 - Reintroducing Muso, or any paid metadata source, should be a new ADR that supersedes this one.
