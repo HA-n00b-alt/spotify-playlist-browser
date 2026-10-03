@@ -7,6 +7,9 @@
  * - `.env.example` or the placement table in `docs/SECRETS-AND-ENVIRONMENT.md` is stale;
  * - a required name is empty in the master `.env.local`;
  * - the BPM service URL or the GCP service account is not the expected `delman-site` one.
+ *
+ * On GitHub Actions (`CI=true`, #9) there is no master `.env.local`, so only the catalog and the
+ * generated docs are checked; the master-file checks still run on every local verify.
  */
 const fs = require('node:fs')
 const path = require('node:path')
@@ -77,7 +80,8 @@ function checkMasterEnvLocal(errors) {
 function main() {
   const errors = []
   checkCatalog(errors)
-  checkMasterEnvLocal(errors)
+  const inCi = process.env.CI === 'true'
+  if (!inCi) checkMasterEnvLocal(errors)
 
   if (errors.length > 0) {
     console.error('check:env-contract failed:')
@@ -87,7 +91,11 @@ function main() {
     process.exit(1)
   }
 
-  console.log(`check:env-contract passed (master: ${ENV_LOCAL})`)
+  console.log(
+    inCi
+      ? 'check:env-contract passed (CI: catalog and docs only, no master .env.local)'
+      : `check:env-contract passed (master: ${ENV_LOCAL})`
+  )
 }
 
 main()
