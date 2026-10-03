@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "vercel": {
+      "source": {
+        "source": "github",
+        "repo": "vercel/vercel-plugin"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "vercel-plugin@vercel": true
+  }
+}
