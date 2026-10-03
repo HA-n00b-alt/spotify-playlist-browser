@@ -47,3 +47,6 @@ next-env.d.ts
 
 # agent worktrees
 .claude/worktrees/
+
+# deploy state (#13): the manifest lives in Vercel Blob, applied migrations in schema_migrations
+.deploy/
