@@ -1,0 +1,16 @@
+#!/bin/sh
+# Check migration file numbering in migrations/ (#7). Two branches can each add the same number
+# without a git conflict, because the file names differ; this catches it at the commit instead of
+# after the second pull request merges. Logic: scripts/check-migration-numbering.js.
+#
+# `git commit --no-verify` skips it; `pnpm run verify` runs the same check.
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+cd "$root" || exit 0
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "pre-commit: node not found, the migration numbering check did NOT run." >&2
+  exit 0
+fi
+
+exec node scripts/check-migration-numbering.js

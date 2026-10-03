@@ -110,23 +110,31 @@ system now does, in plain words. Commit only files that belong to the issue.
 to hand back as instructions:
 
 ```bash
-pnpm run verify                                         # env contract, route checks, tsc, lint, tests
-git fetch origin
-git merge-tree --write-tree --name-only origin/main HEAD   # exit 0 and one tree id = clean
-git push -u origin <branch>
-gh pr create --title "<type(scope): summary (#42)>" --body-file <filled-in PR template>
+npm run pr -- --title "<type(scope): summary (#42)>"   # --title optional when the branch has one commit
 ```
+
+`npm run pr` (`scripts/pr.js`) checks the git hooks are installed, runs verify, checks the branch
+still merges cleanly into `origin/main`, pushes, and opens the PR from
+`.github/pull_request_template.md` with `Closes #<issue>` taken from the branch name. Then **edit the
+PR body** (`gh pr edit <n> --body-file …`): Summary, the Definition of Done ticked honestly, and
+Validation listing **only the checks actually run**. With a PR already open it verifies, pushes and
+reports that PR. `npm run pr -- --dry-run` prints the plan. It uses `npm run`, not `pnpm run`,
+until #22 is fixed.
 
 A branch that is merely behind `origin/main` needs nothing. **A conflict is yours to clear**:
 `git rebase origin/main`, resolve, `git rebase --continue`, re-run verify. **Rebase, never merge**
 `main` into your branch. If the PR is already open, push the rebase with
 `git push --force-with-lease`, never a bare `--force`.
 
-The PR body follows the template: `Closes #42` first, then Summary, the Definition of Done
-checklist, and Validation listing **only the checks actually run**.
+**Git hooks** (`.githooks/`, installed by `prepare` on `pnpm install`; `npm run hooks:install` by
+hand): `pre-commit` checks migration numbering, and `pre-push` runs verify when the pushed branch
+already has an open PR, so a rebased force-push is gated too. If `gh` cannot answer, `pre-push`
+skips loudly and the push continues. `--no-verify` bypasses both; never use it to get past a
+failure.
 
-> #7 will add `npm run pr` (verify + push + `gh pr create` in one command) and a pre-push hook.
-> Until then, the commands above are the delivery path.
+**Migrations** are named `NNNN_<snake_case_name>.sql` (`0001` upwards, no gaps or duplicates). The
+pre-2026-10 files keep their names and always run first (`scripts/lib/migrations.js`). Two branches
+can take the same number without a git conflict; whoever merges second renames to the next free one.
 
 **Step 4 — stop.** No local merge, no `gh pr merge`, unless the maintainer explicitly asks in this
 session. A finished task is not that instruction. The maintainer merges with squash; the PR title

@@ -1,0 +1,16 @@
+#!/bin/sh
+# Run verify when a pushed branch already has an open pull request (#7).
+# Logic, including the loud skip when `gh` cannot answer: scripts/git-hook-pre-push.js.
+# `exec` keeps stdin, where git lists the refs being pushed.
+#
+# `git push --no-verify` skips it; the production deploy runs verify itself.
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+cd "$root" || exit 0
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "pre-push: node not found, the pull-request verify gate did NOT run." >&2
+  exit 0
+fi
+
+exec node scripts/git-hook-pre-push.js
