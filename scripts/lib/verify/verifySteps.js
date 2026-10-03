@@ -32,7 +32,8 @@ const VERIFY_STEPS = Object.freeze([
       '`.env.example` or the table in `docs/SECRETS-AND-ENVIRONMENT.md` is stale, when a required ' +
       'variable is empty in the master `.env.local` (the main checkout\'s, also from a worktree), or ' +
       'when the BPM service URL or Google Cloud service account is not the expected `delman-site` ' +
-      'one. It prints names only.',
+      'one. On GitHub Actions (`CI=true`) there is no master file, so only the catalog and docs are ' +
+      'checked. It prints names only.',
   },
   {
     label: 'api routes',

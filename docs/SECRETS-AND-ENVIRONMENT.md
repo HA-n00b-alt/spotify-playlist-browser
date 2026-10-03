@@ -108,7 +108,7 @@ to the BPM service repository; this repository only needs the invoker key, which
 | `NODE_ENV` | Set by Node, Next.js or Vercel at run time | no | platform | none | — | — | — | `app/api/auth/callback/route.ts`, `app/api/auth/login/route.ts`, `app/components/ErrorBoundary.tsx`, `app/global-error.tsx`, `lib/logger.ts`, `lib/spotify.ts` |
 | `NEXT_RUNTIME` | Set by Node, Next.js or Vercel at run time | no | platform | none | — | — | — | `instrumentation.ts` |
 | `VERCEL_ENV` | Set by Node, Next.js or Vercel at run time | no | platform | none | — | — | — | `lib/logger.ts` |
-| `CI` | Set by Node, Next.js or Vercel at run time | no | platform | none | — | — | — | `next.config.js` |
+| `CI` | Set by Node, Next.js or Vercel at run time | no | platform | none | — | — | — | `next.config.js`, `scripts/check-env-contract.js` |
 | `VERCEL_OIDC_TOKEN` | Short-lived token Vercel adds to every `vercel env pull`; not read by this repository | yes | platform | none | — | — | — | — |
 | `DRY_RUN` | deploy:production prints its plan without changing anything when 1 | no | operator | none | — | — | — | `scripts/deploy-production.js` |
 | `PRODUCTION_URL` | Production URL checked after a deploy (default https://searchmyplaylist.delman.it) | no | operator | none | — | — | — | `scripts/deploy-production.js`, `scripts/post-deploy-verify.js` |

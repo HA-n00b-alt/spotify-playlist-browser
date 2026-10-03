@@ -133,6 +133,11 @@ Validation listing **only the checks actually run**. With a PR already open it v
 reports that PR. `npm run pr -- --dry-run` prints the plan. It uses `npm run`, not `pnpm run`,
 until #22 is fixed.
 
+**GitHub enforces the gate too** (ADR 0005): `main` takes changes only through a pull request,
+merged by squash, with linear history and no force-push or deletion, and only once the `verify`
+check (`.github/workflows/verify.yml`) has passed. There, `CI=true` and `check:env-contract` skips
+the master `.env.local` checks; everything else runs as locally.
+
 A branch that is merely behind `origin/main` needs nothing. **A conflict is yours to clear**:
 `git rebase origin/main`, resolve, `git rebase --continue`, re-run verify. **Rebase, never merge**
 `main` into your branch. If the PR is already open, push the rebase with
