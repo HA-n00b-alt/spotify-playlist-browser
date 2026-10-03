@@ -11,6 +11,10 @@ Before you begin, ensure you have:
    # Install pnpm if not already installed
    npm install -g pnpm
    ```
+   Any recent global pnpm works: the project pins its version in `package.json`
+   (`"packageManager": "pnpm@<version>"`), and pnpm downloads and runs that version automatically
+   when it differs from the global one (`pnpm --version` inside the repo prints the pinned one).
+   See [Upgrading pnpm](#upgrading-pnpm).
 
 2. **A Spotify Developer account** - Sign up at [developer.spotify.com](https://developer.spotify.com)
 
@@ -196,6 +200,23 @@ deploy:production` runs the same steps first. The list is defined in
 8. **lint** (`pnpm run check:strict`): runs `next lint` with the `next/core-web-vitals` rules.
 9. **test** (`pnpm run test`): runs the Vitest suite under `tests/`.
 <!-- verify-steps:end -->
+
+## Upgrading pnpm
+
+pnpm is pinned by `packageManager` in `package.json`, so a new global pnpm never changes how this
+repo installs (#32). Upgrade on purpose, in its own pull request:
+
+1. Set `"packageManager": "pnpm@<new version>"` in `package.json`.
+2. Run `pnpm install --frozen-lockfile`. If pnpm adds a `set this to true or false` placeholder to
+   `allowBuilds` in `pnpm-workspace.yaml`, or warns about ignored build scripts, decide each one by
+   hand (`true` or `false`, with a comment saying why) instead of running `pnpm approve-builds`.
+3. Run `pnpm run verify`, and check `git status`: an upgrade that rewrites `pnpm-lock.yaml` or
+   `pnpm-workspace.yaml` needs those changes reviewed and committed in the same PR.
+
+Production is built on the maintainer's machine (`vercel build` in `pnpm run deploy:production`),
+so it uses the pinned pnpm too. Vercel's own Git builds would not: without Corepack they pick pnpm 9
+or 10 from the lockfile. If Git-triggered builds are ever enabled, add the project environment
+variable `ENABLE_EXPERIMENTAL_COREPACK=1` so Vercel honours `packageManager`.
 
 ## Troubleshooting
 
