@@ -54,6 +54,14 @@ const VERIFY_STEPS = Object.freeze([
       'and fails as soon as one exists until the Cloudflare migration defines the real check.',
   },
   {
+    label: 'migration numbering',
+    script: 'check:migration-numbering',
+    why:
+      'fails when a new file in `migrations/` is not named `NNNN_<snake_case_name>.sql`, or when ' +
+      'two files share a number or a number is skipped. Two branches can add the same number ' +
+      'without a git conflict; the `pre-commit` hook runs the same check.',
+  },
+  {
     label: 'verify steps doc',
     script: 'check:verify-steps-doc',
     why:

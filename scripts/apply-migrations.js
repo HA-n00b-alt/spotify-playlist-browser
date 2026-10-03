@@ -4,6 +4,7 @@ const path = require('node:path')
 const crypto = require('node:crypto')
 const { Client } = require('pg')
 const { ROOT, loadEnvLocal } = require('./lib/env')
+const { orderMigrationFiles } = require('./lib/migrations')
 
 const MIGRATIONS_DIR = path.join(ROOT, 'migrations')
 const STATE_PATH = path.join(ROOT, '.deploy', 'applied-migrations.json')
@@ -22,10 +23,7 @@ function saveState(state) {
 
 function listMigrationFiles() {
   if (!fs.existsSync(MIGRATIONS_DIR)) return []
-  return fs
-    .readdirSync(MIGRATIONS_DIR)
-    .filter((name) => name.endsWith('.sql'))
-    .sort()
+  return orderMigrationFiles(fs.readdirSync(MIGRATIONS_DIR).filter((name) => name.endsWith('.sql')))
 }
 
 function migrationChecksum(sql) {

@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "prepare": "node ./scripts/git-hooks.js install",
     "dev": "NODE_OPTIONS='--no-warnings' next dev",
     "build": "NODE_OPTIONS='--no-warnings' next build",
     "start": "NODE_OPTIONS='--no-warnings' next start",
@@ -13,10 +14,14 @@
     "check:api-routes": "node ./scripts/check-api-routes.js",
     "check:runtime-console": "node ./scripts/check-runtime-console.js",
     "check:csp-cloudflare-jsd-filter": "node ./scripts/check-csp-cloudflare-jsd-filter.js",
+    "check:migration-numbering": "node ./scripts/check-migration-numbering.js",
     "check:verify-steps-doc": "node ./scripts/generate-verify-steps-doc.js --check",
+    "check:git-hooks": "node ./scripts/git-hooks.js check",
     "generate:verify-steps-doc": "node ./scripts/generate-verify-steps-doc.js",
     "test": "node --test tests/**/*.test.js",
     "verify": "node ./scripts/verify.js",
+    "hooks:install": "node ./scripts/git-hooks.js install",
+    "pr": "node ./scripts/pr.js",
     "deploy:production": "node ./scripts/deploy-production.js"
   },
   "pnpm": {

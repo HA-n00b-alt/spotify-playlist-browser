@@ -33,6 +33,9 @@ cd spotify-playlist-browser
 pnpm install
 ```
 
+This also installs the git hooks in `.githooks/` (the `prepare` script sets `core.hooksPath`). If
+it reports a problem, fix it and run `npm run hooks:install`; `npm run check:git-hooks` checks them.
+
 ## Step 3: Set Up Environment Variables
 
 Create a `.env.local` file in the root directory:
@@ -179,10 +182,11 @@ deploy:production` runs the same steps first. The list is defined in
 2. **api routes** (`pnpm run check:api-routes`): fails when a `route.ts` under `app/api/` exports no HTTP method handler, so a refactor cannot silently turn an endpoint into a 405.
 3. **runtime console** (`pnpm run check:runtime-console`): fails on `console.*` calls in `app/api`, `app/actions` and `lib` outside `lib/logger.ts`; server logs go through the structured logger so they stay searchable in production.
 4. **csp cloudflare jsd filter** (`pnpm run check:csp-cloudflare-jsd-filter`): placeholder for the Cloudflare JSD CSP filter: passes while there is no `wrangler.toml`, and fails as soon as one exists until the Cloudflare migration defines the real check.
-5. **verify steps doc** (`pnpm run check:verify-steps-doc`): fails when the step list in `INSTALL.md` no longer matches this list. Fix it with `pnpm run generate:verify-steps-doc`.
-6. **typecheck** (`pnpm run typecheck`): runs `tsc --noEmit` over the whole project.
-7. **lint** (`pnpm run check:strict`): runs `next lint` with the `next/core-web-vitals` rules.
-8. **test** (`pnpm run test`): runs the `node --test` suite under `tests/`.
+5. **migration numbering** (`pnpm run check:migration-numbering`): fails when a new file in `migrations/` is not named `NNNN_<snake_case_name>.sql`, or when two files share a number or a number is skipped. Two branches can add the same number without a git conflict; the `pre-commit` hook runs the same check.
+6. **verify steps doc** (`pnpm run check:verify-steps-doc`): fails when the step list in `INSTALL.md` no longer matches this list. Fix it with `pnpm run generate:verify-steps-doc`.
+7. **typecheck** (`pnpm run typecheck`): runs `tsc --noEmit` over the whole project.
+8. **lint** (`pnpm run check:strict`): runs `next lint` with the `next/core-web-vitals` rules.
+9. **test** (`pnpm run test`): runs the `node --test` suite under `tests/`.
 <!-- verify-steps:end -->
 
 ## Troubleshooting
