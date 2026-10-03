@@ -13,6 +13,8 @@
     "check:api-routes": "node ./scripts/check-api-routes.js",
     "check:runtime-console": "node ./scripts/check-runtime-console.js",
     "check:csp-cloudflare-jsd-filter": "node ./scripts/check-csp-cloudflare-jsd-filter.js",
+    "check:verify-steps-doc": "node ./scripts/generate-verify-steps-doc.js --check",
+    "generate:verify-steps-doc": "node ./scripts/generate-verify-steps-doc.js",
     "test": "node --test tests/**/*.test.js",
     "verify": "node ./scripts/verify.js",
     "deploy:production": "node ./scripts/deploy-production.js"
