@@ -28,9 +28,11 @@ const VERIFY_STEPS = Object.freeze([
     label: 'env contract',
     script: 'check:env-contract',
     why:
-      'fails when a required variable is missing from `.env.example` or empty in `.env.local`, ' +
-      'or when the BPM service URL or Google Cloud service account is not the expected ' +
-      '`delman-site` one, so a deploy never ships with a half-configured BPM integration.',
+      'fails when code reads an env name missing from `scripts/lib/envCatalog.js`, when ' +
+      '`.env.example` or the table in `docs/SECRETS-AND-ENVIRONMENT.md` is stale, when a required ' +
+      'variable is empty in the master `.env.local` (the main checkout\'s, also from a worktree), or ' +
+      'when the BPM service URL or Google Cloud service account is not the expected `delman-site` ' +
+      'one. It prints names only.',
   },
   {
     label: 'api routes',

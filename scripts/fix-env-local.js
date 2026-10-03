@@ -1,11 +1,10 @@
 #!/usr/bin/env node
 const fs = require('node:fs')
-const path = require('node:path')
-const { ENV_LOCAL, parseEnvFile } = require('./lib/env')
+const { ENV_LOCAL, GCP_KEY_FILE } = require('./lib/env')
 
 const KEY = 'GCP_SERVICE_ACCOUNT_KEY'
 const BPM_URL = 'https://bpm-service-7jlgdaerna-ey.a.run.app'
-const jsonKeyPath = process.argv[2] || path.resolve(__dirname, '..', 'vercel-bpm-invoker-delman-site.json')
+const jsonKeyPath = process.argv[2] || GCP_KEY_FILE
 
 function resolveKeyFile() {
   if (fs.existsSync(jsonKeyPath)) return jsonKeyPath

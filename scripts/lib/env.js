@@ -1,9 +1,39 @@
+/**
+ * Where the env files live, and how scripts read them (#31, ADR 0004).
+ *
+ * `ROOT` is the checkout this script runs from: the main checkout or a worktree under
+ * `.claude/worktrees/`. `MASTER_ROOT` is always the main checkout, which holds the gitignored
+ * master copies of the local secret files (`.env.local`, the GCP service-account key). Scripts
+ * read secrets from `MASTER_ROOT`, so a worktree never needs, and never gets, its own copy.
+ * Tracked files such as `.env.example` come from `ROOT`, the branch being worked on.
+ */
 const fs = require('node:fs')
 const path = require('node:path')
+const { spawnSync } = require('node:child_process')
 
 const ROOT = path.resolve(__dirname, '..', '..')
-const ENV_LOCAL = path.join(ROOT, '.env.local')
+
+/**
+ * The main checkout: the parent of the shared git directory. Falls back to `ROOT` outside git
+ * (a Vercel build, an unpacked tarball).
+ *
+ * @param {string} [cwd]
+ * @returns {string}
+ */
+function resolveMasterRoot(cwd = ROOT) {
+  const result = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], {
+    cwd,
+    encoding: 'utf8',
+  })
+  if (result.status !== 0 || !result.stdout.trim()) return cwd
+  const commonDir = result.stdout.trim()
+  return path.basename(commonDir) === '.git' ? path.dirname(commonDir) : cwd
+}
+
+const MASTER_ROOT = resolveMasterRoot()
+const ENV_LOCAL = path.join(MASTER_ROOT, '.env.local')
 const ENV_EXAMPLE = path.join(ROOT, '.env.example')
+const GCP_KEY_FILE = path.join(MASTER_ROOT, 'vercel-bpm-invoker-delman-site.json')
 
 function parseEnvFile(content) {
   const env = {}
@@ -28,6 +58,22 @@ function parseEnvFile(content) {
 
     const key = content.slice(keyStart, index).trim()
     index += 1
+
+    // `vercel env pull` writes JSON values as "{"type":…}" without escaping the inner quotes: when
+    // a quoted value's line ends in a quote with more quotes inside, take it verbatim.
+    let lineEnd = content.indexOf('\n', index)
+    if (lineEnd === -1) lineEnd = content.length
+    const rawLine = content.slice(index, lineEnd).replace(/\r$/, '').trimEnd()
+    if (
+      rawLine.length > 1 &&
+      rawLine.startsWith('"') &&
+      rawLine.endsWith('"') &&
+      /(?<!\\)"/.test(rawLine.slice(1, -1))
+    ) {
+      env[key] = rawLine.slice(1, -1)
+      index = lineEnd
+      continue
+    }
 
     if (content[index] === '"') {
       index += 1
@@ -62,7 +108,10 @@ function parseEnvFile(content) {
 
 function loadEnvLocal() {
   if (!fs.existsSync(ENV_LOCAL)) {
-    throw new Error('Missing .env.local — run `npx vercel env pull .env.local --yes` or copy .env.example')
+    throw new Error(
+      `Missing ${ENV_LOCAL} — the master .env.local lives in the main checkout; ` +
+        'create it there from .env.example (see INSTALL.md)'
+    )
   }
 
   return parseEnvFile(fs.readFileSync(ENV_LOCAL, 'utf8'))
@@ -84,43 +133,27 @@ function loadEnvExample() {
   return env
 }
 
-function requiredKeys() {
-  return [
-    'SPOTIFY_CLIENT_ID',
-    'SPOTIFY_CLIENT_SECRET',
-    'SPOTIFY_REDIRECT_URI',
-    'NEXT_PUBLIC_BASE_URL',
-    'NEXT_PUBLIC_UMAMI_WEBSITE_ID',
-    'DATABASE_URL',
-    'DATABASE_URL_UNPOOLED',
-    'BPM_SERVICE_URL',
-    'GCP_SERVICE_ACCOUNT_KEY',
-    'BLOB_READ_WRITE_TOKEN',
-  ]
-}
-
-function writeEnvLocalPreserving(content, envUpdates) {
-  let next = content.replace(/^GCP_SERVICE_ACCOUNT_KEY=[\s\S]*?(?=^[A-Z_][A-Z0-9_]*=|\s*$)/m, '').trimEnd()
-
-  for (const [key, value] of Object.entries(envUpdates)) {
-    const pattern = new RegExp(`^${key}=.*$`, 'm')
-    if (pattern.test(next)) {
-      next = next.replace(pattern, `${key}=${value}`)
-    } else {
-      next = `${next}\n${key}=${value}`
-    }
-  }
-
-  fs.writeFileSync(ENV_LOCAL, `${next.trimEnd()}\n`)
+/**
+ * The master `.env.local` as a child-process environment, for commands Next.js runs from a
+ * worktree (`with-master-env.js`). Values already in `process.env` win, matching Next.js.
+ * Empty when the checkout is the main one: Next.js reads its own `.env.local` there.
+ *
+ * @returns {Record<string, string>}
+ */
+function masterEnvForChild() {
+  if (MASTER_ROOT === ROOT || !fs.existsSync(ENV_LOCAL)) return {}
+  return parseEnvFile(fs.readFileSync(ENV_LOCAL, 'utf8'))
 }
 
 module.exports = {
   ROOT,
+  MASTER_ROOT,
   ENV_LOCAL,
   ENV_EXAMPLE,
+  GCP_KEY_FILE,
+  resolveMasterRoot,
   parseEnvFile,
   loadEnvLocal,
   loadEnvExample,
-  requiredKeys,
-  writeEnvLocalPreserving,
+  masterEnvForChild,
 }

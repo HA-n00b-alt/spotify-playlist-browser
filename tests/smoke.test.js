@@ -22,11 +22,13 @@ test('BPM service fallbacks point at delman-site Cloud Run URL', () => {
   }
 })
 
-test('.env.example declares BPM migration contract', () => {
+test('.env.example declares BPM migration contract without values', () => {
   const example = fs.readFileSync(path.join(ROOT, '.env.example'), 'utf8')
-  assert.match(example, /BPM_SERVICE_URL=/)
-  assert.match(example, /GCP_SERVICE_ACCOUNT_KEY=/)
-  assert.match(example, new RegExp(EXPECTED_BPM_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+  assert.match(example, /^BPM_SERVICE_URL=$/m)
+  assert.match(example, /^GCP_SERVICE_ACCOUNT_KEY=$/m)
+  assert.doesNotMatch(example, /^[A-Z_][A-Z0-9_]*=.+$/m)
+  const { findEnvVar } = require(path.join(ROOT, 'scripts/lib/envCatalog.js'))
+  assert.equal(findEnvVar('BPM_SERVICE_URL').expected, EXPECTED_BPM_URL)
 })
 
 test('.env.example declares Vercel Blob deployment manifest contract', () => {
@@ -36,9 +38,8 @@ test('.env.example declares Vercel Blob deployment manifest contract', () => {
 })
 
 test('env contract includes Vercel Blob deployment manifest key', async () => {
-  const { requiredKeys } = require(path.join(ROOT, 'scripts/lib/env.js'))
-  const keys = requiredKeys()
-  assert.ok(keys.includes('BLOB_READ_WRITE_TOKEN'))
+  const { requiredLocalNames } = require(path.join(ROOT, 'scripts/lib/envCatalog.js'))
+  assert.ok(requiredLocalNames().includes('BLOB_READ_WRITE_TOKEN'))
 })
 
 test('deploy pipeline scripts exist', () => {
