@@ -94,7 +94,7 @@ if (!fs.existsSync(path.join(repoRoot, 'node_modules'))) {
 
 process.stderr.write(`\n${PREFIX}: ${gated.join(', ')} has an open pull request — running verify.\n\n`)
 
-// `npm run`, not `pnpm run`: pnpm 11 fails every `pnpm run` on unapproved build scripts (#22).
+// `npm run`, not `pnpm run`: skips pnpm 11's per-run install check, which fails on undecided build scripts (#22).
 const verify = spawnSync('npm', ['run', '--silent', 'verify'], { cwd: repoRoot, stdio: 'inherit' })
 if (verify.status !== 0) {
   loud([

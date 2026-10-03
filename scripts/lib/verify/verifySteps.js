@@ -92,8 +92,9 @@ const VERIFY_STEPS = Object.freeze([
  */
 function runVerifySteps(runner) {
   for (const { label, script } of VERIFY_STEPS) {
-    // `npm run`, not `pnpm run`: pnpm 11 re-checks the install before every run and fails the
-    // step on unapproved build scripts (#22). npm runs the same package.json script directly.
+    // `npm run`, not `pnpm run`: pnpm 11 re-checks the install before every run, which fails the
+    // step whenever a dependency's build script is not decided in pnpm-workspace.yaml (#22).
+    // npm runs the same package.json script directly.
     runner.command(label, { command: 'npm', args: ['run', script] })
   }
 }

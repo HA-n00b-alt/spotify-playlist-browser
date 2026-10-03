@@ -1,2 +1,6 @@
-onlyBuiltDependencies:
-  - unrs-resolver
+# Which dependencies may run install scripts (pnpm 11; #22).
+allowBuilds:
+  # Its postinstall is only a fallback downloader: the sentry-cli binary ships in the
+  # @sentry/cli-<platform> optional dependencies, which source-map upload uses.
+  '@sentry/cli': false
+  unrs-resolver: true

@@ -24,11 +24,6 @@
     "pr": "node ./scripts/pr.js",
     "deploy:production": "node ./scripts/deploy-production.js"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@sentry/cli"
-    ]
-  },
   "dependencies": {
     "@neondatabase/serverless": "^0.9.0",
     "@sentry/nextjs": "^10.32.1",
