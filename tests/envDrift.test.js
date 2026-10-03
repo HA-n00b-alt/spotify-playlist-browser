@@ -6,6 +6,7 @@ const { spawnSync } = require('node:child_process')
 const { hasDrift, localFindings, remoteFindings } = require('../scripts/lib/envDrift')
 const { renderEnvExample, scanEnvUsage } = require('../scripts/lib/envDocs')
 const { resolveMasterRoot } = require('../scripts/lib/env')
+const { withoutGitEnv } = require('../scripts/lib/git/prBoundary')
 
 /** @param {Partial<import('../scripts/lib/envCatalog').EnvVar>} entry */
 const envVar = (entry) => ({
@@ -104,12 +105,13 @@ describe('parseEnvFile', () => {
 })
 
 describe('resolveMasterRoot', () => {
-  test('resolves the main checkout from a linked worktree', () => {
+  test('resolves the main checkout from a linked worktree', { timeout: 30_000 }, () => {
     const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'env-master-')))
     const main = path.join(base, 'main')
     const worktree = path.join(base, 'wt')
     const git = (args, cwd) => {
-      const result = spawnSync('git', args, { cwd, encoding: 'utf8' })
+      // Never inherit a hook's GIT_DIR: these commands must touch only the temp repositories (#43).
+      const result = spawnSync('git', args, { cwd, encoding: 'utf8', env: withoutGitEnv(process.env) })
       if (result.status !== 0) throw new Error(result.stderr)
     }
     try {

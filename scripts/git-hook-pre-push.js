@@ -15,7 +15,13 @@
 const { spawnSync } = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
-const { PR_GATE_RAN_ENV, classifyPrLookup, parsePrePushRefs, pushedBranchNames } = require('./lib/git/prBoundary')
+const {
+  PR_GATE_RAN_ENV,
+  classifyPrLookup,
+  parsePrePushRefs,
+  pushedBranchNames,
+  withoutGitEnv,
+} = require('./lib/git/prBoundary')
 
 const PREFIX = 'pre-push'
 /** An unreachable API must not hang a push behind a TCP timeout. */
@@ -95,7 +101,12 @@ if (!fs.existsSync(path.join(repoRoot, 'node_modules'))) {
 process.stderr.write(`\n${PREFIX}: ${gated.join(', ')} has an open pull request — running verify.\n\n`)
 
 // `npm run`, not `pnpm run`: skips pnpm 11's per-run install check, which fails on undecided build scripts (#22).
-const verify = spawnSync('npm', ['run', '--silent', 'verify'], { cwd: repoRoot, stdio: 'inherit' })
+// Without git's hook variables, so tests that create their own repositories stay out of this one (#43).
+const verify = spawnSync('npm', ['run', '--silent', 'verify'], {
+  cwd: repoRoot,
+  stdio: 'inherit',
+  env: withoutGitEnv(process.env),
+})
 if (verify.status !== 0) {
   loud([
     `${PREFIX}: PUSH REFUSED — verify failed, and this branch has an open pull request.`,
