@@ -8,14 +8,14 @@ type PreviewUrlEntry = {
   isrc?: string
   title?: string
   artist?: string
-  provider?: 'deezer_isrc' | 'muso_spotify' | 'itunes_search' | 'deezer_search'
+  provider?: 'deezer_isrc' | 'itunes_search' | 'deezer_search'
   itunesRequestUrl?: string
   itunesResponse?: string
 }
 
 type SongSearchPreview = {
   url: string
-  provider: 'spotify_preview' | 'muso_spotify' | 'deezer_isrc' | 'deezer_search' | 'itunes_search'
+  provider: 'spotify_preview' | 'deezer_isrc' | 'deezer_search' | 'itunes_search'
   isrc?: string
   title?: string
   artist?: string
@@ -107,8 +107,6 @@ export default function IsrcMismatchClient() {
   const [itunesDebugOpen, setItunesDebugOpen] = useState<Record<string, boolean>>({})
   const [spotifyPreviewMap, setSpotifyPreviewMap] = useState<Record<string, { url?: string | null; loading?: boolean; error?: string }>>({})
   const [deezerPreviewMap, setDeezerPreviewMap] = useState<Record<string, { url?: string | null; loading?: boolean }>>({})
-  const [resolveAllLoading, setResolveAllLoading] = useState(false)
-  const [resolveAllSummary, setResolveAllSummary] = useState<{ processed: number; resolved: number; skipped: number } | null>(null)
   const [songSearchInput, setSongSearchInput] = useState({
     isrc: '',
     title: '',
@@ -225,34 +223,13 @@ export default function IsrcMismatchClient() {
     }
   }
 
-  const handleResolveWithMuso = async (spotifyTrackId: string) => {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch('/api/admin/isrc-mismatches', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ spotifyTrackId, action: 'resolve_with_muso' }),
-      })
-      if (!res.ok) {
-        const payload = await res.json().catch(() => ({}))
-        throw new Error(payload?.error || 'Failed to resolve with Muso preview')
-      }
-      await loadMismatches()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to resolve with Muso preview')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handleLoadSpotifyPreview = async (spotifyTrackId: string) => {
     setSpotifyPreviewMap((prev) => ({
       ...prev,
       [spotifyTrackId]: { url: prev[spotifyTrackId]?.url ?? null, loading: true, error: undefined },
     }))
     try {
-      const res = await fetch('/api/muso/preview', {
+      const res = await fetch('/api/admin/song-search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ spotifyTrackId }),
@@ -263,7 +240,7 @@ export default function IsrcMismatchClient() {
       }
       setSpotifyPreviewMap((prev) => ({
         ...prev,
-        [spotifyTrackId]: { url: payload.previewUrl || null, loading: false, error: undefined },
+        [spotifyTrackId]: { url: payload.spotifyTrack?.previewUrl || null, loading: false, error: undefined },
       }))
     } catch (err) {
       setSpotifyPreviewMap((prev) => ({
@@ -297,36 +274,6 @@ export default function IsrcMismatchClient() {
         ...prev,
         [spotifyTrackId]: { url: prev[spotifyTrackId]?.url ?? null, loading: false },
       }))
-    }
-  }
-
-  const handleResolveAllWithMuso = async () => {
-    setResolveAllLoading(true)
-    setError(null)
-    addLog('info', 'Resolving outstanding mismatches with Muso preview URLs...')
-    try {
-      const res = await fetch('/api/admin/isrc-mismatches/resolve-all', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      })
-      const payload = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(payload?.error || 'Failed to resolve mismatches')
-      }
-      setResolveAllSummary({
-        processed: Number(payload?.processed ?? 0),
-        resolved: Number(payload?.resolved ?? 0),
-        skipped: Number(payload?.skipped ?? 0),
-      })
-      addLog('success', `Resolved ${payload?.resolved ?? 0} mismatches via Muso.`)
-      await loadMismatches()
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to resolve mismatches'
-      setError(message)
-      addLog('error', message)
-    } finally {
-      setResolveAllLoading(false)
     }
   }
 
@@ -805,11 +752,6 @@ export default function IsrcMismatchClient() {
           <p className="text-sm text-gray-500">
             Review preview audio for ISRC mismatches and confirm the correct status.
           </p>
-          {resolveAllSummary ? (
-            <div className="mt-2 text-xs text-gray-500">
-              Resolved {resolveAllSummary.resolved} of {resolveAllSummary.processed} (skipped {resolveAllSummary.skipped}).
-            </div>
-          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {isHydratingPreview ? (
@@ -821,14 +763,6 @@ export default function IsrcMismatchClient() {
             className="rounded-full border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900"
           >
             {showMatched ? 'Hide matched' : 'Show matched'}
-          </button>
-          <button
-            type="button"
-            onClick={handleResolveAllWithMuso}
-            className="rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100"
-            disabled={resolveAllLoading}
-          >
-            {resolveAllLoading ? 'Resolving...' : 'Resolve all with Muso'}
           </button>
           <button
             type="button"
@@ -954,7 +888,7 @@ export default function IsrcMismatchClient() {
                     </div>
                   ) : null}
                   <div className="pt-2 space-y-2">
-                    <div className="text-xs uppercase tracking-[0.18em] text-gray-400">Spotify preview (Muso)</div>
+                    <div className="text-xs uppercase tracking-[0.18em] text-gray-400">Spotify preview</div>
                     {spotifyPreviewMap[item.spotify_track_id]?.url ? (
                       <audio controls preload="none" className="w-full" onPlay={handlePlay}>
                         <source src={spotifyPreviewMap[item.spotify_track_id]?.url || undefined} />
@@ -990,14 +924,6 @@ export default function IsrcMismatchClient() {
                     disabled={loading}
                   >
                     Confirm mismatch
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleResolveWithMuso(item.spotify_track_id)}
-                    className="rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100"
-                    disabled={loading}
-                  >
-                    Resolve with Muso preview
                   </button>
                 </div>
               </div>

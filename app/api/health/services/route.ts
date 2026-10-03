@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { withApiLogging, logError } from '@/lib/logger'
-import { getMusoUsageSnapshot } from '@/lib/muso'
 import { MB_BASE_URL, USER_AGENT } from '@/lib/musicbrainz'
 
 export const dynamic = 'force-dynamic'
@@ -79,21 +78,6 @@ async function getSpotifyHealth(): Promise<HealthEntry> {
   }
 }
 
-async function getMusoHealth(): Promise<HealthEntry> {
-  const snapshot = await getMusoUsageSnapshot()
-  if (!snapshot.enabled) {
-    return { status: 'error', label: 'Not configured' }
-  }
-  if (snapshot.remaining <= 0) {
-    return { status: 'error', label: 'Limit reached' }
-  }
-  const warningThreshold = Math.max(50, Math.round(snapshot.limit * 0.1))
-  if (snapshot.remaining <= warningThreshold) {
-    return { status: 'throttled', label: `Low (${snapshot.remaining} left)` }
-  }
-  return { status: 'ok', label: 'OK' }
-}
-
 async function getMusicBrainzHealth(): Promise<HealthEntry> {
   try {
     const controller = new AbortController()
@@ -117,11 +101,10 @@ async function getMusicBrainzHealth(): Promise<HealthEntry> {
 }
 
 export const GET = withApiLogging(async () => {
-  const [spotify, muso, musicbrainz] = await Promise.all([
+  const [spotify, musicbrainz] = await Promise.all([
     getSpotifyHealth(),
-    getMusoHealth(),
     getMusicBrainzHealth(),
   ])
 
-  return NextResponse.json({ spotify, muso, musicbrainz })
+  return NextResponse.json({ spotify, musicbrainz })
 })

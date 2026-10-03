@@ -26,9 +26,6 @@ export default function IsrcDebugClient() {
   const [tracks, setTracks] = useState<Track[]>([])
   const [loadingPlaylists, setLoadingPlaylists] = useState(false)
   const [loadingTracks, setLoadingTracks] = useState(false)
-  const [musoLoading, setMusoLoading] = useState(false)
-  const [musoLogs, setMusoLogs] = useState<any[]>([])
-  const [musoSummary, setMusoSummary] = useState<{ missingCount: number; updated: boolean } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -54,8 +51,6 @@ export default function IsrcDebugClient() {
   useEffect(() => {
     if (!selectedId) {
       setTracks([])
-      setMusoLogs([])
-      setMusoSummary(null)
       return
     }
     const loadTracks = async () => {
@@ -77,38 +72,6 @@ export default function IsrcDebugClient() {
     void loadTracks()
   }, [selectedId])
 
-  const runMusoEnrichment = async () => {
-    if (!selectedId) return
-    setMusoLoading(true)
-    setError(null)
-    setMusoLogs([])
-    setMusoSummary(null)
-    try {
-      const res = await fetch('/api/admin/isrc-debug/muso-enrich', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playlistId: selectedId }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(data?.error || 'Failed to run Muso enrichment')
-      }
-      setMusoLogs(Array.isArray(data?.logs) ? data.logs : [])
-      if (typeof data?.missingCount === 'number') {
-        setMusoSummary({ missingCount: data.missingCount, updated: Boolean(data.updated) })
-      }
-      const refreshed = await fetch(`/api/playlists/${encodeURIComponent(selectedId)}/tracks?includeMissingIsrc=true`)
-      if (refreshed.ok) {
-        const refreshedTracks = await refreshed.json()
-        setTracks(Array.isArray(refreshedTracks) ? refreshedTracks : [])
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to run Muso enrichment')
-    } finally {
-      setMusoLoading(false)
-    }
-  }
-
   const missingIsrcTracks = useMemo(
     () => tracks.filter((track) => !track?.external_ids?.isrc),
     [tracks]
@@ -121,7 +84,7 @@ export default function IsrcDebugClient() {
           <div>
             <h2 className="text-lg font-semibold text-gray-900">ISRC debug</h2>
             <p className="text-sm text-gray-500">
-              Select a playlist to inspect tracks that are missing ISRC values.
+              Select a playlist to inspect tracks that are missing ISRC values from Spotify.
             </p>
           </div>
           <div className="text-xs text-gray-500">
@@ -144,16 +107,6 @@ export default function IsrcDebugClient() {
               ))}
             </select>
           </label>
-          <div className="mt-3">
-            <button
-              type="button"
-              onClick={runMusoEnrichment}
-              className="rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-50"
-              disabled={!selectedId || musoLoading}
-            >
-              {musoLoading ? 'Running Muso search...' : 'Run Muso ISRC search'}
-            </button>
-          </div>
         </div>
       </div>
 
@@ -216,46 +169,6 @@ export default function IsrcDebugClient() {
                 })}
               </tbody>
             </table>
-          </div>
-        )}
-      </div>
-
-      <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-[0_4px_24px_rgba(0,0,0,0.05)]">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-semibold text-gray-900">Muso API logs</h3>
-            <p className="text-xs text-gray-500">Request/response pairs for missing ISRC lookups.</p>
-          </div>
-          <div className="text-xs text-gray-500">
-            {musoLogs.length} entries
-            {musoSummary ? ` • Missing: ${musoSummary.missingCount} • Updated: ${musoSummary.updated ? 'yes' : 'no'}` : ''}
-          </div>
-        </div>
-        {musoLogs.length === 0 ? (
-          <div className="mt-4 text-sm text-gray-500">
-            {musoSummary
-              ? 'No Muso logs returned. This can happen if there are no missing ISRC tracks or Muso returned no candidates.'
-              : 'Run the Muso search to populate logs.'}
-          </div>
-        ) : (
-          <div className="mt-4 space-y-3">
-            {musoLogs.map((log, index) => (
-              <div key={`${log.trackId || 'log'}-${index}`} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                <div className="text-xs font-semibold text-gray-700">{log.title || 'Unknown title'}</div>
-                <div className="text-[11px] text-gray-500">{log.artist || '-'}</div>
-                <div className="mt-2 text-[11px] uppercase tracking-[0.18em] text-gray-400">Request</div>
-                <pre className="mt-1 max-h-40 overflow-auto rounded-lg bg-white p-2 text-[11px] text-gray-600">
-                  {JSON.stringify(log.request, null, 2)}
-                </pre>
-                <div className="mt-2 text-[11px] uppercase tracking-[0.18em] text-gray-400">Response</div>
-                <pre className="mt-1 max-h-56 overflow-auto rounded-lg bg-white p-2 text-[11px] text-gray-600">
-                  {JSON.stringify(log.response, null, 2)}
-                </pre>
-                <div className="mt-2 text-[11px] text-gray-500">
-                  Result: {log.result?.isrc || 'No ISRC found'}
-                </div>
-              </div>
-            ))}
           </div>
         )}
       </div>

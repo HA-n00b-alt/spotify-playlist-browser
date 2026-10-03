@@ -35,11 +35,7 @@ export default async function StatsPage() {
         <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
           Spotify
         </a>
-        ,{' '}
-        <a href="https://muso.ai" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
-          Muso.ai
-        </a>{' '}
-        and{' '}
+      and{' '}
         <a href="https://musicbrainz.org" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
           MusicBrainz
         </a>

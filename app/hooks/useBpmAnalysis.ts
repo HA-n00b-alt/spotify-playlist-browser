@@ -53,7 +53,6 @@ export type BpmState = {
   bpmConfidenceThreshold: string
   bpmDebugInfo: Record<string, any>
   bpmDetails: Record<string, { source?: string; error?: string }>
-  musoPreviewStatus: { loading: boolean; success?: boolean; error?: string } | null
   mismatchPreviewUrls: { itunes?: string | null; spotify?: string | null; loading?: boolean }
   previewUrls: Record<string, string | null>
   bpmFullData: Record<string, BpmFullDataEntry>
@@ -116,7 +115,6 @@ const createInitialBpmState = (): BpmState => ({
   bpmConfidenceThreshold: '0.65',
   bpmDebugInfo: {},
   bpmDetails: {},
-  musoPreviewStatus: null,
   mismatchPreviewUrls: {},
   previewUrls: {},
   bpmFullData: {},
@@ -167,7 +165,6 @@ export function useBpmAnalysis(tracks: Track[]) {
     bpmConfidenceThreshold,
     bpmDebugInfo,
     bpmDetails,
-    musoPreviewStatus,
     mismatchPreviewUrls,
     previewUrls,
     bpmFullData,
@@ -1182,29 +1179,6 @@ export function useBpmAnalysis(tracks: Track[]) {
     }
   }, [recalcStatus?.loading, selectedBpmTrack, bpmStreamStatus, bpmDetails, setState])
 
-  const handleMusoPreviewBpm = async (trackId: string) => {
-    setState('musoPreviewStatus', { loading: true })
-    try {
-      const res = await fetch('/api/muso/preview-bpm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ spotifyTrackId: trackId }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(data?.error || 'Unable to fetch Muso preview')
-      }
-      setState('musoPreviewStatus', { loading: false, success: true })
-      await fetchBpmsBatch()
-    } catch (error) {
-      setState('musoPreviewStatus', {
-        loading: false,
-        success: false,
-        error: error instanceof Error ? error.message : 'Unable to fetch Muso preview',
-      })
-    }
-  }
-
   useEffect(() => {
     if (tracks.length > 0 && Object.keys(trackBpms).length === 0) {
       setState('bpmProcessingStartTime', Date.now())
@@ -1239,10 +1213,6 @@ export function useBpmAnalysis(tracks: Track[]) {
       setState('manualScale', '')
     }
   }, [showBpmModal, selectedBpmTrack, bpmFullData, setState])
-
-  useEffect(() => {
-    setState('musoPreviewStatus', null)
-  }, [showBpmModal, selectedBpmTrack, setState])
 
   useEffect(() => {
     return () => {
@@ -1293,7 +1263,6 @@ export function useBpmAnalysis(tracks: Track[]) {
     streamBpmsForTracks,
     updateBpmSelection,
     recalcTrackWithOptions,
-    handleMusoPreviewBpm,
     bpmRequestSettings,
     bpmSummary,
     loadingTrackIds,

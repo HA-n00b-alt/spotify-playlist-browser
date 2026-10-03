@@ -9,7 +9,7 @@ A modern, minimalist interface for browsing Spotify playlists with BPM/key insig
 - Open tracks, artists, and playlists directly in Spotify.
 - Pull MusicBrainz credits (producer, writer, mixer, mastering).
 - Admin tools for ISRC mismatch review, preview selection, and manual BPM/key overrides.
-- Enrich missing ISRCs via Muso for better metadata coverage.
+- Browse playlists with BPM/key analysis and MusicBrainz credits.
 - Tracks without ISRC are hidden from tracklists until resolved.
 
 ## How It Works

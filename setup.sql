@@ -129,7 +129,7 @@ CREATE TABLE IF NOT EXISTS external_api_usage (
   PRIMARY KEY (provider, usage_date)
 );
 
-COMMENT ON TABLE external_api_usage IS 'Daily usage counters for external APIs such as Muso.';
+COMMENT ON TABLE external_api_usage IS 'Daily usage counters for external APIs.';
 
 -- ============================================================================
 -- Credits Cache
@@ -154,11 +154,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS credits_cache_name_role_unique
 CREATE INDEX IF NOT EXISTS credits_cache_isrcs_gin
   ON credits_cache USING GIN (isrcs);
 
-COMMENT ON TABLE credits_cache IS 'Cached credit search results (MusicBrainz + Deezer)';
-COMMENT ON COLUMN credits_cache.release_date_start IS 'Optional start date filter applied to Muso credits.';
-COMMENT ON COLUMN credits_cache.release_date_end IS 'Optional end date filter applied to Muso credits.';
-COMMENT ON COLUMN credits_cache.profile IS 'Cached Muso profile summary for the search.';
-COMMENT ON COLUMN credits_cache.total_count IS 'Total credit count returned by Muso for the search.';
+COMMENT ON TABLE credits_cache IS 'Cached credit search results (MusicBrainz)';
+COMMENT ON COLUMN credits_cache.release_date_start IS 'Optional start date filter applied to credit searches.';
+COMMENT ON COLUMN credits_cache.release_date_end IS 'Optional end date filter applied to credit searches.';
+COMMENT ON COLUMN credits_cache.profile IS 'Cached profile summary for the search.';
+COMMENT ON COLUMN credits_cache.total_count IS 'Total credit count returned for the search.';
 
 -- ============================================================================
 -- Track Credits Cache
@@ -171,33 +171,7 @@ CREATE TABLE IF NOT EXISTS track_credits_cache (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-COMMENT ON TABLE track_credits_cache IS 'Cached per-track credits for playlist view (Muso first, MusicBrainz fallback).';
-
--- ============================================================================
--- Muso Cache Tables
--- ============================================================================
-
-CREATE TABLE IF NOT EXISTS muso_track_cache (
-  muso_track_id TEXT PRIMARY KEY,
-  data JSONB NOT NULL,
-  spotify_preview_url TEXT,
-  isrcs TEXT[] NOT NULL DEFAULT '{}',
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_muso_track_cache_isrcs_gin
-  ON muso_track_cache USING GIN (isrcs);
-
-CREATE TABLE IF NOT EXISTS muso_album_cache (
-  muso_album_id TEXT PRIMARY KEY,
-  data JSONB NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-COMMENT ON TABLE muso_track_cache IS 'Cached Muso track details to reduce external API calls.';
-COMMENT ON COLUMN muso_track_cache.spotify_preview_url IS 'Spotify preview URL from Muso track details.';
-COMMENT ON COLUMN muso_track_cache.isrcs IS 'ISRCs associated with the Muso track.';
-COMMENT ON TABLE muso_album_cache IS 'Cached Muso album details for later use.';
+COMMENT ON TABLE track_credits_cache IS 'Cached per-track credits for playlist view (MusicBrainz).';
 
 -- ============================================================================
 -- Admin Settings

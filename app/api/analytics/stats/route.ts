@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { isAdminUser } from '@/lib/analytics'
-import { getMusoUsageSnapshot } from '@/lib/muso'
 import { logError, withApiLogging } from '@/lib/logger'
 import { query } from '@/lib/db'
 
@@ -22,7 +21,7 @@ export const GET = withApiLogging(async () => {
     const totalApiRequestsResult = await query<{ count: string }>(`SELECT COUNT(*) as count FROM analytics_api_requests`)
     const totalApiRequests = parseInt(totalApiRequestsResult[0]?.count || '0', 10)
 
-    const externalProviders = ['spotify', 'muso', 'musicbrainz']
+    const externalProviders = ['spotify', 'musicbrainz']
     const externalUsageRows = await query<{ provider: string; count: string }>(
       `SELECT provider, SUM(request_count) as count
        FROM external_api_usage
@@ -74,8 +73,10 @@ export const GET = withApiLogging(async () => {
       `SELECT provider, usage_date as date, SUM(request_count) as count
        FROM external_api_usage
        WHERE usage_date >= CURRENT_DATE - INTERVAL '30 days'
+         AND provider = ANY($1::text[])
        GROUP BY provider, usage_date
-       ORDER BY date ASC`
+       ORDER BY date ASC`,
+      [externalProviders]
     )
 
     const activeUsers7dResult = await query<{ count: string }>(
@@ -101,7 +102,7 @@ export const GET = withApiLogging(async () => {
 
     const apiRequestsOverTimeByProvider = apiRequestsOverTimeByProviderResult.reduce(
       (acc, row) => {
-        const provider = row.provider as 'spotify' | 'musicbrainz' | 'muso'
+        const provider = row.provider as 'spotify' | 'musicbrainz'
         if (!acc[provider]) {
           acc[provider] = []
         }
@@ -111,10 +112,8 @@ export const GET = withApiLogging(async () => {
         })
         return acc
       },
-      { spotify: [], musicbrainz: [], muso: [] } as Record<'spotify' | 'musicbrainz' | 'muso', { date: string; count: number }[]>
+      { spotify: [], musicbrainz: [] } as Record<'spotify' | 'musicbrainz', { date: string; count: number }[]>
     )
-
-    const musoUsage = await getMusoUsageSnapshot()
 
     return NextResponse.json({
       summary: {
@@ -124,11 +123,7 @@ export const GET = withApiLogging(async () => {
         activeUsers7d,
         activeUsers30d,
         spotifyApiRequests: externalUsageTotals.spotify,
-        musoApiRequests: externalUsageTotals.muso,
         musicbrainzApiRequests: externalUsageTotals.musicbrainz,
-        musoDailyUsed: musoUsage.used,
-        musoDailyLimit: musoUsage.limit,
-        musoDailyRemaining: musoUsage.remaining,
       },
       topPaths: topPaths.map((p) => ({
         path: p.path,

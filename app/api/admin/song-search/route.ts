@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { isAdminUser } from '@/lib/analytics'
 import { withApiLogging } from '@/lib/logger'
 import { makeSpotifyRequest, getTrack } from '@/lib/spotify'
-import { getTrackDetailsByIsrc, hasMusoApiKey } from '@/lib/muso'
 
 type SpotifySearchResponse = {
   tracks?: {
@@ -21,7 +20,7 @@ type SpotifyTrackSummary = {
 
 type PreviewUrlEntry = {
   url: string
-  provider: 'spotify_preview' | 'muso_spotify' | 'deezer_isrc' | 'deezer_search' | 'itunes_search'
+  provider: 'spotify_preview' | 'deezer_isrc' | 'deezer_search' | 'itunes_search'
   isrc?: string
   title?: string
   artist?: string
@@ -249,25 +248,6 @@ export const POST = withApiLogging(async (request: Request) => {
   if (resolvedIsrc) {
     const deezerEntries = await fetchDeezerByIsrc(resolvedIsrc)
     deezerEntries.forEach(addEntry)
-
-    if (hasMusoApiKey()) {
-      try {
-        const musoDetails = await getTrackDetailsByIsrc(resolvedIsrc)
-        if (musoDetails?.spotifyPreviewUrl) {
-          addEntry({
-            url: musoDetails.spotifyPreviewUrl,
-            provider: 'muso_spotify',
-            isrc: resolvedIsrc,
-            title: musoDetails.title || resolvedTitle || undefined,
-            artist: Array.isArray(musoDetails.artists)
-              ? musoDetails.artists.map((artist) => artist?.name).filter(Boolean).join(', ')
-              : resolvedArtist || undefined,
-          })
-        }
-      } catch {
-        // Ignore Muso lookup errors for search results.
-      }
-    }
   }
 
   const deezerTextEntries = await searchDeezerByText({

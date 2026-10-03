@@ -1,6 +1,5 @@
 import { query } from './db'
 import { getTrack } from './spotify'
-import { getTrackDetailsByIsrc, hasMusoApiKey } from './muso'
 import { GoogleAuth } from 'google-auth-library'
 import { isValidSpotifyTrackId } from './spotify-validation'
 import { logError } from './logger'
@@ -11,7 +10,7 @@ type PreviewUrlEntry = {
   isrc?: string
   title?: string
   artist?: string
-  provider?: 'deezer_isrc' | 'muso_spotify' | 'itunes_search' | 'deezer_search'
+  provider?: 'deezer_isrc' | 'itunes_search' | 'deezer_search'
   itunesRequestUrl?: string
   itunesResponse?: string
 }
@@ -438,7 +437,7 @@ export async function ensureSuccessfulPreviewUrlForTrack(params: {
 
 /**
  * Resolve preview URL from multiple sources using ISRC
- * Priority: 1. Deezer ISRC, 2. Muso ISRC (Spotify preview), 3. iTunes search with ISRC matching
+ * Priority: 1. Deezer ISRC, 2. iTunes search with ISRC matching
  * Stops at first successful source
  */
 async function resolvePreviewUrl(params: {
@@ -492,34 +491,6 @@ async function resolvePreviewUrl(params: {
       })()
     : null
 
-  const musoPromise = isrc && hasMusoApiKey()
-    ? (async () => {
-        try {
-          const details = await getTrackDetailsByIsrc(isrc)
-          if (details?.spotifyPreviewUrl) {
-            const artistName = Array.isArray(details.artists)
-              ? details.artists.map((artist) => artist?.name).filter(Boolean).join(', ')
-              : artists
-            return {
-              url: details.spotifyPreviewUrl,
-              successful: true,
-              isrc,
-              title: details.title || title,
-              artist: artistName || artists,
-              provider: 'muso_spotify' as const,
-            }
-          }
-        } catch (error) {
-          logError(error, {
-            component: 'bpm.resolvePreviewUrl',
-            isrc,
-            action: 'muso_isrc_lookup',
-          })
-        }
-        return null
-      })()
-    : null
-
   // 1. Try Deezer ISRC lookup (most accurate)
   const deezerEntry = deezerPromise ? await deezerPromise : null
   if (deezerEntry) {
@@ -532,19 +503,7 @@ async function resolvePreviewUrl(params: {
     }
   }
 
-  // 2. Try Muso ISRC lookup (Spotify preview URL)
-  const musoEntry = musoPromise ? await musoPromise : null
-  if (musoEntry) {
-    urls.push(musoEntry)
-    return {
-      url: musoEntry.url,
-      source: 'muso_spotify',
-      urls,
-      isrcMismatch: false,
-    }
-  }
-
-  // 3. Try iTunes search by artist + title, then match ISRC
+  // 2. Try iTunes search by artist + title, then match ISRC
   try {
     const searchTerm = `${artists} ${title}`
     const itunesSearchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(searchTerm)}&media=music&entity=song&country=${countryCode}&limit=20`
@@ -1681,7 +1640,7 @@ export async function computeBpmFromPreviewUrl(params: {
       isrc: previewIsrc ?? identifiers.isrc ?? undefined,
       title: previewTitle ?? identifiers.title,
       artist: previewArtist ?? identifiers.artists,
-      provider: source === 'muso_spotify_preview' ? 'muso_spotify' : undefined,
+      provider: undefined,
     },
   ]
   const sourceLabel = source || 'external_preview'

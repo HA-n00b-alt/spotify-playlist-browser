@@ -84,7 +84,6 @@ type BpmDetailsModalProps = {
   bpmDetails: Record<string, { source?: string; error?: string }>
   isrcMismatchDetails: { spotifyIsrc?: string | null; previewIsrc?: string | null; previewUrl?: string | null } | null
   mismatchPreviewUrls: { itunes?: string | null; spotify?: string | null; loading?: boolean }
-  musoPreviewStatus: { loading: boolean; success?: boolean; error?: string } | null
   loadingBpmFields: Set<string>
   trackBpms: Record<string, number | null>
   retryStatus: { loading: boolean; success?: boolean; error?: string } | null
@@ -105,7 +104,6 @@ type BpmDetailsModalProps = {
   onSetManualKey: (value: string) => void
   onSetManualScale: (value: string) => void
   onRetryBpm: () => void
-  onFetchMusoPreview: (trackId: string) => void
   onSetShowBpmModalDebug: (value: boolean) => void
   onSetBpmDebugLevel: (value: string) => void
   onSetBpmConfidenceThreshold: (value: string) => void
@@ -123,7 +121,6 @@ export default function BpmDetailsModal({
   bpmDetails,
   isrcMismatchDetails,
   mismatchPreviewUrls,
-  musoPreviewStatus,
   loadingBpmFields,
   trackBpms,
   retryStatus,
@@ -144,7 +141,6 @@ export default function BpmDetailsModal({
   onSetManualKey,
   onSetManualScale,
   onRetryBpm,
-  onFetchMusoPreview,
   onSetShowBpmModalDebug,
   onSetBpmDebugLevel,
   onSetBpmConfidenceThreshold,
@@ -343,23 +339,6 @@ export default function BpmDetailsModal({
                         )}
                       </div>
                     </div>
-                  </div>
-                )}
-                {isrcMismatchDetails && (
-                  <div>
-                    <button
-                      onClick={() => onFetchMusoPreview(bpmModalData.trackId)}
-                      disabled={musoPreviewStatus?.loading}
-                      className="rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:text-amber-400 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200"
-                    >
-                      {musoPreviewStatus?.loading ? 'Fetching Muso preview...' : 'Use Muso Spotify preview'}
-                    </button>
-                    {musoPreviewStatus?.error && (
-                      <div className="mt-1 text-xs text-red-600">{musoPreviewStatus.error}</div>
-                    )}
-                    {musoPreviewStatus?.success && (
-                      <div className="mt-1 text-xs text-green-600">BPM calculated from Muso preview.</div>
-                    )}
                   </div>
                 )}
                 {loadingBpmFields.has(bpmModalData.trackId) && trackBpms[bpmModalData.trackId] == null && (

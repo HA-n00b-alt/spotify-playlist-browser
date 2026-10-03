@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from 'react'
 
+const UMAMI_DASHBOARD_URL =
+  'https://cloud.umami.is/analytics/eu/websites/225937b2-e96a-48e0-b1ee-6bdee4d69135'
+
 interface StatsData {
   summary: {
     totalUsers: number
@@ -10,11 +13,7 @@ interface StatsData {
     activeUsers7d: number
     activeUsers30d: number
     spotifyApiRequests: number
-    musoApiRequests: number
     musicbrainzApiRequests: number
-    musoDailyUsed: number
-    musoDailyLimit: number
-    musoDailyRemaining: number
   }
   topPaths: Array<{ path: string; count: number }>
   topEndpoints: Array<{ endpoint: string; method: string; count: number }>
@@ -23,7 +22,6 @@ interface StatsData {
   apiRequestsOverTimeByProvider: {
     spotify: Array<{ date: string; count: number }>
     musicbrainz: Array<{ date: string; count: number }>
-    muso: Array<{ date: string; count: number }>
   }
   requestsByStatus: Array<{ statusCode: number | null; count: number }>
 }
@@ -109,12 +107,6 @@ export default function StatsClient() {
         <StatCard title="Active Users (30d)" value={stats.summary.activeUsers30d.toLocaleString()} description="Last 30 days" />
         <StatCard title="Spotify API Calls" value={stats.summary.spotifyApiRequests.toLocaleString()} description="All time" />
         <StatCard title="MusicBrainz API Calls" value={stats.summary.musicbrainzApiRequests.toLocaleString()} description="All time" />
-        <StatCard title="Muso API Calls" value={stats.summary.musoApiRequests.toLocaleString()} description="All time" />
-        <StatCard
-          title="Muso API Used (Today)"
-          value={stats.summary.musoDailyUsed.toLocaleString()}
-          description={`Remaining ${stats.summary.musoDailyRemaining.toLocaleString()} of ${stats.summary.musoDailyLimit.toLocaleString()}`}
-        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -170,7 +162,21 @@ export default function StatsClient() {
         <TimeSeriesChart title="Pageviews Over Time (Last 30 Days)" data={stats.pageviewsOverTime} color="bg-green-500" />
         <TimeSeriesChart title="Spotify API Requests (Last 30 Days)" data={stats.apiRequestsOverTimeByProvider.spotify} color="bg-green-500" />
         <TimeSeriesChart title="MusicBrainz API Requests (Last 30 Days)" data={stats.apiRequestsOverTimeByProvider.musicbrainz} color="bg-yellow-500" />
-        <TimeSeriesChart title="Muso API Requests (Last 30 Days)" data={stats.apiRequestsOverTimeByProvider.muso} color="bg-purple-500" />
+      </div>
+
+      <div className="bg-white rounded-lg shadow p-6">
+        <h2 className="text-xl font-bold mb-2">Web Analytics</h2>
+        <p className="text-sm text-gray-500">
+          For hosted website traffic analytics outside the app database, use the Umami dashboard.
+        </p>
+        <a
+          href={UMAMI_DASHBOARD_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-4 inline-flex items-center text-sm font-semibold text-emerald-600 hover:text-emerald-700"
+        >
+          Open Umami dashboard {'>'}
+        </a>
       </div>
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>

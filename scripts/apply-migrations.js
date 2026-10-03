@@ -69,9 +69,7 @@ async function detectExistingSchemaMarkers(client) {
           'admin_access_requests',
           'admin_settings',
           'spotify_access_requests',
-          'track_credits_cache',
-          'muso_track_cache',
-          'muso_album_cache'
+          'track_credits_cache'
         )
     ) AS has_markers
   `)

@@ -159,7 +159,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     streamBpmsForTracks,
     updateBpmSelection,
     recalcTrackWithOptions,
-    handleMusoPreviewBpm,
     bpmSummary,
     loadingTrackIds,
     isTrackLoading,
@@ -185,7 +184,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     bpmConfidenceThreshold,
     bpmDebugInfo,
     bpmDetails,
-    musoPreviewStatus,
     mismatchPreviewUrls,
     previewUrls,
     bpmFullData,
@@ -315,9 +313,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
   }
   const setBpmDetails = (value: BpmState['bpmDetails'] | ((prev: BpmState['bpmDetails']) => BpmState['bpmDetails'])) => {
     setBpmState('bpmDetails', value)
-  }
-  const setMusoPreviewStatus = (value: BpmState['musoPreviewStatus'] | ((prev: BpmState['musoPreviewStatus']) => BpmState['musoPreviewStatus'])) => {
-    setBpmState('musoPreviewStatus', value)
   }
   const setMismatchPreviewUrls = useCallback((value: BpmState['mismatchPreviewUrls'] | ((prev: BpmState['mismatchPreviewUrls']) => BpmState['mismatchPreviewUrls'])) => {
     setBpmState('mismatchPreviewUrls', value)
@@ -616,7 +611,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
     setBpmState('manualBpm', '')
     setBpmState('manualKey', '')
     setBpmState('manualScale', 'major')
-    setBpmState('musoPreviewStatus', null)
     setBpmState('mismatchPreviewUrls', {})
     setBpmState('showBpmModalDebug', false)
     setBpmState('recalcMode', 'never')
@@ -1216,33 +1210,9 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
       return
     }
     const itunesUrl = isrcMismatchDetails.previewUrl || null
-    setMismatchPreviewUrls((prev) => ({ ...prev, itunes: itunesUrl }))
-    if (mismatchPreviewUrls.spotify || mismatchPreviewUrls.loading) {
-      return
-    }
-    const fetchSpotifyPreview = async () => {
-      setMismatchPreviewUrls((prev) => ({ ...prev, loading: true }))
-      try {
-        const res = await fetch('/api/muso/preview', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ spotifyTrackId: selectedBpmTrack.id }),
-        })
-        const payload = await res.json().catch(() => ({}))
-        if (!res.ok) {
-          throw new Error(payload?.error || 'Unable to fetch Spotify preview')
-        }
-        setMismatchPreviewUrls((prev) => ({
-          ...prev,
-          spotify: payload.previewUrl || null,
-          loading: false,
-        }))
-      } catch {
-        setMismatchPreviewUrls((prev) => ({ ...prev, loading: false }))
-      }
-    }
-    void fetchSpotifyPreview()
-  }, [showBpmModal, selectedBpmTrack, isrcMismatchDetails, mismatchPreviewUrls.spotify, mismatchPreviewUrls.loading, setMismatchPreviewUrls])
+    const spotifyPreviewUrl = selectedBpmTrack.preview_url || null
+    setMismatchPreviewUrls({ itunes: itunesUrl, spotify: spotifyPreviewUrl, loading: false })
+  }, [showBpmModal, selectedBpmTrack, isrcMismatchDetails, setMismatchPreviewUrls])
 
   const bpmAdminSettings = isAdmin ? (
     <>
@@ -1340,11 +1310,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
             Spotify
           </a>
-          ,{' '}
-          <a href="https://muso.ai" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
-            Muso.ai
-          </a>{' '}
-          and{' '}
+      and{' '}
           <a href="https://musicbrainz.org" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
             MusicBrainz
           </a>
@@ -1389,11 +1355,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
           <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
             Spotify
           </a>
-          ,{' '}
-          <a href="https://muso.ai" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
-            Muso.ai
-          </a>{' '}
-          and{' '}
+      and{' '}
           <a href="https://musicbrainz.org" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
             MusicBrainz
           </a>
@@ -1790,7 +1752,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         bpmDetails={bpmDetails}
         isrcMismatchDetails={isrcMismatchDetails}
         mismatchPreviewUrls={mismatchPreviewUrls}
-        musoPreviewStatus={musoPreviewStatus}
         loadingBpmFields={loadingBpmFields}
         trackBpms={trackBpms}
         retryStatus={retryStatus}
@@ -1811,7 +1772,6 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         onSetManualKey={setManualKey}
         onSetManualScale={setManualScale}
         onRetryBpm={handleRetryBpmForTrack}
-        onFetchMusoPreview={handleMusoPreviewBpm}
         onSetShowBpmModalDebug={setShowBpmModalDebug}
         onSetBpmDebugLevel={setBpmDebugLevel}
         onSetBpmConfidenceThreshold={setBpmConfidenceThreshold}
@@ -2001,11 +1961,7 @@ export default function PlaylistTracksPage({ params }: PlaylistTracksPageProps) 
         <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
           Spotify
         </a>
-        ,{' '}
-        <a href="https://muso.ai" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
-          Muso.ai
-        </a>{' '}
-        and{' '}
+      and{' '}
         <a href="https://musicbrainz.org" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
           MusicBrainz
         </a>

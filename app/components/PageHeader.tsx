@@ -32,11 +32,9 @@ export default function PageHeader({
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [apiHealth, setApiHealth] = useState<{
     spotify: ApiHealthEntry
-    muso: ApiHealthEntry
     musicbrainz: ApiHealthEntry
   }>({
     spotify: { status: 'checking', label: 'Checking' },
-    muso: { status: 'checking', label: 'Checking' },
     musicbrainz: { status: 'checking', label: 'Checking' },
   })
   const [requestCounts, setRequestCounts] = useState<{ admin: number; spotify: number } | null>(null)
@@ -151,7 +149,6 @@ export default function PageHeader({
         if (!isMounted) return
         setApiHealth({
           spotify: data?.spotify ?? { status: 'error', label: 'Unavailable' },
-          muso: data?.muso ?? { status: 'error', label: 'Unavailable' },
           musicbrainz: data?.musicbrainz ?? { status: 'error', label: 'Unavailable' },
         })
       })
@@ -159,7 +156,6 @@ export default function PageHeader({
         if (!isMounted) return
         setApiHealth({
           spotify: { status: 'error', label: 'Unavailable' },
-          muso: { status: 'error', label: 'Unavailable' },
           musicbrainz: { status: 'error', label: 'Unavailable' },
         })
       })
@@ -431,7 +427,6 @@ export default function PageHeader({
                           <div className="space-y-2 text-xs text-gray-600 dark:text-slate-300">
                             {([
                               { label: 'Spotify', value: apiHealth.spotify },
-                              { label: 'Muso', value: apiHealth.muso },
                               { label: 'MusicBrainz', value: apiHealth.musicbrainz },
                             ] as const).map((entry) => (
                               <div key={entry.label} className="flex items-center justify-between">

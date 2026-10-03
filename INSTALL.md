@@ -63,9 +63,6 @@ GCP_SERVICE_ACCOUNT_KEY={"type":"service_account","project_id":"...","private_ke
 BLOB_READ_WRITE_TOKEN=your-vercel-blob-read-write-token
 DEPLOY_MANIFEST_BLOB_PATH=deployment-manifests/spotify-playlist-browser.json
 
-# Muso (Optional but Recommended for ISRC enrichment)
-MUSO_API_KEY=your_muso_api_key_here
-
 # Sentry (Optional but Recommended)
 NEXT_PUBLIC_SENTRY_DSN=https://your-sentry-dsn@sentry.io/project-id
 SENTRY_ORG=your-sentry-org
@@ -75,8 +72,6 @@ SENTRY_PROJECT=spotify-playlist-browser
 PLAYLIST_CACHE_TTL_MS=300000
 SPOTIFY_FOLLOWERS_CONCURRENCY=5
 BPM_STREAM_BATCH_SIZE=5
-MUSO_TRACK_SEARCH_CONCURRENCY=3
-MUSO_RESOLVE_CONCURRENCY=3
 DB_LOG_LEVEL=info
 ```
 
@@ -140,12 +135,6 @@ The manifest pathname defaults to `deployment-manifests/spotify-playlist-browser
 5. Note your project slug (from project settings)
 6. Add all three values to your `.env.local` file
 
-### Setting Up Muso (Optional)
-
-1. Get a Muso API key from [muso.ai](https://muso.ai).
-2. Add it to `MUSO_API_KEY` in `.env.local`.
-3. This enables ISRC enrichment and admin ISRC debugging.
-
 ## Step 4: Set Up the Database
 
 Run the setup script to create all required tables:
@@ -200,12 +189,6 @@ The application should now be running at [http://localhost:3000](http://localhos
 - Check that the service account has the "Cloud Run Invoker" role
 - Ensure the BPM service URL is correct
 - Check Google Cloud Console for service account permissions
-
-### Muso Issues
-
-- Verify `MUSO_API_KEY` is set and valid
-- Reduce `MUSO_TRACK_SEARCH_CONCURRENCY` if you hit rate limits
-- Use the admin ISRC debug page to inspect request/response payloads
 
 ### Sentry Issues
 

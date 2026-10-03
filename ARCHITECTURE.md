@@ -321,7 +321,6 @@ async function makeSpotifyRequest<T>(endpoint: string, options: RequestInit = {}
 **Utility Routes:**
 - `GET /api/country` - Get country code from IP/locale
 - `GET /api/audio-proxy` - Proxy audio preview URLs
- - `POST /api/admin/isrc-debug/muso-enrich` - Admin Muso ISRC debug lookup
 
 ### API Response Caching
 
@@ -402,7 +401,6 @@ Caches full playlist data to reduce Spotify API calls.
 **Cache Invalidation:**
 - TTL-based freshness with snapshot verification
 - Automatically refreshes if snapshot changed
-- Muso ISRC enrichment can update cached `tracks_data`
 
 ## Caching Strategy
 
@@ -428,8 +426,6 @@ Caches full playlist data to reduce Spotify API calls.
 - Invalidated when `snapshot_id` changes
 - Manual refresh via `?refresh=true` parameter
 - TTL-based freshness checks on cache hit
-- Muso ISRC enrichment runs on refresh and cached reads
-
 **BPM Cache:**
 - 90-day TTL
 - Manual refresh via retry button
@@ -475,10 +471,9 @@ async function getIdentityToken(serviceUrl: string): Promise<string> {
 
 **Priority Order** (`lib/bpm.ts`):
 1. **Deezer ISRC Lookup** (`deezer_isrc`) - Direct ISRC lookup
-2. **Muso ISRC Lookup** (`muso_spotify`) - Spotify preview URL
-3. **iTunes Search** (`itunes_search`) - Search with ISRC matching
-4. **Deezer Search** (`deezer_search`) - Search fallback
-5. **Failed** (`computed_failed`) - No preview found
+2. **iTunes Search** (`itunes_search`) - Search with ISRC matching
+3. **Deezer Search** (`deezer_search`) - Search fallback
+4. **Failed** (`computed_failed`) - No preview found
 
 **ISRC Matching:**
 - Extracts ISRC from Spotify track data
@@ -497,9 +492,8 @@ async function getIdentityToken(serviceUrl: string): Promise<string> {
 2. Extract identifiers from Spotify
    ├─> ISRC, title, artists, preview URL
        │
-3. Resolve preview URL (Deezer/Muso/iTunes)
+3. Resolve preview URL (Deezer/iTunes)
    ├─> Try Deezer ISRC lookup
-   ├─> Try Muso ISRC lookup
    ├─> Try iTunes search + ISRC match
    └─> Try Deezer search
        │

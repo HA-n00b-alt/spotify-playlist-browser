@@ -73,7 +73,7 @@ export default async function Home({
                     </div>
                     <h3 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Find producer, writer, and mixer credits</h3>
                     <p className="text-[13px] text-gray-500 dark:text-slate-400">
-                      Search Muso credits without logging in and export data for deeper research.
+                      Search MusicBrainz credits without logging in and export data for deeper research.
                     </p>
                   </div>
                   <div className="hidden sm:flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-200">
@@ -124,11 +124,7 @@ export default async function Home({
         <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
           Spotify
         </a>
-        ,{' '}
-        <a href="https://muso.ai" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
-          Muso.ai
-        </a>{' '}
-        and{' '}
+      and{' '}
         <a href="https://musicbrainz.org" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
           MusicBrainz
         </a>

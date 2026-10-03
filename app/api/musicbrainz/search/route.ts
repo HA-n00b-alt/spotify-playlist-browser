@@ -8,13 +8,6 @@ import {
   streamRecordingsByCredit,
 } from '@/lib/musicbrainz/client'
 import { fetchDeezerTrackByIsrc } from '@/lib/deezer'
-import {
-  getTrackDetailsById,
-  hasMusoApiKey,
-  listProfileCredits,
-  searchProfilesByName,
-  type MusoTrackDetails,
-} from '@/lib/muso'
 import { query } from '@/lib/db'
 import { withApiLogging } from '@/lib/logger'
 
@@ -39,7 +32,7 @@ interface TrackResult {
   releaseId: string
   coverArtUrl?: string | null
   previewUrl?: string | null
-  source?: 'muso' | 'musicbrainz'
+  source?: 'musicbrainz'
 }
 
 function getReleasePrimaryType(release: any): string | null {
@@ -90,14 +83,6 @@ function selectReleaseInfo(releases: any[]) {
   }
 }
 
-const normalizeMusoDurationMs = (duration?: number) => {
-  if (typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0) {
-    return 0
-  }
-  // Muso durations appear to be reported in seconds; convert when values are too small for ms.
-  return duration < 10000 ? duration * 1000 : duration
-}
-
 export const GET = withApiLogging(async (request: Request) => {
   const { searchParams } = new URL(request.url)
   const name = searchParams.get('name')?.trim()
@@ -121,7 +106,6 @@ export const GET = withApiLogging(async (request: Request) => {
   const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 50) : 20
   const offset = Number.isFinite(offsetParam) ? Math.max(offsetParam, 0) : 0
   const nameKey = name.toLowerCase()
-  const profileSearchLimit = 5
 
   const loadCache = async () => {
     try {
@@ -189,82 +173,6 @@ export const GET = withApiLogging(async (request: Request) => {
     }
   }
 
-  const trackDetailsCache = new Map<string, MusoTrackDetails | null>()
-
-  const loadTrackCache = async (trackId: string): Promise<MusoTrackDetails | null> => {
-    if (trackDetailsCache.has(trackId)) {
-      return trackDetailsCache.get(trackId) ?? null
-    }
-    try {
-      const rows = await query<{ data: any }>(
-        'SELECT data FROM muso_track_cache WHERE muso_track_id = $1 LIMIT 1',
-        [trackId]
-      )
-      if (!rows.length) {
-        trackDetailsCache.set(trackId, null)
-        return null
-      }
-      const rawData = rows[0]?.data
-      let cached = rawData as MusoTrackDetails | null
-      if (typeof rawData === 'string') {
-        try {
-          cached = JSON.parse(rawData) as MusoTrackDetails
-        } catch {
-          cached = null
-        }
-      }
-      trackDetailsCache.set(trackId, cached ?? null)
-      return cached ?? null
-    } catch {
-      return null
-    }
-  }
-
-  const saveTrackCache = async (trackId: string, details: MusoTrackDetails | null) => {
-    if (!details) return
-    trackDetailsCache.set(trackId, details)
-    try {
-      const isrcs = Array.isArray(details.isrcs) ? details.isrcs : []
-      await query(
-        `
-        INSERT INTO muso_track_cache (muso_track_id, data, spotify_preview_url, isrcs, updated_at)
-        VALUES ($1, $2, $3, $4, NOW())
-        ON CONFLICT (muso_track_id)
-        DO UPDATE SET
-          data = EXCLUDED.data,
-          spotify_preview_url = EXCLUDED.spotify_preview_url,
-          isrcs = EXCLUDED.isrcs,
-          updated_at = NOW()
-        `,
-        [
-          trackId,
-          JSON.stringify(details),
-          details.spotifyPreviewUrl ?? null,
-          isrcs,
-        ]
-      )
-    } catch {
-      // ignore cache failures
-    }
-  }
-
-  const saveAlbumCache = async (album: { id?: string } | null | undefined) => {
-    if (!album?.id) return
-    try {
-      await query(
-        `
-        INSERT INTO muso_album_cache (muso_album_id, data, updated_at)
-        VALUES ($1, $2, NOW())
-        ON CONFLICT (muso_album_id)
-        DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()
-        `,
-        [album.id, JSON.stringify(album)]
-      )
-    } catch {
-      // ignore cache failures
-    }
-  }
-
   const mergeResults = (existing: TrackResult[] | null, incoming: TrackResult[]) => {
     const map = new Map<string, TrackResult>()
     if (existing) {
@@ -276,224 +184,6 @@ export const GET = withApiLogging(async (request: Request) => {
       map.set(`${item.id}-${item.releaseId}`, item)
     })
     return Array.from(map.values())
-  }
-
-  const musoRoleCredits = (roleName: string) => {
-    switch (roleName) {
-      case 'songwriter':
-        return ['Composer']
-      case 'mixer':
-        return ['Mixer']
-      case 'engineer':
-        return ['Engineer']
-      case 'artist':
-        return ['Artist']
-      case 'producer':
-      default:
-        return ['Producer']
-    }
-  }
-
-  const fetchMusoResults = async () => {
-    const profileSearchRequest = {
-      endpoint: '/search',
-      method: 'POST',
-      body: {
-        keyword: name,
-        type: ['profile'],
-        limit: profileSearchLimit,
-        offset: 0,
-      },
-    }
-    const { items: profiles, totalCount: profileTotal, raw: profileRaw } = await searchProfilesByName(name, {
-      limit: profileSearchLimit,
-      offset: 0,
-      debug,
-    })
-    if (debug) {
-      debugSteps.push({
-        step: 2,
-        name: 'Muso profile search',
-        data: {
-          request: profileSearchRequest,
-          response: profileRaw ?? { totalCount: profileTotal, itemsCount: profiles.length },
-        },
-      })
-    }
-    const profile = profiles[0]
-    if (!profile?.id) {
-      if (debug) {
-        debugSteps.push({
-          step: 3,
-          name: 'Muso profile missing',
-          data: { totalCount: profileTotal, itemsCount: profiles.length },
-        })
-      }
-      return { results: [] as TrackResult[], totalCount: 0, profile: null }
-    }
-    const creditsRequest = {
-      endpoint: `/profile/${profile.id}/credits`,
-      params: {
-        credits: musoRoleCredits(role),
-        limit,
-        offset,
-        sortKey: 'releaseDate',
-        releaseDateStart: releaseDateStart ?? undefined,
-        releaseDateEnd: releaseDateEnd ?? undefined,
-      },
-    }
-    const { items, totalCount, raw: creditsRaw } = await listProfileCredits({
-      profileId: profile.id,
-      credits: musoRoleCredits(role),
-      limit,
-      offset,
-      sortKey: 'releaseDate',
-      releaseDateStart: releaseDateStart ?? undefined,
-      releaseDateEnd: releaseDateEnd ?? undefined,
-      debug,
-    })
-    if (debug) {
-      debugSteps.push({
-        step: 4,
-        name: 'Muso credits search',
-        data: {
-          request: creditsRequest,
-          response: creditsRaw ?? { totalCount, itemsCount: items.length },
-        },
-      })
-    }
-    const results: TrackResult[] = []
-    let trackDetailsRequested = 0
-    let trackDetailsFetched = 0
-    let trackDetailsCacheHits = 0
-    const trackDetailsSamples: Array<Record<string, unknown>> = []
-    for (const item of items) {
-      const track = item.track || {}
-      const album = item.album || {}
-      await saveAlbumCache(album)
-
-      const trackId = typeof track.id === 'string' ? track.id : ''
-      let trackDetails = trackId ? await loadTrackCache(trackId) : null
-      if (trackId) {
-        trackDetailsRequested += 1
-      }
-      if (!trackDetails && trackId) {
-        trackDetails = await getTrackDetailsById({ idKey: 'id', idValue: trackId })
-        trackDetailsFetched += 1
-        await saveTrackCache(trackId, trackDetails)
-      } else if (trackDetails && trackId) {
-        trackDetailsCacheHits += 1
-      }
-      if (debug && trackId && trackDetails && trackDetailsSamples.length < 3) {
-        trackDetailsSamples.push({
-          trackId,
-          title: trackDetails.title,
-          releaseDate: trackDetails.releaseDate,
-          spotifyPreviewUrl: trackDetails.spotifyPreviewUrl,
-        })
-      }
-      const artists = Array.isArray(trackDetails?.artists)
-        ? trackDetails?.artists
-        : (Array.isArray(item.artists) ? item.artists : [])
-      const artistName = artists.map((artist) => artist?.name).filter(Boolean).join(', ')
-      const releaseDate = typeof trackDetails?.releaseDate === 'string'
-        ? trackDetails.releaseDate
-        : (typeof item.releaseDate === 'string' ? item.releaseDate : '')
-      const isrc = Array.isArray(trackDetails?.isrcs)
-        ? trackDetails?.isrcs[0]
-        : (Array.isArray(track.isrcs) ? track.isrcs[0] : undefined)
-
-      results.push({
-        id: track.id || 'unknown',
-        title: trackDetails?.title || track.title || 'Unknown title',
-        artist: artistName || 'Unknown artist',
-        album: album.title || 'Unknown release',
-        releaseType: undefined,
-        year: releaseDate ? releaseDate.split('-')[0] : '',
-        length: normalizeMusoDurationMs(
-          typeof trackDetails?.duration === 'number'
-            ? trackDetails.duration
-            : (typeof track.duration === 'number' ? track.duration : undefined)
-        ),
-        isrc,
-        spotifyTrackId: trackDetails?.spotifyId || track.spotifyId || undefined,
-        releaseId: album.id || 'unknown',
-        coverArtUrl: album.albumArt || null,
-        previewUrl: trackDetails?.spotifyPreviewUrl || track.spotifyPreviewUrl || null,
-        source: 'muso',
-      })
-    }
-    if (debug) {
-      debugSteps.push({
-        step: 5,
-        name: 'Muso track details',
-        data: {
-          requested: trackDetailsRequested,
-          fetched: trackDetailsFetched,
-          cacheHits: trackDetailsCacheHits,
-          samples: trackDetailsSamples,
-        },
-      })
-    }
-    return { results, totalCount, profile }
-  }
-
-  if (hasMusoApiKey()) {
-    try {
-      const { results, totalCount, profile } = await fetchMusoResults()
-      if (stream) {
-        const encoder = new TextEncoder()
-        const streamBody = new ReadableStream({
-          start: async (controller) => {
-            const send = (payload: Record<string, unknown>) => {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`))
-            }
-            try {
-              if (profile) {
-                send({ type: 'profile', profile })
-              }
-              if (typeof totalCount === 'number') {
-                send({ type: 'meta', totalWorks: totalCount })
-              }
-              results.forEach((track) => send({ type: 'result', track }))
-              await saveCache(results, { profile, totalCount })
-              send({ type: 'done', count: results.length })
-            } catch (error) {
-              send({ type: 'error', message: error instanceof Error ? error.message : 'Unknown error' })
-            } finally {
-              controller.close()
-            }
-          },
-        })
-        return new Response(streamBody, {
-          headers: {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            Connection: 'keep-alive',
-          },
-        })
-      }
-
-      await saveCache(results, { profile, totalCount })
-      return NextResponse.json({
-        releaseCount: totalCount,
-        releaseOffset: offset,
-        releaseLimit: limit,
-        trackCount: results.length,
-        results,
-        profile,
-        debug: debug ? debugSteps : undefined,
-        source: 'muso',
-      })
-    } catch (error) {
-      if (debug) {
-        debugSteps.push({
-          step: 2,
-          name: 'Muso lookup failed; falling back to MusicBrainz',
-          data: { error: error instanceof Error ? error.message : 'Unknown error' },
-        })
-      }
-    }
   }
 
   if (stream && !refresh) {
@@ -516,17 +206,6 @@ export const GET = withApiLogging(async (request: Request) => {
       })
 
       void (async () => {
-        if (hasMusoApiKey()) {
-          try {
-            const { results, profile, totalCount } = await fetchMusoResults()
-            const merged = mergeResults(cached.results, results)
-            await saveCache(merged, { profile, totalCount })
-            return
-          } catch {
-            // Fall back to MusicBrainz refresh.
-          }
-        }
-
         const collected: TrackResult[] = []
         for await (const recording of streamRecordingsByCredit({ name, role, limit, offset: 0 })) {
           const embeddedReleases = Array.isArray(recording?.releases) ? recording.releases : []

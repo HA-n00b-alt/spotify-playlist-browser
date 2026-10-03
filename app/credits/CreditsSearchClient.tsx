@@ -7,7 +7,7 @@ import { formatDuration } from '@/lib/musicbrainz'
 
 type RoleOption = 'producer' | 'songwriter' | 'mixer' | 'engineer' | 'artist'
 
-interface MusoProfileSummary {
+interface ProfileSummary {
   id?: string
   name?: string
   avatarUrl?: string | null
@@ -33,7 +33,7 @@ interface SearchResult {
   releaseId: string
   coverArtUrl?: string | null
   previewUrl?: string | null
-  source?: 'muso' | 'musicbrainz'
+  source?: 'musicbrainz'
 }
 
 const ROLE_OPTIONS: Array<{ value: RoleOption; label: string }> = [
@@ -50,7 +50,7 @@ const cacheKeyFor = (searchName: string, searchRole: string, startDate: string, 
 export default function CreditsSearchClient() {
   const [name, setName] = useState('')
   const [role, setRole] = useState<RoleOption>('producer')
-  const [profileInfo, setProfileInfo] = useState<MusoProfileSummary | null>(null)
+  const [profileInfo, setProfileInfo] = useState<ProfileSummary | null>(null)
   const [results, setResults] = useState<SearchResult[]>([])
   const [trackCount, setTrackCount] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -906,7 +906,7 @@ export default function CreditsSearchClient() {
           </div>
         </div>
         <p className="text-xs text-gray-500">
-          Searches Muso credits by role and name, with MusicBrainz as fallback.
+          Searches MusicBrainz credits by role and name.
         </p>
         {loading && statusMessage && (
           <div className="text-xs text-gray-500">
@@ -935,12 +935,12 @@ export default function CreditsSearchClient() {
               />
             ) : (
               <div className="h-12 w-12 rounded-full bg-gray-100 text-xs text-gray-400 flex items-center justify-center">
-                Muso
+                MusicBrainz
               </div>
             )}
             <div>
               <div className="text-sm font-semibold text-gray-900">
-                {profileInfo.name || 'Muso profile'}
+                {profileInfo.name || 'Artist profile'}
               </div>
               <div className="text-xs text-gray-500">
                 Credits: {profileInfo.creditCount ?? '—'} • Collaborators: {profileInfo.collaboratorsCount ?? '—'}

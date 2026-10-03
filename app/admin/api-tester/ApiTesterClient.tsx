@@ -32,7 +32,7 @@ const endpointDefinitions: EndpointDefinition[] = [
   {
     id: 'musicbrainz-search',
     name: 'MusicBrainz search',
-    description: 'Run the credit-based search route backed by MusicBrainz and Muso enrichment.',
+    description: 'Run the credit-based search route backed by MusicBrainz.',
     method: 'GET',
     path: '/api/musicbrainz/search',
     query: {
@@ -47,30 +47,13 @@ const endpointDefinitions: EndpointDefinition[] = [
   {
     id: 'musicbrainz-credits',
     name: 'Track credits',
-    description: 'Fetch normalized track credits for an ISRC through Muso or MusicBrainz fallback.',
+    description: 'Fetch normalized track credits for an ISRC through MusicBrainz.',
     method: 'GET',
     path: '/api/musicbrainz/credits',
     query: {
       isrc: 'GBUM71029604',
       refresh: 'true',
     },
-  },
-  {
-    id: 'muso-preview',
-    name: 'Muso preview',
-    description: 'Resolve Spotify preview audio via Muso using a Spotify track ID payload.',
-    method: 'POST',
-    path: '/api/muso/preview',
-    body: {
-      spotifyTrackId: '11dFghVXANMlKmJXsNCbNl',
-    },
-  },
-  {
-    id: 'muso-status',
-    name: 'Muso quota status',
-    description: 'Inspect current Muso quota availability from the admin-only status route.',
-    method: 'GET',
-    path: '/api/admin/muso-status',
   },
   {
     id: 'deezer-preview',
@@ -94,6 +77,20 @@ const endpointDefinitions: EndpointDefinition[] = [
     },
   },
   {
+    id: 'bpm-health',
+    name: 'BPM service health',
+    description: 'Check the remote BPM service health endpoint through the authenticated app route.',
+    method: 'GET',
+    path: '/api/bpm/health',
+  },
+  {
+    id: 'services-health',
+    name: 'Service health',
+    description: 'Inspect Spotify and MusicBrainz health checks in one response.',
+    method: 'GET',
+    path: '/api/health/services',
+  },
+  {
     id: 'spotify-audio-features',
     name: 'Spotify Audio Features access',
     description:
@@ -105,20 +102,6 @@ const endpointDefinitions: EndpointDefinition[] = [
       token: 'auto',
     },
     notes: 'token=auto uses your session if logged in, otherwise client credentials. Use token=client_credentials to force app-level probe.',
-  },
-  {
-    id: 'bpm-health',
-    name: 'BPM service health',
-    description: 'Check the remote BPM service health endpoint through the authenticated app route.',
-    method: 'GET',
-    path: '/api/bpm/health',
-  },
-  {
-    id: 'services-health',
-    name: 'Service health',
-    description: 'Inspect Spotify, Muso, and MusicBrainz health checks in one response.',
-    method: 'GET',
-    path: '/api/health/services',
   },
   {
     id: 'country-detect',

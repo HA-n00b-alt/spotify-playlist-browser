@@ -31,7 +31,7 @@ const tools = [
   },
   {
     title: 'External API Tester',
-    description: 'Send sample payloads to Spotify, Muso, MusicBrainz, Deezer, iTunes, and BPM integration routes.',
+    description: 'Send sample payloads to Spotify, MusicBrainz, Deezer, iTunes, and BPM integration routes.',
     href: '/admin/api-tester',
     roles: ['admin', 'superadmin'],
   },
@@ -108,11 +108,7 @@ export default async function AdminPage() {
         <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
           Spotify
         </a>
-        ,{' '}
-        <a href="https://muso.ai" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
-          Muso.ai
-        </a>{' '}
-        and{' '}
+      and{' '}
         <a href="https://musicbrainz.org" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 hover:underline">
           MusicBrainz
         </a>

@@ -1,13 +1,7 @@
 import { NextResponse } from 'next/server'
 import { query } from '@/lib/db'
 import { fetchMusicBrainzJson } from '@/lib/musicbrainz/client'
-import { getTrackDetailsByIsrc, hasMusoApiKey, type MusoTrackDetails } from '@/lib/muso'
 import { withApiLogging } from '@/lib/logger'
-
-const normalizeRole = (value?: string | null) => (value || '').toLowerCase()
-
-const uniqueNames = (names: Array<string | null | undefined>) =>
-  Array.from(new Set(names.filter((name): name is string => Boolean(name && name.trim()))))
 
 type CreditsPayload = {
   performedBy: string[]
@@ -44,72 +38,19 @@ const loadCachedCredits = async (
   }
 }
 
-const saveCachedCredits = async (
-  isrc: string,
-  credits: CreditsPayload,
-  source: 'muso' | 'musicbrainz'
-) => {
+const saveCachedCredits = async (isrc: string, credits: CreditsPayload) => {
   try {
     await query(
       `
       INSERT INTO track_credits_cache (isrc, credits, source, updated_at)
-      VALUES ($1, $2, $3, NOW())
+      VALUES ($1, $2, 'musicbrainz', NOW())
       ON CONFLICT (isrc)
       DO UPDATE SET credits = EXCLUDED.credits, source = EXCLUDED.source, updated_at = NOW()
       `,
-      [isrc, JSON.stringify(credits), source]
+      [isrc, JSON.stringify(credits)]
     )
   } catch {
     // ignore cache failures
-  }
-}
-
-const collectMusoCredits = (track: MusoTrackDetails) => {
-  const performedBy = uniqueNames(track.artists?.map((artist) => artist.name) || [])
-  const producedBy: string[] = []
-  const mixedBy: string[] = []
-  const masteredBy: string[] = []
-  const writtenBy: string[] = []
-
-  const credits = Array.isArray(track.credits) ? track.credits : []
-  for (const group of credits) {
-    const parent = normalizeRole(group.parent)
-    const childCredits = Array.isArray(group.credits) ? group.credits : []
-    for (const credit of childCredits) {
-      const child = normalizeRole(credit.child)
-      const collaborators = Array.isArray(credit.collaborators) ? credit.collaborators : []
-      const names = uniqueNames(collaborators.map((collab) => collab.name))
-      const bucket = (target: string[], incoming: string[]) => target.push(...incoming)
-
-      if (child.includes('producer') || parent.includes('producer')) {
-        bucket(producedBy, names)
-        continue
-      }
-      if (child.includes('mix') || child.includes('engineer')) {
-        bucket(mixedBy, names)
-        continue
-      }
-      if (child.includes('master')) {
-        bucket(masteredBy, names)
-        continue
-      }
-      if (child.includes('writer') || child.includes('composer') || child.includes('lyric')) {
-        bucket(writtenBy, names)
-        continue
-      }
-      if (child.includes('artist') || parent.includes('artist')) {
-        bucket(performedBy, names)
-      }
-    }
-  }
-
-  return {
-    performedBy: uniqueNames(performedBy),
-    producedBy: uniqueNames(producedBy),
-    mixedBy: uniqueNames(mixedBy),
-    masteredBy: uniqueNames(masteredBy),
-    writtenBy: uniqueNames(writtenBy),
-    releaseId: null,
   }
 }
 
@@ -133,21 +74,6 @@ export const GET = withApiLogging(async (request: Request) => {
           ...cached.credits,
           retrievedAt: cached.retrievedAt,
         })
-      }
-    }
-    if (hasMusoApiKey()) {
-      try {
-        const track = await getTrackDetailsByIsrc(isrc)
-        if (track) {
-          const credits = collectMusoCredits(track)
-          await saveCachedCredits(isrc, credits, 'muso')
-          return NextResponse.json({
-            ...credits,
-            retrievedAt: new Date().toISOString(),
-          })
-        }
-      } catch {
-        // Fall back to MusicBrainz if Muso is unavailable or rate-limited.
       }
     }
     const data = await fetchMusicBrainzJson<any>(`/isrc/${encodeURIComponent(isrc)}`, {
@@ -287,7 +213,7 @@ export const GET = withApiLogging(async (request: Request) => {
       writtenBy: uniqueComposition,
       releaseId,
     }
-    await saveCachedCredits(isrc, credits, 'musicbrainz')
+    await saveCachedCredits(isrc, credits)
     return NextResponse.json({
       ...credits,
       retrievedAt: new Date().toISOString(),
