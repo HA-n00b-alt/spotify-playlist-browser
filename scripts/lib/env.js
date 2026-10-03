@@ -10,6 +10,7 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
+const { withoutGitEnv } = require('./git/prBoundary')
 
 const ROOT = path.resolve(__dirname, '..', '..')
 
@@ -21,9 +22,11 @@ const ROOT = path.resolve(__dirname, '..', '..')
  * @returns {string}
  */
 function resolveMasterRoot(cwd = ROOT) {
+  // Without an inherited GIT_DIR (set inside git hooks), which would answer for that repo, not `cwd` (#43).
   const result = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], {
     cwd,
     encoding: 'utf8',
+    env: withoutGitEnv(process.env),
   })
   if (result.status !== 0 || !result.stdout.trim()) return cwd
   const commonDir = result.stdout.trim()

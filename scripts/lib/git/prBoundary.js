@@ -135,6 +135,20 @@ function fillPrTemplate(template, issue) {
   return template.replace(/^Closes #\s*$/m, `Closes #${issue}`)
 }
 
+/**
+ * `env` without the `GIT_*` variables git sets for a hook (`GIT_DIR`, `GIT_INDEX_FILE`, …).
+ *
+ * A hook's children inherit them, so a test that runs `git init` or `git commit` in a temp dir
+ * acts on the pushing repository instead: it once committed onto the pushed branch and set
+ * `core.bare = true` on the main checkout (#43). Verify must run as if started from a shell.
+ *
+ * @param {NodeJS.ProcessEnv} env
+ * @returns {NodeJS.ProcessEnv}
+ */
+function withoutGitEnv(env) {
+  return Object.fromEntries(Object.entries(env).filter(([name]) => !name.startsWith('GIT_')))
+}
+
 module.exports = {
   EXPECTED_HOOKS,
   HOOKS_DIR,
@@ -145,4 +159,5 @@ module.exports = {
   issueNumberFromBranch,
   parsePrePushRefs,
   pushedBranchNames,
+  withoutGitEnv,
 }

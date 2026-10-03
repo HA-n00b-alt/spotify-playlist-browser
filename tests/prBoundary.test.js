@@ -11,6 +11,7 @@ const {
   issueNumberFromBranch,
   parsePrePushRefs,
   pushedBranchNames,
+  withoutGitEnv,
 } = require('../scripts/lib/git/prBoundary')
 
 const ROOT = path.resolve(__dirname, '..')
@@ -85,4 +86,10 @@ test('fillPrTemplate points the committed template at the issue', () => {
   const filled = fillPrTemplate(template, 7)
   assert.match(filled, /^Closes #7$/m)
   assert.equal(fillPrTemplate(template, null), template)
+})
+
+test('withoutGitEnv drops the variables git sets for a hook and keeps the rest', () => {
+  const env = { GIT_DIR: '/repo/.git', GIT_INDEX_FILE: '/repo/.git/index', PATH: '/bin', HOME: '/h' }
+  assert.deepEqual(withoutGitEnv(env), { PATH: '/bin', HOME: '/h' })
+  assert.equal(env.GIT_DIR, '/repo/.git')
 })
