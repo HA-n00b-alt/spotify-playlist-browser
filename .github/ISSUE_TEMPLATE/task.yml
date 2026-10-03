@@ -1,0 +1,47 @@
+name: Task
+description: A unit of committed work — what will be built, fixed, or changed.
+labels:
+  - "status:todo"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **The implementation plan and the implementation notes go in COMMENTS on this issue, never
+        in this body.** Parallel sessions would otherwise overwrite each other's edits to the body.
+
+        The definition of done is not repeated here — it is checked on the pull request.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: >-
+        What is wrong or missing, why it matters, and anything already ruled in or out. Written so
+        someone with no prior conversation context can act on it.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: >-
+        Outcome-shaped and checkable, one per line, as `- [ ] AC<N> <criterion>`. Check them off
+        as they become true. Use `AC1`, not `#1`: GitHub reads a task-list item that starts with
+        `#1` as a tracked issue and shows that issue's title instead.
+      value: |
+        - [ ] AC1
+        - [ ] AC2
+    validations:
+      required: true
+  - type: textarea
+    id: context-links
+    attributes:
+      label: Context links
+      description: >-
+        One `- <kind>: <value>` per line. `code:` a repo path the work touches, `docs:` a document
+        that governs it, `task:` a related issue such as `#12`.
+      placeholder: |
+        - code: lib/spotify.ts
+        - docs: ARCHITECTURE.md
+        - task: #12
+    validations:
+      required: false
