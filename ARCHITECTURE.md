@@ -798,21 +798,31 @@ lib/
 
 ### Vercel Deployment
 
-**Build Process:**
-1. Install dependencies (`pnpm install`)
-2. Build application (`next build`)
-3. Upload source maps to Sentry
-4. Deploy to Edge/Serverless functions
+Production is deployed only by `pnpm run deploy:production`, run from the maintainer's laptop on a
+clean `main` matching `origin/main`. The Vercel project is not connected to git, so pushes deploy
+nothing and there are no preview deployments. Full detail: [DEPLOYMENT.md](DEPLOYMENT.md).
+
+**Pipeline** (`scripts/deploy-production.js`):
+1. Guards: on `main`, no uncommitted changes, fast-forward from `origin/main`, no unpushed commits
+2. `pnpm run verify` steps
+3. Apply pending SQL migrations to Neon (`schema_migrations` ledger)
+4. Sync env names the catalog owns from the master `.env.local` to Vercel production
+5. `vercel build --prod` locally (Sentry source maps upload here), then
+   `vercel deploy --prebuilt --prod`
+6. Append the commit to the deployment manifest in Vercel Blob
+7. Post-deploy health checks: app `/api/bpm/health` and the BPM service `/health`
 
 **Environment Variables:**
-- Required variables set in Vercel dashboard
-- Different values for Production/Preview/Development
-- Automatic injection at build time
+- The master `.env.local` in the main checkout is the source; `scripts/lib/envCatalog.js` says
+  which names belong in Vercel ([docs/SECRETS-AND-ENVIRONMENT.md](docs/SECRETS-AND-ENVIRONMENT.md))
+- Names that differ per environment (e.g. `SPOTIFY_REDIRECT_URI`) and integration-owned names
+  (Neon, Blob) are set in Vercel, not pushed by the sync
 
-**Edge Runtime:**
-- API routes run on Edge runtime where possible
-- Database client supports Edge runtime
-- Automatic scaling based on traffic
+**Runtime:**
+- API routes run on the Node.js runtime (no route opts into Edge)
+
+**Rollback:** Vercel Instant Rollback (`vercel rollback`) for speed, or revert through a pull
+request and redeploy. Migrations are never rolled back automatically.
 
 ## Troubleshooting Guide
 

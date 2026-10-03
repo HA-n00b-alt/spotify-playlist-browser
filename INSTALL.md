@@ -131,7 +131,7 @@ The BPM service runs on Cloud Run in the `delman-site` GCP project. Use the `ver
 
 ### Setting Up Vercel Blob Deploy Manifest
 
-`pnpm run deploy:production` now requires a centralized manifest stored in Vercel Blob.
+`pnpm run deploy:production` requires a centralized manifest stored in Vercel Blob.
 
 1. Create a Blob store in the Vercel project or team
 2. Generate or copy a Blob read-write token
@@ -145,8 +145,11 @@ stored in Blob only; the deploy no longer writes or commits `.deploy/manifest.js
 
 `pnpm run deploy:production` deploys only a clean, pushed `main`: it aborts unless the checkout is
 on `main` with no staged, unstaged or untracked changes, fast-forwards from `origin/main`, and
-refuses unpushed commits. `DRY_RUN=1 pnpm run deploy:production` prints the plan and the guard
-verdict without fetching, building or writing anything.
+refuses unpushed commits. It then verifies, applies migrations, syncs env to Vercel, builds on this
+machine, deploys, records the commit in the manifest and checks production health.
+`DRY_RUN=1 pnpm run deploy:production` prints the plan and the guard verdict without fetching,
+building or writing anything. [DEPLOYMENT.md](DEPLOYMENT.md) has every step, the manifest format
+and how to roll back.
 
 ### Setting Up Sentry (Optional)
 
@@ -258,6 +261,6 @@ variable `ENABLE_EXPERIMENTAL_COREPACK=1` so Vercel honours `packageManager`.
 ## Next Steps
 
 - Read the [README.md](README.md) for more information about features and usage
-- See [DEPLOYMENT.md](DEPLOYMENT.md) for production deployment instructions (if applicable)
+- See [DEPLOYMENT.md](DEPLOYMENT.md) for production deployments and rollback
 - Configure admin users in your database for admin access
 - Set `NEXT_PUBLIC_UMAMI_WEBSITE_ID` for the Umami Cloud tracker
