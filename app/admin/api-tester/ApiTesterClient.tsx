@@ -94,6 +94,19 @@ const endpointDefinitions: EndpointDefinition[] = [
     },
   },
   {
+    id: 'spotify-audio-features',
+    name: 'Spotify Audio Features access',
+    description:
+      'Probe whether this app Client ID can access the deprecated Spotify audio-features endpoint (BPM/key). Compares /tracks vs /audio-features on a sample track.',
+    method: 'GET',
+    path: '/api/health/spotify-audio-features',
+    query: {
+      trackId: '11dFghVXANMlKmJXsNCbNl',
+      token: 'auto',
+    },
+    notes: 'token=auto uses your session if logged in, otherwise client credentials. Use token=client_credentials to force app-level probe.',
+  },
+  {
     id: 'bpm-health',
     name: 'BPM service health',
     description: 'Check the remote BPM service health endpoint through the authenticated app route.',
