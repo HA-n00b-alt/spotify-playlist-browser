@@ -6,11 +6,8 @@ const { readManifest, appendDeployment, gitTreeHash, workingTreeHash } = require
 const { main: applyMigrations } = require('./apply-migrations')
 const { main: syncSecrets } = require('./sync-secrets-vercel')
 const { main: postDeployVerify } = require('./post-deploy-verify')
-
-function step(title, fn) {
-  console.log(`\n=== ${title} ===`)
-  return fn()
-}
+const { runPipeline } = require('./lib/stepRunner')
+const { runVerifySteps } = require('./lib/verify/verifySteps')
 
 function gitCommitDeployArtifacts() {
   const files = ['.deploy/manifest.json', '.deploy/applied-migrations.json']
@@ -41,12 +38,12 @@ function gitCommitDeployArtifacts() {
   runCommand('git', ['push', 'origin', branch], { cwd: ROOT })
 }
 
-async function main() {
+async function main(runner) {
   const startedAt = new Date().toISOString()
 
-  step('1/8 verify', () => runCommand('pnpm', ['run', 'verify']))
+  runVerifySteps(runner)
 
-  await step('2/8 read deployment manifest', async () => {
+  await runner.step('read deployment manifest', async () => {
     const manifest = await readManifest()
     const latest = manifest.deployments?.[manifest.deployments.length - 1]
     console.log(
@@ -56,21 +53,19 @@ async function main() {
     )
   })
 
-  await step('3/8 apply migrations', () => applyMigrations())
+  await runner.step('apply migrations', () => applyMigrations())
 
-  step('4/8 sync secrets to Vercel', () => syncSecrets())
+  await runner.step('sync secrets to Vercel', () => syncSecrets())
 
-  step('5/8 accessory components', () => {
-    console.log('No accessory components for this repository — skipped')
-  })
+  runner.skip('accessory components', 'none for this repository')
 
-  step('6/8 build and deploy main app', () => {
+  await runner.step('build and deploy main app', () => {
     runCommand('npx', ['vercel', 'pull', '--yes', '--environment=production'])
     runCommand('npx', ['vercel', 'build', '--prod'])
     runCommand('npx', ['vercel', 'deploy', '--prebuilt', '--prod'])
   })
 
-  await step('7/8 write deployment manifest', async () => {
+  await runner.step('write deployment manifest', async () => {
     await appendDeployment({
       timestamp: startedAt,
       gitHash: gitTreeHash(),
@@ -81,15 +76,9 @@ async function main() {
     console.log('Manifest updated in Vercel Blob and mirrored to .deploy/manifest.json')
   })
 
-  step('8/8 post-deploy verify and git commit', () => {
-    postDeployVerify()
-    gitCommitDeployArtifacts()
-  })
+  await runner.step('post-deploy verify', () => postDeployVerify())
 
-  console.log('\ndeploy:production completed successfully')
+  await runner.step('git commit deploy artifacts', () => gitCommitDeployArtifacts())
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error)
-  process.exit(1)
-})
+runPipeline('deploy:production', main)
