@@ -14,6 +14,9 @@ type Props = {
   defaults: Settings
 }
 
+const UMAMI_DASHBOARD_URL =
+  'https://cloud.umami.is/analytics/eu/websites/225937b2-e96a-48e0-b1ee-6bdee4d69135'
+
 export default function ObservabilityLinksClient({ defaults }: Props) {
   const [links, setLinks] = useState<Settings>(defaults)
 
@@ -96,6 +99,21 @@ export default function ObservabilityLinksClient({ defaults }: Props) {
           className="mt-4 inline-flex items-center text-sm font-semibold text-emerald-600 hover:text-emerald-700"
         >
           Open Sentry dashboard {'>'}
+        </a>
+      </div>
+
+      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-[0_4px_24px_rgba(0,0,0,0.06)]">
+        <h2 className="text-lg font-semibold text-gray-900">Umami Web Analytics</h2>
+        <p className="mt-2 text-sm text-gray-500">
+          Open the hosted Umami dashboard for page-level traffic, sessions, and website analytics.
+        </p>
+        <a
+          href={UMAMI_DASHBOARD_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-4 inline-flex items-center text-sm font-semibold text-emerald-600 hover:text-emerald-700"
+        >
+          Open Umami dashboard {'>'}
         </a>
       </div>
     </>
