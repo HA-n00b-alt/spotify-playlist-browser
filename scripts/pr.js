@@ -133,7 +133,7 @@ runPipeline('pr', async (runner) => {
     cwd: repoRoot,
   })
 
-  // `npm run`, not `pnpm run`: pnpm 11 fails every `pnpm run` on unapproved build scripts (#22).
+  // `npm run`, not `pnpm run`: skips pnpm 11's per-run install check, which fails on undecided build scripts (#22).
   runner.command('verify', { command: 'npm', args: ['run', '--silent', 'verify'], cwd: repoRoot, stream: true })
 
   runner.command(`fetch origin/${options.base}`, { command: 'git', args: ['fetch', 'origin', options.base], cwd: repoRoot })
