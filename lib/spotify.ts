@@ -9,7 +9,13 @@ import {
 } from './errors'
 import { logError, logWarning, logInfo } from './logger'
 import { incrementExternalApiUsage } from './externalApiUsage'
-import { REFRESH_TOKEN_MAX_AGE_SECONDS, clearSpotifyAuthCookies, isInvalidGrant } from './spotifyAuth'
+import {
+  REFRESH_TOKEN_MAX_AGE_SECONDS,
+  accessTokenCookieMaxAge,
+  clearSpotifyAuthCookies,
+  requestTokenRefresh,
+  spotifyTokenCookieOptions,
+} from './spotifyAuth'
 
 interface SpotifyError {
   error: {
@@ -126,107 +132,74 @@ async function refreshAccessToken(): Promise<string | null> {
     return null
   }
 
-  const REFRESH_TIMEOUT_MS = 15_000
-  try {
-    logInfo('Attempting token refresh', {
-      component: 'spotify.refreshAccessToken',
-      hasRefreshToken: !!refreshToken,
-    })
-    
-    const start = Date.now()
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), REFRESH_TIMEOUT_MS)
-    const response = await fetch('https://accounts.spotify.com/api/token', {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
-      },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        refresh_token: refreshToken,
-      }),
-    })
-    clearTimeout(timeoutId)
-    const durationMs = Date.now() - start
+  logInfo('Attempting token refresh', {
+    component: 'spotify.refreshAccessToken',
+    hasRefreshToken: !!refreshToken,
+  })
 
-    logInfo('Token refresh response received', {
-      component: 'spotify.refreshAccessToken',
-      status: response.status,
-      statusText: response.statusText,
-      ok: response.ok,
-      durationMs,
-    })
+  const result = await requestTokenRefresh(refreshToken, { clientId, clientSecret })
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'Unable to read error')
-      if (isInvalidGrant(response.status, errorText)) {
-        // Expired or revoked refresh token: discard it and send the user back to sign-in, no retry.
-        const cleared = clearSpotifyAuthCookies(cookieStore)
-        logWarning('Refresh token rejected (invalid_grant); user must sign in again', {
-          component: 'spotify.refreshAccessToken',
-          status: response.status,
-          cookiesCleared: cleared,
-        })
-        return null
-      }
-      const error = new Error(`Token refresh failed: ${response.status} ${response.statusText}`)
-      logError(error, {
-        component: 'spotify.refreshAccessToken',
-        status: response.status,
-        statusText: response.statusText,
-        errorText: errorText.substring(0, 500),
-      })
-      return null
-    }
-
-    const data = await response.json()
-    const { access_token, expires_in, refresh_token: newRefreshToken } = data
-
-    logInfo('Token refresh successful', {
-      component: 'spotify.refreshAccessToken',
-      hasAccessToken: !!access_token,
-      expiresIn: expires_in,
-      hasNewRefreshToken: !!newRefreshToken,
-    })
-
-    // Update the access token cookie
-    cookieStore.set('access_token', access_token, {
-      maxAge: expires_in || 3600,
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      path: '/',
-    })
-
-    // Update refresh token if a new one was provided
-    if (newRefreshToken) {
-      cookieStore.set('refresh_token', newRefreshToken, {
-        maxAge: REFRESH_TOKEN_MAX_AGE_SECONDS,
-        httpOnly: true,
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-        path: '/',
-      })
-    }
-
-    return access_token
-  } catch (error) {
-    const isTimeout = error instanceof Error && error.name === 'AbortError'
-    if (isTimeout) {
+  if (!result.ok) {
+    if (result.reason === 'timeout') {
       logWarning('Token refresh timed out', {
         component: 'spotify.refreshAccessToken',
         errorType: 'Timeout',
       })
-    } else {
-      logError(error, {
+      return null
+    }
+    if (result.reason === 'network') {
+      logError(result.error, {
         component: 'spotify.refreshAccessToken',
         errorType: 'Exception',
       })
+      return null
     }
+    if (result.reason === 'invalid_grant') {
+      // Expired or revoked refresh token: discard it and send the user back to sign-in, no retry.
+      const cleared = clearSpotifyAuthCookies(cookieStore)
+      logWarning('Refresh token rejected (invalid_grant); user must sign in again', {
+        component: 'spotify.refreshAccessToken',
+        status: result.status,
+        cookiesCleared: cleared,
+      })
+      return null
+    }
+    const error = new Error(`Token refresh failed: ${result.status} ${result.statusText}`)
+    logError(error, {
+      component: 'spotify.refreshAccessToken',
+      status: result.status,
+      statusText: result.statusText,
+      errorText: result.errorText.substring(0, 500),
+    })
     return null
   }
+
+  const { accessToken, expiresIn, refreshToken: newRefreshToken } = result
+
+  logInfo('Token refresh successful', {
+    component: 'spotify.refreshAccessToken',
+    status: result.status,
+    durationMs: result.durationMs,
+    hasAccessToken: !!accessToken,
+    expiresIn,
+    hasNewRefreshToken: !!newRefreshToken,
+  })
+
+  // Server Components cannot write cookies (#12). The new token still serves this render; the page
+  // stays read-only and middleware.ts refreshes and stores tokens before the next render.
+  try {
+    cookieStore.set('access_token', accessToken, spotifyTokenCookieOptions(accessTokenCookieMaxAge(expiresIn)))
+    if (newRefreshToken) {
+      cookieStore.set('refresh_token', newRefreshToken, spotifyTokenCookieOptions(REFRESH_TOKEN_MAX_AGE_SECONDS))
+    }
+  } catch {
+    logInfo('Refreshed token used for this request only; cookies are read-only here', {
+      component: 'spotify.refreshAccessToken',
+      hasNewRefreshToken: !!newRefreshToken,
+    })
+  }
+
+  return accessToken
 }
 
 const SPOTIFY_REQUEST_TIMEOUT_MS = 25_000
@@ -234,10 +207,12 @@ const SPOTIFY_REQUEST_TIMEOUT_MS = 25_000
 export async function makeSpotifyRequest<T>(
   endpoint: string,
   options: RequestInit = {},
-  retryCount = 0
+  retryCount = 0,
+  // A token refreshed during this request; where cookies are read-only the cookie still holds the old one.
+  refreshedToken?: string
 ): Promise<T> {
   const maxRetries = 3
-  let accessToken = await getAccessToken()
+  let accessToken = refreshedToken ?? (await getAccessToken())
 
   if (!accessToken) {
     accessToken = await refreshAccessToken()
@@ -335,7 +310,7 @@ export async function makeSpotifyRequest<T>(
         endpoint,
         retryCount: retryCount + 1,
       })
-      return makeSpotifyRequest<T>(endpoint, options, retryCount + 1)
+      return makeSpotifyRequest<T>(endpoint, options, retryCount + 1, accessToken)
     }
     
     // If we've exceeded retries or no Retry-After header, throw error
@@ -395,7 +370,7 @@ export async function makeSpotifyRequest<T>(
       retryCount: retryCount + 1,
     })
     // Retry the request with new token
-    return makeSpotifyRequest<T>(endpoint, options, retryCount + 1)
+    return makeSpotifyRequest<T>(endpoint, options, retryCount + 1, accessToken)
   }
 
   // Handle forbidden (403) - insufficient permissions or scopes

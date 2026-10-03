@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import crypto from 'crypto'
 import { logError, logInfo, withApiLogging } from '@/lib/logger'
-import { REFRESH_TOKEN_MAX_AGE_SECONDS } from '@/lib/spotifyAuth'
+import { REFRESH_TOKEN_MAX_AGE_SECONDS, accessTokenCookieMaxAge } from '@/lib/spotifyAuth'
 
 export const GET = withApiLogging(async (request: Request) => {
   const { searchParams } = new URL(request.url)
@@ -109,7 +109,7 @@ export const GET = withApiLogging(async (request: Request) => {
     const isProduction = process.env.NODE_ENV === 'production'
     
     response.cookies.set('access_token', access_token, {
-      maxAge: expires_in || 3600,
+      maxAge: accessTokenCookieMaxAge(expires_in),
       httpOnly: true,
       sameSite: 'lax',
       secure: isProduction,
