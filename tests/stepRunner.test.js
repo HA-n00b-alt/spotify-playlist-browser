@@ -34,7 +34,8 @@ test('formatDuration picks ms, seconds or minutes', () => {
 test('a passing command prints one PASS line and hides its output', () => {
   const { runner, output } = captureRunner()
   runner.command('ok step', nodeCommand('console.log("noisy output")'))
-  assert.match(output(), /^PASS ok step {2}\(\d+ms\)$/m)
+  // Any format formatDuration prints: spawning node can take over a second on a loaded machine.
+  assert.match(output(), /^PASS ok step {2}\((\d+ms|\d+\.\d+s|\d+m\d{2}s)\)$/m)
   assert.doesNotMatch(output(), /noisy output/)
 })
 
