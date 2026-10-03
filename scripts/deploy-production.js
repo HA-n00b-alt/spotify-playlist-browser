@@ -13,7 +13,7 @@ const { runCommand, runCommandCapture } = require('./lib/exec')
 const { ROOT } = require('./lib/env')
 const { readManifest, appendDeployment } = require('./lib/manifest')
 const { main: applyMigrations } = require('./apply-migrations')
-const { main: syncSecrets } = require('./sync-secrets-vercel')
+const { sync: syncEnv } = require('./env-remote')
 const { main: postDeployVerify } = require('./post-deploy-verify')
 const {
   DEPLOY_UPSTREAM,
@@ -34,7 +34,7 @@ const PLAN = [
   'verify',
   'read deployment manifest (Vercel Blob)',
   'apply migrations',
-  'sync secrets to Vercel',
+  'sync env to Vercel from the master .env.local (env:sync --only=vercel --write)',
   'guard: working tree still clean',
   'build and deploy main app (vercel pull, build --prod, deploy --prebuilt --prod)',
   'append { commit, timestamp, dirty: false } to the deployment manifest (Vercel Blob only)',
@@ -119,7 +119,7 @@ async function main(runner) {
 
   await runner.step('apply migrations', () => applyMigrations())
 
-  await runner.step('sync secrets to Vercel', () => syncSecrets())
+  await runner.step('sync env to Vercel', () => syncEnv({ only: ['vercel'], write: true }))
 
   runner.skip('accessory components', 'none for this repository')
 

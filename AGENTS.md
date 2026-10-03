@@ -85,12 +85,16 @@ git worktree add ".claude/worktrees/0042-claude-fix-token-expiry" \
 Create it by hand like this. Auto-provisioned worktrees get `claude/…` or `worktree-…` branch
 prefixes that hide which issue and harness own them.
 
-**Set the worktree up before running anything** — gitignored files are not copied into it:
+**Set the worktree up before running anything:**
 
 ```bash
-cp "<main-checkout>/.env.local" "<main-checkout>/.env.example" .   # .env.example: until #18 lands
-pnpm install --frozen-lockfile                                     # a symlinked node_modules is refused
+pnpm install --frozen-lockfile   # a symlinked node_modules is refused
 ```
+
+Do not copy, link, open or print `.env.local` or any other secret file. Verify, the env scripts and
+`pnpm dev` read the master copy in the main checkout themselves, and print names only
+([`docs/SECRETS-AND-ENVIRONMENT.md`](docs/SECRETS-AND-ENVIRONMENT.md), ADR 0004). A new variable
+goes in `scripts/lib/envCatalog.js`, then `npm run generate:env-docs`.
 
 Do not approve pnpm build scripts or commit the `allowBuilds` block pnpm may add to
 `pnpm-workspace.yaml` during install — revert that file if it changes.
@@ -169,5 +173,6 @@ created directly rather than proposed) · Production steps needed · Known risks
 - **Checks:** `pnpm run verify` (`scripts/verify.js`).
 - **Docs:** `README.md` overview, `INSTALL.md` setup, `ARCHITECTURE.md` system design,
   `PIPELINES-LOGGING-ANALYTICS-STANDARDS.md`, `BPM API DOCUMENTATION.md`, ADRs in `docs/adr/` (#5).
-- **Secrets:** never print, commit or paste secret values. `.env.local` holds local secrets;
-  `.env.example` lists the names.
+- **Secrets:** never print, commit or paste secret values. The main checkout's `.env.local` is the
+  master copy; `.env.example` lists the names; `docs/SECRETS-AND-ENVIRONMENT.md` maps where each
+  one lives. `npm run env:inventory`, `env:drift` and `env:sync` print names only.

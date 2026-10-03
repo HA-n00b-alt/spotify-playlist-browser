@@ -29,3 +29,4 @@ fixes and features don't need one.
 | `adr.delman_pfm_workflow` | [Issue-first workflow with PRs, local verify and laptop deploys](0001-delman-pfm-workflow.md) | accepted |
 | `adr.remove_muso` | [Remove the Muso.ai integration](0002-remove-muso.md) | accepted |
 | [0003](0003-vitest-keep-eslint.md) | Test with Vitest and keep ESLint rather than moving to Biome | accepted |
+| [0004](0004-local-master-env-files.md) | Local files in the main checkout are the master copy of env and secrets; worktrees read them from there | accepted |
