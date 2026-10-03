@@ -102,16 +102,22 @@ The application uses Spotify's OAuth 2.0 with PKCE (Proof Key for Code Exchange)
    └─> Spotify redirects to /api/auth/callback?code=...
        ├─> Retrieve code_verifier from cookie
        ├─> Exchange code + code_verifier for access_token
-       ├─> Store access_token in httpOnly cookie (1 hour TTL)
-       ├─> Store refresh_token in httpOnly cookie (1 year TTL)
+       ├─> Store access_token in httpOnly cookie (token lifetime minus 5 minutes)
+       ├─> Store refresh_token in httpOnly cookie (180 days)
        └─> Redirect to /playlists
 ```
 
 #### Token Management
 
-- **Access Token**: Short-lived (1 hour), stored in httpOnly cookie
-- **Refresh Token**: Long-lived (1 year), stored in httpOnly cookie
-- **Automatic Refresh**: Handled in `lib/spotify.ts` when access token expires
+- **Access Token**: Short-lived (1 hour), stored in httpOnly cookie that expires 5 minutes early
+- **Refresh Token**: Expires six months after issue (Spotify, from July 2026), cookie kept 180 days
+- **Automatic Refresh**:
+  - Pages (`/playlists`, `/admin`, `/stats`): `middleware.ts` refreshes before render when the
+    access_token cookie is gone, and stores the new tokens. Server Components cannot write cookies,
+    so the page itself stays read-only (#12).
+  - API routes and any refresh still needed during render: `lib/spotify.ts` on a missing token or
+    a 401. Where cookies are read-only, the new token serves the current request only.
+  - Shared, Edge-safe refresh request and cookie options: `lib/spotifyAuth.ts`
 - **Cookie Security**:
   - `httpOnly: true` - Not accessible via JavaScript
   - `secure: true` - HTTPS only in production
@@ -123,6 +129,8 @@ The application uses Spotify's OAuth 2.0 with PKCE (Proof Key for Code Exchange)
 **Key Files:**
 - `app/api/auth/login/route.ts` - Initiates OAuth flow
 - `app/api/auth/callback/route.ts` - Handles OAuth callback
+- `middleware.ts` - Refresh before page render (`/playlists`, `/admin`, `/stats`)
+- `lib/spotifyAuth.ts` - Refresh request, cookie lifetimes, `invalid_grant` handling
 - `lib/spotify.ts` - Token refresh logic (`refreshAccessToken()`)
 - `lib/spotify.ts` - Token retrieval (`getAccessToken()`)
 

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { clearSpotifyAuthCookies, isInvalidGrant } from '@/lib/spotifyAuth'
+import { accessTokenCookieMaxAge, clearSpotifyAuthCookies, isInvalidGrant } from '@/lib/spotifyAuth'
 
 describe('isInvalidGrant', () => {
   it('matches a 400 with error invalid_grant', () => {
@@ -29,5 +29,16 @@ describe('clearSpotifyAuthCookies', () => {
       }),
     }
     expect(clearSpotifyAuthCookies(store)).toBe(false)
+  })
+})
+
+describe('accessTokenCookieMaxAge', () => {
+  it('expires the cookie five minutes before Spotify expires the token', () => {
+    expect(accessTokenCookieMaxAge(3600)).toBe(3300)
+    expect(accessTokenCookieMaxAge(undefined)).toBe(3300)
+  })
+
+  it('never goes below a minute', () => {
+    expect(accessTokenCookieMaxAge(120)).toBe(60)
   })
 })
