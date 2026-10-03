@@ -81,7 +81,7 @@ const VERIFY_STEPS = Object.freeze([
   {
     label: 'test',
     script: 'test',
-    why: 'runs the `node --test` suite under `tests/`.',
+    why: 'runs the Vitest suite under `tests/`.',
   },
 ])
 
