@@ -179,7 +179,8 @@ created directly rather than proposed) · Production steps needed · Known risks
 - **Layout:** `app/` pages and API routes, `lib/` business logic, `scripts/` tooling (verify,
   migrations, deploy), `migrations/` SQL migrations, `setup.sql` fresh-install schema.
 - **Checks:** `pnpm run verify` (`scripts/verify.js`).
-- **Docs:** `README.md` overview, `INSTALL.md` setup, `ARCHITECTURE.md` system design,
+- **Docs:** `README.md` overview, `INSTALL.md` setup, `DEPLOYMENT.md` production deploys and
+  rollback, `ARCHITECTURE.md` system design,
   `PIPELINES-LOGGING-ANALYTICS-STANDARDS.md`, `BPM API DOCUMENTATION.md`, ADRs in `docs/adr/` (#5).
 - **Secrets:** never print, commit or paste secret values. The main checkout's `.env.local` is the
   master copy; `.env.example` lists the names; `docs/SECRETS-AND-ENVIRONMENT.md` maps where each
