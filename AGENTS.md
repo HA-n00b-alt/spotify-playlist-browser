@@ -10,9 +10,17 @@ Adapted from `delman-pfm`'s `AGENTS.md` §0, scaled down for this repo.
 request has an issue, read it (`gh issue view <n> --comments`) and **claim it** (below) before
 planning or editing.
 
-**Name the session after the task:** `<XXXX> - <brief description>` — the zero-padded issue number
-and 3–4 words, e.g. `0010 - Spotify token expiry`. The branch and worktree carry the same identity.
-Use `0000` for work that warrants no issue.
+**Rename the session as soon as the task is known** — right after claiming the issue, before
+planning — to `<XXXX> - <brief description>`: the zero-padded issue number and 3–4 words, e.g.
+`0010 - Spotify token expiry`. The branch and worktree carry the same identity. Use `0000` for work
+that warrants no issue. Do it with your harness's rename action; it is often a deferred tool you
+must load first:
+
+- **Claude Code desktop app:** load `mcp__ccd_session_mgmt__set_session_title` with ToolSearch
+  (`select:mcp__ccd_session_mgmt__set_session_title`), then call it with `session_id: "self"`. If
+  the maintainer named the session by hand, the app asks them to approve the new title.
+- **Claude Code CLI:** suggest the maintainer runs `/rename <title>`.
+- **Other harnesses:** use their rename action if they have one; otherwise skip this step.
 
 **The delivery loop, in one line:** sync `main` from `origin` → worktree + branch for the issue →
 claim the issue → work → verify → check it still merges into `origin/main` → push and open a pull
