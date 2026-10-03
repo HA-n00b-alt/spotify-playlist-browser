@@ -44,3 +44,6 @@ vercel-bpm-invoker*.json
 *.tsbuildinfo
 next-env.d.ts
 .env*
+
+# agent worktrees
+.claude/worktrees/
