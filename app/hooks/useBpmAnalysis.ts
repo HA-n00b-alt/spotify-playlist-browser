@@ -576,6 +576,11 @@ export function useBpmAnalysis(tracks: Track[]) {
         }
       }
     } catch (error) {
+      // We aborted this stream ourselves: the hook unmounted or a newer batch superseded it.
+      // Not an error, and the superseding batch now owns the loading state of these tracks.
+      if (abortController.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
+        return
+      }
       console.error('[BPM Client] Stream error:', error)
       logError(error, {
         component: 'bpm.stream.results',
