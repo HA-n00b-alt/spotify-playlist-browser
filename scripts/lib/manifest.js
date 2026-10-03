@@ -1,29 +1,11 @@
-const fs = require('node:fs')
-const path = require('node:path')
-const crypto = require('node:crypto')
+/**
+ * The production deployment manifest. It lives in Vercel Blob only (#13): the deploy no longer
+ * mirrors it to `.deploy/manifest.json` or commits it.
+ */
 const { head, put } = require('@vercel/blob')
-const { ROOT, loadEnvLocal } = require('./env')
+const { loadEnvLocal } = require('./env')
 
-const DEPLOY_DIR = path.join(ROOT, '.deploy')
-const MANIFEST_PATH = path.join(DEPLOY_DIR, 'manifest.json')
 const DEFAULT_MANIFEST_PATHNAME = 'deployment-manifests/spotify-playlist-browser.json'
-
-function ensureDeployDir() {
-  fs.mkdirSync(DEPLOY_DIR, { recursive: true })
-}
-
-function readLocalManifest() {
-  ensureDeployDir()
-  if (!fs.existsSync(MANIFEST_PATH)) {
-    return { deployments: [] }
-  }
-  return JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'))
-}
-
-function writeLocalManifest(manifest) {
-  ensureDeployDir()
-  fs.writeFileSync(MANIFEST_PATH, `${JSON.stringify(manifest, null, 2)}\n`)
-}
 
 function loadDeployManifestConfig() {
   const env = loadEnvLocal()
@@ -53,18 +35,14 @@ async function readManifest() {
     }
 
     const raw = await response.text()
-    const manifest = raw.trim() ? JSON.parse(raw) : { deployments: [] }
-    writeLocalManifest(manifest)
-    return manifest
+    return raw.trim() ? JSON.parse(raw) : { deployments: [] }
   } catch (error) {
     if (
       error?.name === 'BlobNotFoundError' ||
       error?.constructor?.name === 'BlobNotFoundError' ||
       error?.message === 'Vercel Blob: The requested blob does not exist'
     ) {
-      const manifest = { deployments: [] }
-      writeLocalManifest(manifest)
-      return manifest
+      return { deployments: [] }
     }
 
     throw error
@@ -81,8 +59,6 @@ async function writeManifest(manifest) {
     contentType: 'application/json',
     token: config.BLOB_READ_WRITE_TOKEN,
   })
-
-  writeLocalManifest(manifest)
 }
 
 async function appendDeployment(entry) {
@@ -93,31 +69,8 @@ async function appendDeployment(entry) {
   return manifest
 }
 
-function gitTreeHash() {
-  const { execSync } = require('node:child_process')
-  try {
-    return execSync('git rev-parse HEAD', { cwd: ROOT, encoding: 'utf8' }).trim()
-  } catch {
-    return 'unknown'
-  }
-}
-
-function workingTreeHash() {
-  const { execSync } = require('node:child_process')
-  try {
-    const status = execSync('git status --porcelain', { cwd: ROOT, encoding: 'utf8' }).trim()
-    return crypto.createHash('sha256').update(status).digest('hex').slice(0, 12)
-  } catch {
-    return 'unknown'
-  }
-}
-
 module.exports = {
-  DEPLOY_DIR,
-  MANIFEST_PATH,
   readManifest,
   writeManifest,
   appendDeployment,
-  gitTreeHash,
-  workingTreeHash,
 }

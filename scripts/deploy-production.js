@@ -1,45 +1,109 @@
 #!/usr/bin/env node
+/**
+ * `pnpm run deploy:production` — deploys a clean, pushed `main` to Vercel (#13).
+ *
+ * Before anything changes, the guards require the checkout to be on `main` with no staged,
+ * unstaged or untracked changes, fast-forward it from `origin/main`, and refuse unpushed commits.
+ * The deploy records the commit in the Vercel Blob manifest and never commits or pushes.
+ *
+ * `DRY_RUN=1` prints the plan and the guard verdict without fetching, building or writing anything.
+ */
 const { spawnSync } = require('node:child_process')
 const { runCommand, runCommandCapture } = require('./lib/exec')
 const { ROOT } = require('./lib/env')
-const { readManifest, appendDeployment, gitTreeHash, workingTreeHash } = require('./lib/manifest')
+const { readManifest, appendDeployment } = require('./lib/manifest')
 const { main: applyMigrations } = require('./apply-migrations')
 const { main: syncSecrets } = require('./sync-secrets-vercel')
 const { main: postDeployVerify } = require('./post-deploy-verify')
+const {
+  DEPLOY_UPSTREAM,
+  deployAbortMessage,
+  deployTreeProblems,
+  manifestEntry,
+  parsePorcelainPaths,
+} = require('./lib/deploy/guards')
 const { runPipeline } = require('./lib/stepRunner')
 const { runVerifySteps } = require('./lib/verify/verifySteps')
 
-function gitCommitDeployArtifacts() {
-  const files = ['.deploy/manifest.json', '.deploy/applied-migrations.json']
-  const existing = files.filter((file) => {
-    const { existsSync } = require('node:fs')
-    return existsSync(require('node:path').join(ROOT, file))
-  })
+const DRY_RUN = process.env.DRY_RUN === '1'
+const PRODUCTION_URL = process.env.PRODUCTION_URL || 'https://searchmyplaylist.delman.it'
 
-  if (existing.length === 0) {
-    console.log('git: no deploy artifacts to commit')
+const PLAN = [
+  'guard: on `main` with no staged, unstaged or untracked changes',
+  `fast-forward from ${DEPLOY_UPSTREAM}; abort on unpushed or diverged commits`,
+  'verify',
+  'read deployment manifest (Vercel Blob)',
+  'apply migrations',
+  'sync secrets to Vercel',
+  'guard: working tree still clean',
+  'build and deploy main app (vercel pull, build --prod, deploy --prebuilt --prod)',
+  'append { commit, timestamp, dirty: false } to the deployment manifest (Vercel Blob only)',
+  'post-deploy verify',
+]
+
+/** @param {string[]} args */
+function git(args) {
+  return runCommandCapture('git', args, { cwd: ROOT })
+}
+
+/** `git status --porcelain` read untrimmed: its leading status column is significant. */
+function uncommittedPaths() {
+  const result = spawnSync('git', ['status', '--porcelain=v1'], { cwd: ROOT, encoding: 'utf8' })
+  if (result.status !== 0) throw new Error(`git status failed: ${result.stderr}`)
+  return parsePorcelainPaths(result.stdout)
+}
+
+/** @param {number} [ahead] */
+function checkoutState(ahead) {
+  return {
+    branch: git(['rev-parse', '--abbrev-ref', 'HEAD']),
+    uncommitted: uncommittedPaths(),
+    ahead,
+  }
+}
+
+function commitsAheadOfUpstream() {
+  return Number(git(['rev-list', '--count', `${DEPLOY_UPSTREAM}..HEAD`]))
+}
+
+/** Abort on any problem; under DRY_RUN, report what would abort and carry on. */
+function enforce(problems) {
+  if (problems.length === 0) return
+  const message = deployAbortMessage(problems)
+  if (DRY_RUN) {
+    console.warn(`WOULD ABORT — ${message}`)
     return
   }
-
-  spawnSync('git', ['add', ...existing], { cwd: ROOT, stdio: 'inherit' })
-  const status = spawnSync('git', ['diff', '--cached', '--quiet'], { cwd: ROOT })
-  if (status.status === 0) {
-    console.log('git: deploy artifacts unchanged')
-    return
-  }
-
-  runCommand('git', [
-    'commit',
-    '-m',
-    'chore(deploy): update production deployment manifest',
-  ])
-
-  const branch = runCommandCapture('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: ROOT })
-  runCommand('git', ['push', 'origin', branch], { cwd: ROOT })
+  throw new Error(message)
 }
 
 async function main(runner) {
   const startedAt = new Date().toISOString()
+
+  console.log(`Plan${DRY_RUN ? ' (DRY_RUN: nothing will be changed)' : ''}:`)
+  PLAN.forEach((line, index) => console.log(`  ${index + 1}. ${line}`))
+  console.log('')
+
+  if (DRY_RUN) {
+    await runner.step(`guard: clean main checkout (vs last-fetched ${DEPLOY_UPSTREAM})`, () => {
+      enforce(deployTreeProblems(checkoutState(commitsAheadOfUpstream())))
+      const behind = Number(git(['rev-list', '--count', `HEAD..${DEPLOY_UPSTREAM}`]))
+      console.log(`Would fast-forward ${behind} commit(s); the real run fetches first.`)
+    })
+    for (const label of PLAN.slice(1)) runner.skip(label, 'DRY_RUN')
+    return
+  }
+
+  await runner.step('guard: clean main checkout', () => enforce(deployTreeProblems(checkoutState())))
+
+  const commit = await runner.step(`fast-forward from ${DEPLOY_UPSTREAM}`, () => {
+    runCommand('git', ['fetch', 'origin', 'main'], { cwd: ROOT })
+    enforce(deployTreeProblems(checkoutState(commitsAheadOfUpstream())))
+    runCommand('git', ['merge', '--ff-only', DEPLOY_UPSTREAM], { cwd: ROOT })
+    const head = git(['rev-parse', 'HEAD'])
+    console.log(`Deploying ${head}`)
+    return head
+  })
 
   runVerifySteps(runner)
 
@@ -48,7 +112,7 @@ async function main(runner) {
     const latest = manifest.deployments?.[manifest.deployments.length - 1]
     console.log(
       latest
-        ? `Latest deployment: ${latest.timestamp} (${latest.gitHash})`
+        ? `Latest deployment: ${latest.timestamp} (${latest.commit ?? latest.gitHash})`
         : 'No prior deployments recorded'
     )
   })
@@ -59,6 +123,11 @@ async function main(runner) {
 
   runner.skip('accessory components', 'none for this repository')
 
+  await runner.step('guard: working tree still clean', () => {
+    enforce(deployTreeProblems(checkoutState()))
+    if (git(['rev-parse', 'HEAD']) !== commit) throw new Error('HEAD moved during the deploy')
+  })
+
   await runner.step('build and deploy main app', () => {
     runCommand('npx', ['vercel', 'pull', '--yes', '--environment=production'])
     runCommand('npx', ['vercel', 'build', '--prod'])
@@ -66,19 +135,11 @@ async function main(runner) {
   })
 
   await runner.step('write deployment manifest', async () => {
-    await appendDeployment({
-      timestamp: startedAt,
-      gitHash: gitTreeHash(),
-      workingTreeHash: workingTreeHash(),
-      platform: 'vercel',
-      productionUrl: process.env.PRODUCTION_URL || 'https://searchmyplaylist.delman.it',
-    })
-    console.log('Manifest updated in Vercel Blob and mirrored to .deploy/manifest.json')
+    await appendDeployment(manifestEntry({ commit, timestamp: startedAt, productionUrl: PRODUCTION_URL }))
+    console.log(`Manifest updated in Vercel Blob: ${commit}`)
   })
 
   await runner.step('post-deploy verify', () => postDeployVerify())
-
-  await runner.step('git commit deploy artifacts', () => gitCommitDeployArtifacts())
 }
 
 runPipeline('deploy:production', main)

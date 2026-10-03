@@ -21,14 +21,15 @@ Every repository must expose a top-level deployment command in `package.json`:
 ### ── Orchestration Sequence
 The `deploy:production` command must execute a custom deployment script that sequentially performs the following operations:
 
+0. **Guard the Checkout:** Refuse to run unless on `main` with no staged, unstaged or untracked changes; fast-forward from `origin/main` and abort on unpushed or diverged commits. `DRY_RUN=1` prints the plan and the guard verdict without changing anything.
 1. **Run Verify:** Execute the local quality gate suite exactly as defined below.
 2. **Read Remote Deployment Manifest:** Fetch the state manifest from centralized Vercel Blob storage to verify current production versions and hashes.
 3. **Apply Pending Migrations:** Execute necessary database schema updates against the production database instance.
 4. **Upload New/Changed Secrets:** Read local encrypted environment configurations and push updated secrets natively to the target edge platform or GCP Secret Manager.
 5. **Build/Deploy Accessory Components:** Compile and deploy dependencies, microservices, or companion workers if changes are detected.
 6. **Build/Deploy Main App:** Compile production code assets locally and deploy the primary runtime engine.
-7. **Write Updated Manifest to Vercel Blob:** Append the new version hash, timestamp, and deployment logs to the deployment manifest in Vercel Blob.
-8. **Upload Changes to Git:** Commit tracking modifications, dependency updates, or manifest lockfiles directly back to the repository branch.
+7. **Write Updated Manifest to Vercel Blob:** Append the deployed commit, timestamp and `dirty: false` to the deployment manifest in Vercel Blob. The manifest lives in Blob only.
+8. **No Git Writes:** The deploy never commits or pushes. `main` advances only through pull requests.
 
 ### ── Verification Suite (`npm run verify`)
 The verification phase is non-negotiable. The orchestration script must confirm a successful execution of each of the following targets before proceeding:

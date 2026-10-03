@@ -127,7 +127,15 @@ The BPM service runs on Cloud Run in the `delman-site` GCP project. Use the `ver
 3. Add `BLOB_READ_WRITE_TOKEN` to `.env.local`
 4. Optionally override `DEPLOY_MANIFEST_BLOB_PATH` if you want a different blob pathname
 
-The manifest pathname defaults to `deployment-manifests/spotify-playlist-browser.json`.
+The manifest pathname defaults to `deployment-manifests/spotify-playlist-browser.json`. It is
+stored in Blob only; the deploy no longer writes or commits `.deploy/manifest.json`.
+
+### Deploying
+
+`pnpm run deploy:production` deploys only a clean, pushed `main`: it aborts unless the checkout is
+on `main` with no staged, unstaged or untracked changes, fast-forwards from `origin/main`, and
+refuses unpushed commits. `DRY_RUN=1 pnpm run deploy:production` prints the plan and the guard
+verdict without fetching, building or writing anything.
 
 ### Setting Up Sentry (Optional)
 
