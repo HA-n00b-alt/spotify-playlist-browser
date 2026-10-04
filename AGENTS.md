@@ -159,8 +159,8 @@ becomes the commit on `main`, so it must follow the commit format above.
 
 ### Deployment
 
-**Agents never deploy.** `pnpm run deploy:production` runs from the maintainer's laptop, from an
-up-to-date `main`. If a change needs a production step (a migration, a new secret, a data fix), say
+**Agents never deploy.** `npm run deploy:production` runs from the maintainer's laptop, from an
+up-to-date `main`, and deploys both the Vercel app and the changed BPM services on Cloud Run. If a change needs a production step (a migration, a new secret, a data fix), say
 so in the PR and in the completion message.
 
 ### Talking to the maintainer
@@ -179,14 +179,17 @@ created directly rather than proposed) · Production steps needed · Known risks
 
 - **Stack:** Next.js 14 (App Router) on Vercel, React 18, TypeScript, Tailwind. Package manager
   **pnpm**. Database: Neon Postgres (`lib/db.ts`). Error tracking: Sentry. Analytics: Umami.
-- **External services:** Spotify Web API (user OAuth), a BPM/key analysis service on Google Cloud
-  Run (`lib/bpm.ts`), MusicBrainz, Deezer and iTunes for previews and metadata.
+- **External services:** Spotify Web API (user OAuth), MusicBrainz, Deezer and iTunes for
+  previews and metadata. The BPM/key analysis services on Google Cloud Run are part of this repo
+  (`services/bpm/`, called from `lib/bpm.ts`; #59).
 - **Layout:** `app/` pages and API routes, `lib/` business logic, `scripts/` tooling (verify,
-  migrations, deploy), `migrations/` SQL migrations, `setup.sql` fresh-install schema.
+  migrations, deploy), `migrations/` SQL migrations, `setup.sql` fresh-install schema,
+  `services/bpm/` the Python BPM services (`bpm-service`, `bpm-worker`, `bpm-fallback-service`)
+  with their Cloud Run deploy scripts. The root `verify` runs their checks too (needs `python3`).
 - **Checks:** `pnpm run verify` (`scripts/verify.js`).
 - **Docs:** `README.md` overview, `INSTALL.md` setup, `DEPLOYMENT.md` production deploys and
   rollback, `ARCHITECTURE.md` system design,
-  `PIPELINES-LOGGING-ANALYTICS-STANDARDS.md`, `BPM API DOCUMENTATION.md`, ADRs in `docs/adr/` (#5).
+  `PIPELINES-LOGGING-ANALYTICS-STANDARDS.md`, `services/bpm/README.md` (BPM services), ADRs in `docs/adr/` (#5).
 - **Secrets:** never print, commit or paste secret values. The main checkout's `.env.local` is the
   master copy; `.env.example` lists the names; `docs/SECRETS-AND-ENVIRONMENT.md` maps where each
   one lives. `npm run env:inventory`, `env:drift` and `env:sync` print names only.

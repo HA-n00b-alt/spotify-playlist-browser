@@ -81,7 +81,10 @@ function deployAbortMessage(problems) {
  * The entry appended to the deployment manifest in Vercel Blob. `dirty` is always false: the
  * guards refuse to deploy anything else, and it is recorded so the manifest says so explicitly.
  *
- * @param {{ commit: string; timestamp: string; productionUrl: string }} input
+ * `bpmServices` is the content hash of each BPM Cloud Run service as deployed (#59); the next deploy
+ * redeploys only the services whose hash changed.
+ *
+ * @param {{ commit: string; timestamp: string; productionUrl: string; bpmServices?: Record<string, string> }} input
  */
 function manifestEntry(input) {
   return {
@@ -90,6 +93,7 @@ function manifestEntry(input) {
     dirty: false,
     platform: 'vercel',
     productionUrl: input.productionUrl,
+    ...(input.bpmServices ? { bpmServices: input.bpmServices } : {}),
   }
 }
 

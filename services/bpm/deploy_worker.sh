@@ -206,12 +206,15 @@ if ! gcloud pubsub subscriptions describe "${PUBSUB_SUBSCRIPTION}" \
     # --push-auth-token-audience: The Cloud Run service URL (required for OIDC)
     # --dead-letter-topic: Topic for permanently failed messages
     # --max-delivery-attempts: Maximum retries before sending to DLQ (default: 5)
+    # --expiration-period=never: Pub/Sub otherwise deletes a subscription after 31 idle days,
+    #   which silently stopped all BPM analysis in production (spotify-playlist-browser#56)
     gcloud pubsub subscriptions create "${PUBSUB_SUBSCRIPTION}" \
         --topic="${PUBSUB_TOPIC}" \
         --push-endpoint="${WORKER_URL}/pubsub/process" \
         --push-auth-service-account="${PUSH_SA_EMAIL}" \
         --push-auth-token-audience="${WORKER_URL}" \
         --ack-deadline=600 \
+        --expiration-period=never \
         --dead-letter-topic="${PUBSUB_DEAD_LETTER_TOPIC}" \
         --max-delivery-attempts=5 \
         --project="${PROJECT_ID}"
@@ -229,6 +232,7 @@ else
         --push-auth-service-account="${PUSH_SA_EMAIL}" \
         --push-auth-token-audience="${WORKER_URL}" \
         --ack-deadline=600 \
+        --expiration-period=never \
         --dead-letter-topic="${PUBSUB_DEAD_LETTER_TOPIC}" \
         --max-delivery-attempts=5 \
         --project="${PROJECT_ID}"

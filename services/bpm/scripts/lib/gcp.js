@@ -12,59 +12,22 @@ export function getCloudRunUrl(serviceName, config) {
   );
 }
 
-export function updateFallbackServiceUrl(fallbackUrl) {
-  const filePath = path.join(repoRoot(), "shared_processing.py");
-  const content = fs.readFileSync(filePath, "utf8");
-  if (!FALLBACK_URL_PATTERN.test(content)) {
-    throw new Error("FALLBACK_SERVICE_URL not found in shared_processing.py");
+/**
+ * Fails when `FALLBACK_SERVICE_URL` in shared_processing.py is not the live fallback URL. The worker
+ * and main service bake that constant into their images, so a mismatch has to be fixed in the
+ * source through a pull request; the deploy no longer rewrites and commits the file itself.
+ */
+export function assertFallbackServiceUrl(fallbackUrl) {
+  const content = fs.readFileSync(path.join(repoRoot(), "shared_processing.py"), "utf8");
+  const match = content.match(FALLBACK_URL_PATTERN);
+  if (!match) {
+    throw new Error("FALLBACK_SERVICE_URL not found in services/bpm/shared_processing.py");
   }
-  const updated = content.replace(
-    FALLBACK_URL_PATTERN,
-    `FALLBACK_SERVICE_URL = "${fallbackUrl}"`
-  );
-  if (updated === content) {
-    return false;
-  }
-  fs.writeFileSync(filePath, updated);
-  return true;
-}
-
-export function uploadSecrets(config) {
-  const secretsPath = path.join(repoRoot(), ".env.secrets");
-  if (!fs.existsSync(secretsPath)) {
-    console.log("ℹ️  No .env.secrets file — skipping Secret Manager upload");
-    return;
-  }
-
-  for (const line of fs.readFileSync(secretsPath, "utf8").split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eq = trimmed.indexOf("=");
-    if (eq === -1) continue;
-    const name = trimmed.slice(0, eq).trim();
-    const value = trimmed.slice(eq + 1).trim();
-    if (!name || !value) continue;
-
-    try {
-      run(`gcloud secrets describe ${name} --project=${config.PROJECT_ID}`, { quiet: true });
-    } catch {
-      run(
-        `gcloud secrets create ${name} --replication-policy=automatic --project=${config.PROJECT_ID}`,
-        { quiet: true }
-      );
-    }
-
-    const tmpPath = path.join(repoRoot(), `.secret-${name}.tmp`);
-    fs.writeFileSync(tmpPath, value);
-    try {
-      run(
-        `gcloud secrets versions add ${name} --data-file=${tmpPath} --project=${config.PROJECT_ID}`,
-        { quiet: true }
-      );
-      console.log(`✅ Secret uploaded: ${name}`);
-    } finally {
-      fs.unlinkSync(tmpPath);
-    }
+  if (match[0] !== `FALLBACK_SERVICE_URL = "${fallbackUrl}"`) {
+    throw new Error(
+      `services/bpm/shared_processing.py has ${match[0]}, but bpm-fallback-service is served at ` +
+        `${fallbackUrl}. Update the constant through a pull request, then deploy again.`
+    );
   }
 }
 

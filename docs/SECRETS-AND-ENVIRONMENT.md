@@ -111,6 +111,7 @@ to the BPM service repository; this repository only needs the invoker key, which
 | `CI` | Set by Node, Next.js or Vercel at run time | no | platform | none | — | — | — | `next.config.js`, `scripts/check-env-contract.js` |
 | `VERCEL_OIDC_TOKEN` | Short-lived token Vercel adds to every `vercel env pull`; not read by this repository | yes | platform | none | — | — | — | — |
 | `DRY_RUN` | deploy:production prints its plan without changing anything when 1 | no | operator | none | — | — | — | `scripts/deploy-production.js` |
+| `BPM_DEPLOY_FORCE` | deploy:production redeploys every BPM Cloud Run service, changed or not, when 1 | no | operator | none | — | — | — | `scripts/deploy-production.js` |
 | `PRODUCTION_URL` | Production URL checked after a deploy (default https://searchmyplaylist.delman.it) | no | operator | none | — | — | — | `scripts/deploy-production.js`, `scripts/post-deploy-verify.js` |
 | `NO_COLOR` | Disables colour in the step runner output | no | operator | none | — | — | — | `scripts/lib/stepRunner.js` |
 <!-- env-catalog:end -->

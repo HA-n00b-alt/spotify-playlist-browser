@@ -13,18 +13,12 @@ const requiredFiles = [
   "deploy_worker.sh",
   "deploy_fallback.sh",
   "package.json",
-  "scripts/deploy-production.js",
+  "scripts/deploy.js",
 ];
 
 const missing = requiredFiles.filter((file) => !fs.existsSync(path.join(root, file)));
 if (missing.length > 0) {
   console.error(`check:env-contract failed — missing files: ${missing.join(", ")}`);
-  process.exit(1);
-}
-
-const examplePath = path.join(root, ".env.deploy.example");
-if (!fs.existsSync(examplePath)) {
-  console.error("check:env-contract failed — missing .env.deploy.example");
   process.exit(1);
 }
 
@@ -45,6 +39,13 @@ for (const script of ["deploy.sh", "deploy_worker.sh", "deploy_fallback.sh"]) {
     console.error(`check:env-contract failed — ${script} must default PROJECT_ID to delman-site`);
     process.exit(1);
   }
+}
+
+if (!fs.readFileSync(path.join(root, "deploy_worker.sh"), "utf8").includes("--expiration-period=never")) {
+  console.error(
+    "check:env-contract failed — deploy_worker.sh must create the subscription with --expiration-period=never (#56)"
+  );
+  process.exit(1);
 }
 
 console.log("check:env-contract passed");

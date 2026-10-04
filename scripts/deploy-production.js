@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * `pnpm run deploy:production` — deploys a clean, pushed `main` to Vercel (#13).
+ * `npm run deploy:production` — deploys a clean, pushed `main`: the BPM services whose code changed
+ * to Cloud Run (#59), then the app to Vercel (#13).
  *
  * Before anything changes, the guards require the checkout to be on `main` with no staged,
  * unstaged or untracked changes, fast-forward it from `origin/main`, and refuse unpushed commits.
@@ -12,6 +13,7 @@ const { spawnSync } = require('node:child_process')
 const { runCommand, runCommandCapture } = require('./lib/exec')
 const { ROOT } = require('./lib/env')
 const { readManifest, appendDeployment } = require('./lib/manifest')
+const { bpmServiceHashes, previousBpmHashes } = require('./lib/deploy/bpm')
 const { main: applyMigrations } = require('./apply-migrations')
 const { sync: syncEnv } = require('./env-remote')
 const { main: postDeployVerify } = require('./post-deploy-verify')
@@ -36,8 +38,9 @@ const PLAN = [
   'apply migrations',
   'sync env to Vercel from the master .env.local (env:sync --only=vercel --write)',
   'guard: working tree still clean',
+  'deploy changed BPM services to Cloud Run (bpm-worker, bpm-fallback-service, bpm-service; BPM_DEPLOY_FORCE=1 for all)',
   'build and deploy main app (vercel pull, build --prod, deploy --prebuilt --prod)',
-  'append { commit, timestamp, dirty: false } to the deployment manifest (Vercel Blob only)',
+  'append { commit, timestamp, dirty: false, bpmServices } to the deployment manifest (Vercel Blob only)',
   'post-deploy verify',
 ]
 
@@ -107,7 +110,7 @@ async function main(runner) {
 
   runVerifySteps(runner)
 
-  await runner.step('read deployment manifest', async () => {
+  const manifest = await runner.step('read deployment manifest', async () => {
     const manifest = await readManifest()
     const latest = manifest.deployments?.[manifest.deployments.length - 1]
     console.log(
@@ -115,17 +118,28 @@ async function main(runner) {
         ? `Latest deployment: ${latest.timestamp} (${latest.commit ?? latest.gitHash})`
         : 'No prior deployments recorded'
     )
+    return manifest
   })
 
   await runner.step('apply migrations', () => applyMigrations())
 
   await runner.step('sync env to Vercel', () => syncEnv({ only: ['vercel'], write: true }))
 
-  runner.skip('accessory components', 'none for this repository')
-
   await runner.step('guard: working tree still clean', () => {
     enforce(deployTreeProblems(checkoutState()))
     if (git(['rev-parse', 'HEAD']) !== commit) throw new Error('HEAD moved during the deploy')
+  })
+
+  // Before the app, so a new app never calls a BPM service that is not deployed yet. If a later
+  // step fails, nothing is recorded and the next deploy redeploys these services again.
+  const bpm = await runner.step('deploy BPM services to Cloud Run', async () => {
+    const { deployBpmServices } = await import('../services/bpm/scripts/deploy.js')
+    const result = deployBpmServices({
+      previousHashes: previousBpmHashes(manifest),
+      force: process.env.BPM_DEPLOY_FORCE === '1',
+    })
+    console.log(result.deployed.length ? `Deployed: ${result.deployed.join(', ')}` : 'No BPM service changed')
+    return result
   })
 
   await runner.step('build and deploy main app', () => {
@@ -135,7 +149,14 @@ async function main(runner) {
   })
 
   await runner.step('write deployment manifest', async () => {
-    await appendDeployment(manifestEntry({ commit, timestamp: startedAt, productionUrl: PRODUCTION_URL }))
+    await appendDeployment(
+      manifestEntry({
+        commit,
+        timestamp: startedAt,
+        productionUrl: PRODUCTION_URL,
+        bpmServices: bpmServiceHashes(bpm.services),
+      })
+    )
     console.log(`Manifest updated in Vercel Blob: ${commit}`)
   })
 
