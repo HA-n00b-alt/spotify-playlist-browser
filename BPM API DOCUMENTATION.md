@@ -78,11 +78,11 @@ The system uses an **async event-driven architecture** with three main component
 ### Pub/Sub & Firestore
 
 - **Pub/Sub Topic**: `bpm-analysis-tasks` - Queues individual URL processing tasks
-- **Pub/Sub Subscription**: `bpm-analysis-worker-sub` - Push subscription to worker service. Without it, batches are accepted and streams stay at `processed: 0` until Cloud Run cuts them off at 300s, while every `/health` check stays green (#56). `npm run verify:production` analyses one real song to catch this. Recreate it with:
+- **Pub/Sub Subscription**: `bpm-analysis-worker-sub` - Push subscription to worker service. By default Pub/Sub deletes a subscription after 31 days without activity, which is how it was lost in #56, so it must have `--expiration-period=never`. Without it, batches are accepted and streams stay at `processed: 0` until Cloud Run cuts them off at 300s, while every `/health` check stays green (#56). `npm run verify:production` analyses one real song to catch this. Recreate it with:
 
   ```bash
   gcloud pubsub subscriptions create bpm-analysis-worker-sub --project=delman-site \
-    --topic=bpm-analysis-tasks --ack-deadline=600 \
+    --topic=bpm-analysis-tasks --ack-deadline=600 --expiration-period=never \
     --push-endpoint=https://bpm-worker-7jlgdaerna-ey.a.run.app/pubsub/process \
     --push-auth-service-account=pubsub-push-invoker@delman-site.iam.gserviceaccount.com \
     --push-auth-token-audience=https://bpm-worker-7jlgdaerna-ey.a.run.app
