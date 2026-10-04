@@ -87,6 +87,11 @@ type SetAction<State, K extends keyof State = keyof State> = {
   value: State[K] | ((prev: State[K]) => State[K])
 }
 
+// A song takes seconds to analyse (well under a minute on a cold worker). A results stream that
+// delivers no track result for this long is stalled, not slow: the BPM service keeps the stream
+// open with status lines even when nothing is being processed (#56).
+export const BPM_STREAM_STALL_TIMEOUT_MS = 90_000
+
 const bpmReducer = (state: BpmState, action: SetAction<BpmState>): BpmState => {
   if (action.type !== 'set') return state
   const nextValue = typeof action.value === 'function'
@@ -341,6 +346,16 @@ export function useBpmAnalysis(tracks: Track[]) {
     const abortController = new AbortController()
     streamAbortRef.current = abortController
     const finalizedTracks = new Set<string>()
+    const stalledError = new Error(
+      `BPM results stream delivered no track result for ${BPM_STREAM_STALL_TIMEOUT_MS / 1000}s`
+    )
+    stalledError.name = 'BpmStreamStalledError'
+    let stallTimer: ReturnType<typeof setTimeout> | undefined
+    const resetStallTimer = () => {
+      clearTimeout(stallTimer)
+      stallTimer = setTimeout(() => abortController.abort(stalledError), BPM_STREAM_STALL_TIMEOUT_MS)
+    }
+    resetStallTimer()
 
     try {
       const response = await fetch(`/api/stream/${batchId}`, {
@@ -367,6 +382,7 @@ export function useBpmAnalysis(tracks: Track[]) {
         if (typeof data.index !== 'number') return
         const trackId = indexToTrackId.get(data.index)
         if (!trackId) return
+        resetStallTimer()
 
         const meta = previewMeta[trackId]
         const shouldUpdateBpm = !needsBpm || needsBpm.has(trackId)
@@ -575,12 +591,14 @@ export function useBpmAnalysis(tracks: Track[]) {
           console.error('[BPM Client] Error parsing final stream data:', err)
         }
       }
-    } catch (error) {
+    } catch (caught) {
+      const stalled = abortController.signal.reason === stalledError
       // We aborted this stream ourselves: the hook unmounted or a newer batch superseded it.
       // Not an error, and the superseding batch now owns the loading state of these tracks.
-      if (abortController.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
+      if (!stalled && (abortController.signal.aborted || (caught instanceof Error && caught.name === 'AbortError'))) {
         return
       }
+      const error = stalled ? stalledError : caught
       console.error('[BPM Client] Stream error:', error)
       logError(error, {
         component: 'bpm.stream.results',
@@ -601,6 +619,8 @@ export function useBpmAnalysis(tracks: Track[]) {
           })
         }
       })
+    } finally {
+      clearTimeout(stallTimer)
     }
   }, [bpmFullData, getPreviewUrlFromMeta, selectBestBpm, selectBestKey, setState])
 
