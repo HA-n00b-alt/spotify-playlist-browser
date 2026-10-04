@@ -32,7 +32,7 @@ vi.mock('react', () => react)
 vi.mock('@/lib/logger', () => ({ logError: vi.fn(), logWarning: vi.fn(), logInfo: vi.fn() }))
 
 import { logError } from '@/lib/logger'
-import { useBpmAnalysis } from '@/app/hooks/useBpmAnalysis'
+import { BPM_STREAM_STALL_TIMEOUT_MS, useBpmAnalysis } from '@/app/hooks/useBpmAnalysis'
 import type { SpotifyTrack } from '@/lib/types'
 
 const track = (id: string) => ({ id, name: id }) as unknown as SpotifyTrack
@@ -43,18 +43,24 @@ const json = (body: unknown) => new Response(JSON.stringify(body), {
 })
 
 // A results stream that stays open until it is aborted (rejecting reads with AbortError, as
-// fetch does) or until the test fails it with a network error.
+// fetch does) or until the test fails it with a network error. `send` writes one NDJSON line.
 function openResultsStream(signal: AbortSignal | undefined) {
   let fail: (error: Error) => void = () => {}
+  let send: (line: unknown) => void = () => {}
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
       fail = (error) => controller.error(error)
+      send = (line) => controller.enqueue(new TextEncoder().encode(`${JSON.stringify(line)}\n`))
       signal?.addEventListener('abort', () => {
         controller.error(new DOMException('The operation was aborted.', 'AbortError'))
       })
     },
   })
-  return { response: new Response(body, { status: 200 }), fail: (error: Error) => fail(error) }
+  return {
+    response: new Response(body, { status: 200 }),
+    fail: (error: Error) => fail(error),
+    send: (line: unknown) => send(line),
+  }
 }
 
 describe('BPM results stream errors', () => {
@@ -140,5 +146,53 @@ describe('BPM results stream errors', () => {
     }))
     expect(react.state.loadingBpmFields).toEqual(new Set())
     expect(react.state.loadingKeyFields).toEqual(new Set())
+  })
+
+  describe('when the stream stops delivering results', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    const status = { type: 'status', status: 'processing', total: 2, processed: 0 }
+
+    it('gives up, reports it, and stops showing the tracks as loading', async () => {
+      const hook = useBpmAnalysis([])
+      const { done } = await startStream(hook, ['a', 'b'])
+
+      // Status lines keep the connection busy but are not progress.
+      streams[0].send(status)
+      await vi.advanceTimersByTimeAsync(BPM_STREAM_STALL_TIMEOUT_MS - 1)
+      streams[0].send(status)
+      expect(logError).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(1)
+      await done
+
+      expect(logError).toHaveBeenCalledTimes(1)
+      expect(logError).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'BpmStreamStalledError' }),
+        expect.objectContaining({ component: 'bpm.stream.results', batchId: 'batch-a', trackCount: 2 }),
+      )
+      expect(react.state.loadingBpmFields).toEqual(new Set())
+      expect(react.state.loadingKeyFields).toEqual(new Set())
+    })
+
+    it('keeps waiting while track results keep arriving', async () => {
+      const hook = useBpmAnalysis([])
+      const { done } = await startStream(hook, ['a', 'b'])
+
+      await vi.advanceTimersByTimeAsync(BPM_STREAM_STALL_TIMEOUT_MS - 1)
+      streams[0].send({ index: 0, status: 'partial', bpm_essentia: 120 })
+      await vi.advanceTimersByTimeAsync(BPM_STREAM_STALL_TIMEOUT_MS - 1)
+      expect(logError).not.toHaveBeenCalled()
+      expect(react.state.loadingBpmFields).toEqual(new Set(['a', 'b']))
+
+      streams[0].fail(new Error('stop'))
+      await done
+    })
   })
 })

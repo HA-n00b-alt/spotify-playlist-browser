@@ -68,7 +68,7 @@ The system uses an **async event-driven architecture** with three main component
   - **Timeout**: 600 seconds (for individual URL processing)
   - **Max Instances**: 20 (auto-scaling)
   - **Concurrency**: 10 concurrent requests per instance (200 parallel tasks total)
-- **Authentication**: Public endpoint (Pub/Sub push subscription)
+- **Authentication**: Private. Only `pubsub-push-invoker@<project>.iam.gserviceaccount.com` has `roles/run.invoker`; the Pub/Sub push subscription signs each delivery as that account (OIDC push auth)
 - **Integration**: 
   - Receives Pub/Sub push messages via `/pubsub/process`
   - Writes results to Firestore as they complete
@@ -78,7 +78,15 @@ The system uses an **async event-driven architecture** with three main component
 ### Pub/Sub & Firestore
 
 - **Pub/Sub Topic**: `bpm-analysis-tasks` - Queues individual URL processing tasks
-- **Pub/Sub Subscription**: `bpm-analysis-worker-sub` - Push subscription to worker service
+- **Pub/Sub Subscription**: `bpm-analysis-worker-sub` - Push subscription to worker service. Without it, batches are accepted and streams stay at `processed: 0` until Cloud Run cuts them off at 300s, while every `/health` check stays green (#56). `npm run verify:production` analyses one real song to catch this. Recreate it with:
+
+  ```bash
+  gcloud pubsub subscriptions create bpm-analysis-worker-sub --project=delman-site \
+    --topic=bpm-analysis-tasks --ack-deadline=600 \
+    --push-endpoint=https://bpm-worker-7jlgdaerna-ey.a.run.app/pubsub/process \
+    --push-auth-service-account=pubsub-push-invoker@delman-site.iam.gserviceaccount.com \
+    --push-auth-token-audience=https://bpm-worker-7jlgdaerna-ey.a.run.app
+  ```
 - **Firestore Collection**: `batches/{batch_id}` - Stores batch status and results
 - **Message Format**: `{batch_id, url, index, max_confidence, debug_level}`
 
