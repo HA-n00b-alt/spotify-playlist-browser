@@ -1,5 +1,13 @@
 # BPM Finder API
 
+> The BPM services of [spotify-playlist-browser](../../README.md), moved here from
+> [`HA-n00b-alt/bpm-finder-api`](https://github.com/HA-n00b-alt/bpm-finder-api) at
+> `fa79a1d96a85b0396b37411b2b10793e0ad40105` (#59). Their earlier history is in that (archived)
+> repository. They are checked by the root `npm run verify` and deployed by the root
+> `npm run deploy:production`, which redeploys only the services whose files changed
+> ([DEPLOYMENT.md](../../DEPLOYMENT.md)). The per-service `./deploy*.sh` scripts below still work
+> on their own for a one-off deploy, but then the deployment manifest does not know about it.
+
 A Google Cloud Run microservice that computes BPM (beats per minute) and musical key from audio preview URLs. **Async streaming architecture** with real-time NDJSON results. The service is deployed as a **private** Cloud Run service, requiring Google Cloud IAM authentication.
 
 ## Features
@@ -21,6 +29,7 @@ A Google Cloud Run microservice that computes BPM (beats per minute) and musical
 - **Normalized Confidence Scores**: All confidence values normalized to 0-1 range for consistent interpretation
 - **Comprehensive Debug Information**: Detailed debug info including method comparisons, confidence analysis, error reporting, and telemetry
 - **Telemetry**: Timing information for download, Essentia analysis, and fallback service calls
+- **Structured Logging**: JSON logs with per-request context (`request_id` / `trace_id`) for easy Cloud Logging queries
 - **Separate Results**: Response includes both Essentia and Librosa results separately (Librosa fields are null if not used)
 - **Private Cloud Run Service**: IAM authentication required for access
 - **SSRF Protection**: HTTPS-only requirement with redirect validation
@@ -78,17 +87,9 @@ The system uses an **async event-driven architecture** with three main component
 ### Pub/Sub & Firestore
 
 - **Pub/Sub Topic**: `bpm-analysis-tasks` - Queues individual URL processing tasks
-- **Pub/Sub Subscription**: `bpm-analysis-worker-sub` - Push subscription to worker service. By default Pub/Sub deletes a subscription after 31 days without activity, which is how it was lost in #56, so it must have `--expiration-period=never`. Without it, batches are accepted and streams stay at `processed: 0` until Cloud Run cuts them off at 300s, while every `/health` check stays green (#56). `npm run verify:production` analyses one real song to catch this. Recreate it with:
-
-  ```bash
-  gcloud pubsub subscriptions create bpm-analysis-worker-sub --project=delman-site \
-    --topic=bpm-analysis-tasks --ack-deadline=600 --expiration-period=never \
-    --push-endpoint=https://bpm-worker-7jlgdaerna-ey.a.run.app/pubsub/process \
-    --push-auth-service-account=pubsub-push-invoker@delman-site.iam.gserviceaccount.com \
-    --push-auth-token-audience=https://bpm-worker-7jlgdaerna-ey.a.run.app
-  ```
+- **Pub/Sub Subscription**: `bpm-analysis-worker-sub` - Push subscription to worker service, created by `deploy_worker.sh`. By default Pub/Sub deletes a subscription after 31 days without activity, which is how it was lost in spotify-playlist-browser#56, so it is created with `--expiration-period=never` (the BPM check fails without it). Without the subscription, batches are accepted and streams stay at `processed: 0` until Cloud Run cuts them off at 300s, while every `/health` check stays green. The root `npm run verify:production` analyses one real song to catch this.
 - **Firestore Collection**: `batches/{batch_id}` - Stores batch status and results
-- **Message Format**: `{batch_id, url, index, max_confidence, debug_level}`
+- **Message Format**: `{batch_id, url, index, max_confidence, debug_level, trace_id}`
 
 ### Fallback Service (`bpm-fallback-service`)
 
@@ -131,11 +132,12 @@ The system uses an **async event-driven architecture** with three main component
 
 Before deployment, configure the following variables in `deploy.sh` or set them as environment variables:
 
-- `PROJECT_ID`: Your GCP project ID (default: `bpm-api-microservice`)
+- `PROJECT_ID`: Your GCP project ID (default: `delman-site`)
 - `REGION`: Cloud Run region (default: `europe-west3`)
 - `SERVICE_NAME`: Cloud Run service name (default: `bpm-service`)
 - `ARTIFACT_REPO`: Artifact Registry repository name (default: `bpm-repo`)
 - `SERVICE_ACCOUNT`: Service account name for external callers (default: `vercel-bpm-invoker`)
+- `LOG_LEVEL`: Log level for structured JSON logs (default: `INFO`)
 
 ### Fallback Service Configuration
 
@@ -144,6 +146,9 @@ The fallback service configuration is in `deploy_fallback.sh`:
 - `PROJECT_ID`: Your GCP project ID (same as primary service)
 - `REGION`: Cloud Run region (default: `europe-west3`)
 - `SERVICE_NAME`: Fallback service name (default: `bpm-fallback-service`)
+- `PROCESS_POOL_WORKERS`: Process pool size for CPU-bound librosa work
+- `FALLBACK_MAX_SECONDS`: Max audio duration (seconds) processed by librosa (default: 30)
+- `LOG_LEVEL`: Log level for structured JSON logs (default: `INFO`)
 
 ### Worker Service Configuration
 
@@ -152,6 +157,10 @@ Worker behavior can be tuned via environment variables:
 - `STREAM_PARTIAL_BPM_ONLY`: When `true` (default), workers emit a partial result after BPM is ready and update later with key/fallback fields.
 - `ARTIFACT_REPO`: Artifact Registry repository name (default: `bpm-repo`)
 - `ESSENTIA_MAX_CONCURRENCY`: Max thread pool workers for Essentia analysis (defaults to CPU count)
+- `LOG_LEVEL`: Log level for structured JSON logs (default: `INFO`)
+- `MAX_AUDIO_DURATION`: Maximum audio duration (seconds) processed by Essentia (default: 35; set to 180 in deploy script)
+- `FALLBACK_REQUEST_TIMEOUT_COLD_START`: Fallback timeout for first attempt (seconds)
+- `FALLBACK_REQUEST_TIMEOUT_WARM`: Fallback timeout for subsequent attempts (seconds)
 
 ### Primary Service Fallback Settings
 
@@ -165,6 +174,12 @@ Fallback configuration shared by the worker and primary services is in `shared_p
 - `FALLBACK_RETRY_DELAY`: Base retry delay (seconds)
 - `FALLBACK_FAILURE_THRESHOLD`: Consecutive failures before circuit opens
 - `FALLBACK_RECOVERY_TIMEOUT`: Seconds before half-open retry is allowed
+
+### Logging & Tracing
+
+- All services emit **structured JSON logs**.
+- `LOG_LEVEL` controls verbosity (`INFO` default; `DEBUG` for detailed timings/breakdowns).
+- API requests get an `x-request-id`; Pub/Sub items include a `trace_id` that propagates to worker and fallback logs.
 
 **Note**: The confidence threshold is now configurable per-request via the `max_confidence` parameter (default: 0.65). This allows clients to control when fallback is triggered.
 
@@ -268,7 +283,37 @@ gcloud iam service-accounts keys create ${SERVICE_ACCOUNT}-key.json \
 
 **Security Note**: Store this JSON key securely. You'll need it to authenticate external applications calling the service.
 
+## CI/CD (Standards-Compliant Local Orchestrator)
+
+This repository follows [`PIPELINES-LOGGING-ANALYTICS-STANDARDS.md`](./PIPELINES-LOGGING-ANALYTICS-STANDARDS.md). Deployments are **local-only** (no GitHub Actions or remote CI runners). Production releases run through a single orchestrated command.
+
+### Verify (quality gate)
+
+The root `npm run verify` runs these checks as its `bpm services` step. On their own:
+
+```bash
+npm --prefix services/bpm run verify
+```
+
+They check the API route markers the app relies on, stdout logging rules, `python3 -m compileall`, strict lint guards, AST smoke tests, that the deploy scripts target `delman-site`, and that `deploy_worker.sh` keeps `--expiration-period=never` on the subscription. CSP checks are skipped (web-only rule).
+
+### Production deploy
+
+From the repository root, on an up-to-date `main`, with `gcloud auth login` and Cloud Build / Cloud Run / Pub/Sub permissions on `delman-site`:
+
+```bash
+npm run deploy:production
+```
+
+Its `deploy BPM services to Cloud Run` step (`scripts/deploy.js`) hashes each service's files and deploys only the services whose hash differs from the one recorded in the root deployment manifest (Vercel Blob): the worker and fallback first, then `bpm-service`, which is also redeployed whenever either of them is. It fails before deploying `bpm-service` if `FALLBACK_SERVICE_URL` in `shared_processing.py` is not the live fallback URL; fix the constant through a pull request. `BPM_DEPLOY_FORCE=1 npm run deploy:production` redeploys all three. `deploy.lock.json` is the hash record of the last deploy from the old repository, read only until the first combined deploy records hashes. Full detail: [DEPLOYMENT.md](../../DEPLOYMENT.md).
+
+### Logging
+
+Services emit structured JSON to **stdout/stderr**; Cloud Run forwards these to Google Cloud Logging (20 GB/month free tier). No Sentry or PostHog in this repo.
+
 ## Deployment
+
+For manual or partial deploys, the shell scripts below remain available. **Production releases should use the root `npm run deploy:production`.**
 
 ### Deploy Primary Service
 
@@ -387,8 +432,8 @@ The test script will:
 
 **Streaming Results Format (NDJSON):**
 - `{"type":"status","status":"processing","total":5,"processed":0}`
-- `{"type":"result","index":0,"status":"partial","bpm_essentia":128,"key_essentia":null,...}`
-- `{"type":"result","index":0,"status":"final","bpm_essentia":128,"key_essentia":"C",...}`
+- `{"type":"result","index":0,"trace_id":"...","status":"partial","bpm_essentia":128,"key_essentia":null,...}`
+- `{"type":"result","index":0,"trace_id":"...","status":"final","bpm_essentia":128,"key_essentia":"C",...}`
 - `{"type":"progress","processed":2,"total":5}`
 - `{"type":"complete","batch_id":"...","total":5}`
 
@@ -1048,7 +1093,7 @@ The service normalizes confidence values from different algorithms to a consiste
 - SSRF protection through HTTPS-only requirement and redirect validation
 - Download size and timeout limits
 - No audio persistence (temp files deleted immediately)
-- Minimal logging (URLs with tokens are not logged)
+- URLs in logs are elided (query strings omitted) to avoid leaking tokens
 
 ## Troubleshooting
 

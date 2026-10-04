@@ -19,7 +19,7 @@ This document provides a comprehensive technical overview of the Spotify Playlis
 
 ## System Overview
 
-The application is a Next.js 14 web application that allows users to browse, search, and analyze their Spotify playlists. It integrates with the Spotify Web API, uses a PostgreSQL database for caching and analytics, and calls an external BPM detection service hosted on Google Cloud Run.
+The application is a Next.js 14 web application that allows users to browse, search, and analyze their Spotify playlists. It integrates with the Spotify Web API, uses a PostgreSQL database for caching and analytics, and calls a BPM detection service on Google Cloud Run whose code lives in `services/bpm/` (#59).
 
 ### Architecture Diagram
 
@@ -75,7 +75,7 @@ The application is a Next.js 14 web application that allows users to browse, sea
 ### External Services
 - **Database**: Neon Postgres (serverless PostgreSQL)
 - **Authentication**: Spotify OAuth 2.0 with PKCE
-- **BPM Service**: Google Cloud Run (external microservice)
+- **BPM Service**: Google Cloud Run (`services/bpm/`: Python/FastAPI services, Pub/Sub, Firestore)
 - **Error Tracking**: Sentry
 - **Deployment**: Vercel
 - **Package Manager**: pnpm
@@ -443,7 +443,11 @@ Caches full playlist data to reduce Spotify API calls.
 
 ### Architecture
 
-The BPM detection is handled by an external microservice hosted on Google Cloud Run.
+The BPM detection is handled by three Python services on Google Cloud Run, in `services/bpm/`
+(moved from the `bpm-finder-api` repository in #59): `bpm-service` accepts batches and streams
+results, `bpm-worker` analyses each song (fed by the Pub/Sub push subscription
+`bpm-analysis-worker-sub`), and `bpm-fallback-service` re-analyses low-confidence results. Full
+service documentation: [services/bpm/README.md](services/bpm/README.md).
 
 **Service Details:**
 - **URL**: `https://bpm-service-7jlgdaerna-ey.a.run.app`
@@ -699,9 +703,10 @@ lib/
 - Cache invalidation complexity
 - Potential stale data (mitigated by snapshot_id)
 
-### 4. External BPM Service
+### 4. Separate BPM Service
 
-**Decision**: Use external microservice for BPM detection.
+**Decision**: Run BPM detection as separate Cloud Run services, kept in this repository
+(`services/bpm/`, #59) and deployed by the same `deploy:production`.
 
 **Rationale**:
 - Complex audio processing (requires Essentia, ffmpeg)
@@ -806,19 +811,22 @@ lib/
 
 ### Vercel Deployment
 
-Production is deployed only by `pnpm run deploy:production`, run from the maintainer's laptop on a
+Production (the Vercel app and the BPM services on Cloud Run) is deployed only by
+`npm run deploy:production`, run from the maintainer's laptop on a
 clean `main` matching `origin/main`. The Vercel project is not connected to git, so pushes deploy
 nothing and there are no preview deployments. Full detail: [DEPLOYMENT.md](DEPLOYMENT.md).
 
 **Pipeline** (`scripts/deploy-production.js`):
 1. Guards: on `main`, no uncommitted changes, fast-forward from `origin/main`, no unpushed commits
-2. `pnpm run verify` steps
+2. `npm run verify` steps (including the BPM services' checks)
 3. Apply pending SQL migrations to Neon (`schema_migrations` ledger)
 4. Sync env names the catalog owns from the master `.env.local` to Vercel production
-5. `vercel build --prod` locally (Sentry source maps upload here), then
+5. Deploy the BPM services whose files changed since the last deploy to Cloud Run
+6. `vercel build --prod` locally (Sentry source maps upload here), then
    `vercel deploy --prebuilt --prod`
-6. Append the commit to the deployment manifest in Vercel Blob
-7. Post-deploy health checks: app `/api/bpm/health` and the BPM service `/health`
+7. Append the commit and the BPM service hashes to the deployment manifest in Vercel Blob
+8. Post-deploy checks: app `/api/bpm/health`, the BPM service `/health`, and one real song
+   analysed end to end
 
 **Environment Variables:**
 - The master `.env.local` in the main checkout is the source; `scripts/lib/envCatalog.js` says

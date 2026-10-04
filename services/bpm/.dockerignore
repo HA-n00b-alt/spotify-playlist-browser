@@ -1,0 +1,42 @@
+# Git
+.git/
+.gitignore
+
+# Documentation
+README.md
+LICENSE
+
+# Deployment scripts (not needed in container)
+deploy.sh
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+env/
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Service account keys
+*.json
+!package.json
+
+
+
+

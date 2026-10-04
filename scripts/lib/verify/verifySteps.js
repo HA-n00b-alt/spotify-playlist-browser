@@ -72,6 +72,14 @@ const VERIFY_STEPS = Object.freeze([
       '`pnpm run generate:verify-steps-doc`.',
   },
   {
+    label: 'bpm services',
+    script: 'check:bpm',
+    why:
+      'runs the checks of the BPM services in `services/bpm/` (#59): every route the app calls is ' +
+      'still defined, the Python sources compile and log structured JSON, the deploy scripts target ' +
+      '`delman-site`, and the worker subscription never expires (#56). Needs `python3`.',
+  },
+  {
     label: 'typecheck',
     script: 'typecheck',
     why: 'runs `tsc --noEmit` over the whole project.',

@@ -1,10 +1,12 @@
 # Deployment
 
-Production is `https://searchmyplaylist.delman.it`, a Vercel project. It is deployed by one
+Production is two halves of one application: the app at `https://searchmyplaylist.delman.it`
+(a Vercel project), and the BPM services in `services/bpm/` (`bpm-service`, `bpm-worker` and
+`bpm-fallback-service` on Cloud Run in GCP project `delman-site`, #59). Both are deployed by one
 command, from the maintainer's laptop, from an up-to-date `main`:
 
 ```bash
-pnpm run deploy:production
+npm run deploy:production
 ```
 
 The Vercel project is not connected to git: pushing to GitHub deploys nothing, and preview
@@ -22,6 +24,9 @@ deployments are off. Agents never deploy (`AGENTS.md`). The script is
   See [Setting Up Vercel Blob Deploy Manifest](INSTALL.md#setting-up-vercel-blob-deploy-manifest).
 - **BPM service credentials** (`BPM_SERVICE_URL`, `GCP_SERVICE_ACCOUNT_KEY`) for the post-deploy
   check.
+- **`gcloud` logged in** as an account that can deploy to Cloud Run, Cloud Build and Pub/Sub in
+  `delman-site` (`gcloud auth login`). The BPM deploy scripts call it; it is only used when a BPM
+  service changed, plus two read-only lookups and one idempotent IAM grant on every deploy.
 
 ## What the command does
 
@@ -32,7 +37,7 @@ Each step prints one PASS/FAIL line; the first failure stops the run and later s
 2. **Fast-forward from `origin/main`.** Fetches, re-checks the guard, aborts if `main` has commits
    `origin/main` lacks (unpushed or diverged), then `git merge --ff-only origin/main`. The commit
    it lands on is the one deployed.
-3. **Verify.** The same steps as `pnpm run verify` (listed in `INSTALL.md`).
+3. **Verify.** The same steps as `npm run verify` (listed in `INSTALL.md`).
 4. **Read the deployment manifest** from Vercel Blob and print the last recorded deployment.
 5. **Apply migrations** (`scripts/apply-migrations.js`) to the production database from
    `DATABASE_URL_UNPOOLED` (or `DATABASE_URL`). Pending files in `migrations/` run in order, each
@@ -41,21 +46,33 @@ Each step prints one PASS/FAIL line; the first failure stops the run and later s
    from the master `.env.local` to Vercel production
    ([`docs/SECRETS-AND-ENVIRONMENT.md`](docs/SECRETS-AND-ENVIRONMENT.md)).
 7. **Guard again.** The working tree must still be clean and `HEAD` must not have moved.
-8. **Build and deploy.** `vercel pull --yes --environment=production`, `vercel build --prod`
+8. **Deploy the changed BPM services** (`services/bpm/scripts/deploy.js`). Each service's files are
+   hashed and compared with the hashes the last deploy recorded in the manifest; only changed
+   services are rebuilt and deployed (`deploy_worker.sh`, `deploy_fallback.sh`, `deploy.sh`), and
+   `bpm-service` is redeployed whenever the worker or fallback service is. It runs before the app,
+   so a new app never calls a BPM version that is not live yet. It fails, before deploying
+   `bpm-service`, if `FALLBACK_SERVICE_URL` in `services/bpm/shared_processing.py` is not the live
+   fallback URL: fix that constant through a pull request. `BPM_DEPLOY_FORCE=1` redeploys all three.
+9. **Build and deploy the app.** `vercel pull --yes --environment=production`, `vercel build --prod`
    (on the laptop, with the pinned pnpm; Sentry source maps upload during this build), then
    `vercel deploy --prebuilt --prod`.
-9. **Write the manifest.** Appends
-   `{ timestamp, commit, dirty: false, platform: "vercel", productionUrl }` to the manifest in
-   Vercel Blob. Nothing is written to the repository; the deploy never commits or pushes.
-10. **Post-deploy verify** (`scripts/post-deploy-verify.js`): production `/api/bpm/health` must
-    answer `"ok": true`, and the BPM service's `/health` must answer when called with an identity
-    token minted from `GCP_SERVICE_ACCOUNT_KEY`. Run the same check on its own, without deploying,
-    with `pnpm run verify:production`.
+10. **Write the manifest.** Appends
+    `{ timestamp, commit, dirty: false, platform: "vercel", productionUrl, bpmServices }` to the
+    manifest in Vercel Blob, where `bpmServices` is the content hash of each BPM service as now
+    deployed. Nothing is written to the repository; the deploy never commits or pushes. If a step
+    fails before this one, nothing is recorded and the next deploy redeploys the BPM services that
+    had changed. Deploys from before #59 recorded no `bpmServices`; until one does,
+    `services/bpm/deploy.lock.json` (the last deploy from the old repo) supplies the hashes.
+11. **Post-deploy verify** (`scripts/post-deploy-verify.js`): production `/api/bpm/health` must
+    answer `"ok": true`, the BPM service's `/health` must answer when called with an identity
+    token minted from `GCP_SERVICE_ACCOUNT_KEY`, and one real song must come back analysed within
+    60 seconds (#56). Run the same check on its own, without deploying, with
+    `npm run verify:production`.
 
 ### Dry run
 
 ```bash
-DRY_RUN=1 pnpm run deploy:production
+DRY_RUN=1 npm run deploy:production
 ```
 
 Prints the plan and the guard verdict against the last-fetched `origin/main` (`WOULD ABORT — …`
@@ -91,7 +108,12 @@ The manifest is a JSON file in Vercel Blob listing every production deploy, olde
       "commit": "<full sha>",
       "dirty": false,
       "platform": "vercel",
-      "productionUrl": "https://searchmyplaylist.delman.it"
+      "productionUrl": "https://searchmyplaylist.delman.it",
+      "bpmServices": {
+        "bpm-worker": "<sha256 of its files>",
+        "bpm-fallback-service": "<sha256 of its files>",
+        "bpm-service": "<sha256 of its files>"
+      }
     }
   ]
 }
@@ -113,8 +135,14 @@ There is no rollback script. Two ways back, fastest first:
    `deploy:production`, check the site serves the new build, and `npx vercel promote <url>` it if
    not.
 2. **Revert and redeploy.** Revert the bad commit through a pull request, merge it, and run
-   `pnpm run deploy:production`. This keeps `main`, production and the manifest in agreement and
+   `npm run deploy:production`. A reverted BPM change hashes differently from what is live, so
+   the affected Cloud Run services are redeployed too. This keeps `main`, production and the manifest in agreement and
    is the way to make a rollback permanent.
+
+**BPM services** have no instant rollback here: Vercel's covers only the app. To go back fast,
+route traffic to the previous Cloud Run revision
+(`gcloud run services update-traffic <service> --to-revisions=<revision>=100 --region=europe-west3 --project=delman-site`),
+then make it permanent with path 2.
 
 **Migrations are not rolled back** by either path. They are expected to be backward compatible
 with the previous release; if one is not, write a new migration that undoes it and deploy that.

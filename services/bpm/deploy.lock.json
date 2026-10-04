@@ -1,0 +1,36 @@
+{
+  "repo": "bpm-finder-api",
+  "projectId": "delman-site",
+  "region": "europe-west3",
+  "deployedAt": "2026-06-07T07:22:03.742Z",
+  "gitSha": "0a95c42f3271d6461fff957a67120d8089cc9bc9",
+  "combinedHash": "66f1593baf4af8db6a778d009e1212ca68571bf06b2120fb0d74fde09da92eaa",
+  "services": {
+    "bpm-worker": {
+      "contentHash": "db5a14c5f610c83d6f57c12bd7825a13db3823d5146eb4cc8716399ec84eac9a",
+      "url": "https://bpm-worker-7jlgdaerna-ey.a.run.app"
+    },
+    "bpm-fallback-service": {
+      "contentHash": "8c230f30c3d57e77f8cecc159e097eae6662695a6b934a092b257c589f57e134",
+      "url": "https://bpm-fallback-service-7jlgdaerna-ey.a.run.app"
+    },
+    "bpm-service": {
+      "contentHash": "a455eda07be7ce2feb0766e315d87ab21d86beaef59166bba6e44bffaf03d951",
+      "url": "https://bpm-service-7jlgdaerna-ey.a.run.app"
+    }
+  },
+  "logs": [
+    "2026-06-07T07:20:09.944Z Step 1/8 — Run verify",
+    "2026-06-07T07:20:29.647Z Step 2/8 — Read deployment manifest",
+    "2026-06-07T07:20:29.656Z Local deploy.lock.json loaded (2026-06-06T10:48:50.772Z)",
+    "2026-06-07T07:20:29.657Z Step 3/8 — Apply pending migrations",
+    "2026-06-07T07:20:29.657Z No database migrations configured (Firestore is schemaless) — skipped",
+    "2026-06-07T07:20:29.657Z Step 4/8 — Upload new/changed secrets",
+    "2026-06-07T07:20:29.749Z Step 5/8 — Build/deploy accessory components",
+    "2026-06-07T07:20:29.752Z Skipping bpm-worker deploy (no changes)",
+    "2026-06-07T07:20:29.752Z Skipping bpm-fallback-service deploy (no changes)",
+    "2026-06-07T07:21:10.993Z Step 6/8 — Build/deploy main app",
+    "2026-06-07T07:21:10.993Z Main service unchanged — skipped",
+    "2026-06-07T07:22:03.768Z Step 7/8 — Write deployment manifest"
+  ]
+}

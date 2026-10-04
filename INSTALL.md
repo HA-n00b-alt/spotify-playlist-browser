@@ -24,6 +24,10 @@ Before you begin, ensure you have:
 
 5. **A Sentry account** (optional but recommended) - Sign up at [sentry.io](https://sentry.io)
 
+6. **`python3`** - `npm run verify` compiles the BPM services in `services/bpm/` (#59). Deploying
+   also needs the [`gcloud` CLI](https://cloud.google.com/sdk/docs/install), logged in to
+   `delman-site` ([DEPLOYMENT.md](DEPLOYMENT.md)).
+
 ## Step 1: Clone the Repository
 
 ```bash
@@ -209,9 +213,10 @@ only accepts a pull request once that `verify` check passes (ADR 0005).
 4. **csp cloudflare jsd filter** (`pnpm run check:csp-cloudflare-jsd-filter`): placeholder for the Cloudflare JSD CSP filter: passes while there is no `wrangler.toml`, and fails as soon as one exists until the Cloudflare migration defines the real check.
 5. **migration numbering** (`pnpm run check:migration-numbering`): fails when a new file in `migrations/` is not named `NNNN_<snake_case_name>.sql`, or when two files share a number or a number is skipped. Two branches can add the same number without a git conflict; the `pre-commit` hook runs the same check.
 6. **verify steps doc** (`pnpm run check:verify-steps-doc`): fails when the step list in `INSTALL.md` no longer matches this list. Fix it with `pnpm run generate:verify-steps-doc`.
-7. **typecheck** (`pnpm run typecheck`): runs `tsc --noEmit` over the whole project.
-8. **lint** (`pnpm run check:strict`): runs `next lint` with the `next/core-web-vitals` rules.
-9. **test** (`pnpm run test`): runs the Vitest suite under `tests/`.
+7. **bpm services** (`pnpm run check:bpm`): runs the checks of the BPM services in `services/bpm/` (#59): every route the app calls is still defined, the Python sources compile and log structured JSON, the deploy scripts target `delman-site`, and the worker subscription never expires (#56). Needs `python3`.
+8. **typecheck** (`pnpm run typecheck`): runs `tsc --noEmit` over the whole project.
+9. **lint** (`pnpm run check:strict`): runs `next lint` with the `next/core-web-vitals` rules.
+10. **test** (`pnpm run test`): runs the Vitest suite under `tests/`.
 <!-- verify-steps:end -->
 
 ## Upgrading pnpm

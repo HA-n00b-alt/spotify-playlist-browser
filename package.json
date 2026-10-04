@@ -24,6 +24,7 @@
     "env:sync": "node ./scripts/env-remote.js sync",
     "test": "vitest run",
     "verify": "node ./scripts/verify.js",
+    "check:bpm": "npm --prefix services/bpm run verify",
     "hooks:install": "node ./scripts/git-hooks.js install",
     "pr": "node ./scripts/pr.js",
     "deploy:production": "node ./scripts/deploy-production.js",

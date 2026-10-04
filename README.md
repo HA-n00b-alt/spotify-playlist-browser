@@ -27,5 +27,9 @@ If you would like access, email: delman@delman.it
 - Playlist metadata and track-level BPM/key results are cached to improve performance.
 - Access is restricted to authorized users.
 
+## Repository
+- The Next.js app (Vercel) and the BPM/key analysis services (`services/bpm/`, Google Cloud Run) live
+  here together. Setup: [INSTALL.md](INSTALL.md). Deploying both: [DEPLOYMENT.md](DEPLOYMENT.md).
+
 ## Support
 For questions or access requests, contact: delman@delman.it

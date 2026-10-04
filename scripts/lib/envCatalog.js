@@ -302,6 +302,7 @@ const ENV_CATALOG = Object.freeze([
   }),
   ...[
     ['DRY_RUN', 'deploy:production prints its plan without changing anything when 1'],
+    ['BPM_DEPLOY_FORCE', 'deploy:production redeploys every BPM Cloud Run service, changed or not, when 1'],
     ['PRODUCTION_URL', 'Production URL checked after a deploy (default https://searchmyplaylist.delman.it)'],
     ['NO_COLOR', 'Disables colour in the step runner output'],
   ].map(([name, purpose]) => envVar({ name, purpose, source: 'operator', group: 'Script flags' })),
