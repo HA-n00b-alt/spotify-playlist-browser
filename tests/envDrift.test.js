@@ -105,7 +105,7 @@ describe('parseEnvFile', () => {
 })
 
 describe('resolveMasterRoot', () => {
-  test('resolves the main checkout from a linked worktree', { timeout: 30_000 }, () => {
+  test('resolves the main checkout from a linked worktree', () => {
     const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'env-master-')))
     const main = path.join(base, 'main')
     const worktree = path.join(base, 'wt')
