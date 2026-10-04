@@ -6,6 +6,9 @@ const {
   manifestEntry,
   parsePorcelainPaths,
 } = require('../scripts/lib/deploy/guards')
+// Loaded once here, not inside the test: it pulls in @vercel/blob, whose first load can outlast
+// the per-test timeout while verify runs other steps concurrently (#53).
+const { ipv4Lookup } = require('../scripts/lib/manifest')
 
 test('parsePorcelainPaths lists staged, unstaged and untracked paths', () => {
   const porcelain = [' M lib/db.ts', 'M  app/page.tsx', 'MM lib/bpm.ts', '?? notes.txt', ''].join('\n')
@@ -63,7 +66,6 @@ test('manifestEntry records the commit, timestamp and dirty: false', () => {
 })
 
 test('ipv4Lookup answers both the single-address and the `all` callback shapes', () => {
-  const { ipv4Lookup } = require('../scripts/lib/manifest')
   const lookup = ipv4Lookup((_host, callback) => callback(null, ['192.0.2.1', '192.0.2.2']))
   let single
   lookup('blob.example', {}, (...args) => {
