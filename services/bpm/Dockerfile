@@ -1,0 +1,48 @@
+# Use MTG Essentia base image
+# Essentia handles MP3/AAC decoding directly, ffmpeg provides backend support
+FROM ghcr.io/mtg/essentia:latest
+
+# Install ffmpeg and ensure pip is available
+# ffmpeg provides codec support for Essentia's audio decoding (MP3, AAC, etc.)
+# Set DEBIAN_FRONTEND=noninteractive to suppress debconf warnings
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ffmpeg python3-pip && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create a non-root user
+RUN useradd -m -u 1000 appuser && \
+    mkdir -p /app /tmp && \
+    chown -R appuser:appuser /app /tmp
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements and install Python dependencies as root (needed for system-wide install)
+COPY requirements.txt .
+# Upgrade pip first (without the flag since old pip doesn't support it)
+RUN python3 -m pip install --no-cache-dir --upgrade pip
+# Now install dependencies (newer pip supports --root-user-action to suppress warning)
+# Verify google-auth installation explicitly
+RUN python3 -m pip install --no-cache-dir -r requirements.txt --root-user-action=ignore && \
+    python3 -c "import google.auth; print('google-auth imported successfully')" || \
+    (echo "ERROR: google-auth failed to import after installation" && exit 1)
+
+# Copy application code (primary service: main.py and shared_processing.py)
+COPY main.py shared_processing.py ./
+
+# Pre-compile Python bytecode to reduce cold start time
+# This compiles all .py files to .pyc files during build time
+RUN python3 -m compileall -q /app && \
+    find /app -name "*.pyc" -exec chmod 644 {} \;
+
+# Switch to non-root user
+USER appuser
+
+# Expose port 8080 (Cloud Run requirement)
+EXPOSE 8080
+
+# Run uvicorn with main.py (primary service)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+

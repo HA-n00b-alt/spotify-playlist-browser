@@ -1,0 +1,49 @@
+# Use MTG Essentia base image - provides Essentia for fast MP3 decoding
+# Essentia's MonoLoader (C++) is much faster than librosa's Python audioread wrapper
+# We use Essentia to decode MP3, then pass numpy array directly to librosa for processing
+FROM ghcr.io/mtg/essentia:latest
+
+# Install system dependencies for librosa
+# - libsndfile1: for WAV file reading (soundfile backend)
+# - libgomp1: GNU OpenMP runtime library required by Numba (librosa dependency)
+# - ffmpeg: already in Essentia image, but ensure it's available
+# - python3-pip: ensure pip is available
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    libsndfile1 \
+    libgomp1 \
+    python3-pip \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create a non-root user
+RUN useradd -m -u 1000 appuser && \
+    mkdir -p /app /tmp && \
+    chown -R appuser:appuser /app /tmp
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements and install Python dependencies
+COPY requirements_fallback.txt .
+RUN python3 -m pip install --no-cache-dir --upgrade pip && \
+    python3 -m pip install --no-cache-dir -r requirements_fallback.txt
+
+# Copy application code
+COPY fallback_service.py .
+
+# Pre-compile Python bytecode to reduce cold start time
+# This compiles all .py files to .pyc files during build time
+RUN python3 -m compileall -q /app && \
+    find /app -name "*.pyc" -exec chmod 644 {} \;
+
+# Switch to non-root user
+USER appuser
+
+# Expose port 8080 (Cloud Run requirement)
+EXPOSE 8080
+
+# Run uvicorn with PORT from environment variable (Cloud Run provides this)
+# Default to 8080 if PORT is not set
+CMD uvicorn fallback_service:app --host 0.0.0.0 --port ${PORT:-8080}
+
